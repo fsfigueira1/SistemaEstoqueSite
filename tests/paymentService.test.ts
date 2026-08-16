@@ -1,0 +1,590 @@
+import { describe, beforeEach, afterEach, it, expect } from 'vitest';
+import { PaymentService } from '../src/services/paymentService';
+import { SaleService } from '../src/services/saleService';
+import { ProductService } from '../src/services/productService';
+import { CashSessionService } from '../src/services/cashSessionService';
+import { CashRegisterService } from '../src/services/cashRegisterService';
+import { CashMovementService } from '../src/services/cashMovementService';
+import { prisma } from './setup';
+import { cleanupDatabase, createAdminUser, createTestUser } from './utils';
+
+describe('Payment Service', () => {
+  let adminUser: any;
+  let testUser: any;
+  let testCashRegister: any;
+  let testCashSession: any;
+  let testProduct: any;
+  let testSale: any;
+  let testCustomer: any;
+
+  beforeEach(async () => {
+    console.log('Starting beforeEach');
+    await cleanupDatabase();
+    console.log('After cleanupDatabase');
+    adminUser = await createAdminUser();
+    console.log('After createAdminUser');
+    testUser = await createTestUser();
+    console.log('After createTestUser');
+
+    // Create a category for our test product
+    const category = await prisma.category.create({
+      data: {
+        name: 'Test Category',
+        id: '11111111-1111-1111-1111-111111111111'
+      }
+    });
+
+    // Create a test product
+    testProduct = await prisma.product.create({
+      data: {
+        name: 'Test Product',
+        sku: 'PAYMENTTEST001',
+        categoryId: category.id,
+        costPrice: 10.0,
+        salePrice: 15.0,
+        stockQuantity: 100,
+        status: 'ACTIVE'
+      }
+    });
+
+    // Create a test customer
+    testCustomer = await prisma.customer.create({
+      data: {
+        name: 'Test Customer',
+        email: 'test@example.com'
+      }
+    });
+
+    // Create a cash register for our tests
+    testCashRegister = await CashRegisterService.createCashRegister({
+      name: 'Test Register',
+      description: 'Test description',
+      isActive: true
+    });
+
+    // Open a cash session for our tests
+    testCashSession = await CashSessionService.openCashSession({
+      cashRegisterId: testCashRegister.id,
+      openedById: adminUser.id,
+      openingAmount: 100
+    });
+
+    // Create a test sale
+    const saleResult = await SaleService.createSale({
+      cashSessionId: testCashSession.id,
+      customerId: testCustomer.id,
+      items: [
+        {
+          productId: testProduct.id,
+          quantity: 7,
+          unitPrice: testProduct.salePrice
+        }
+      ],
+      paymentMethod: 'CASH',
+      createdById: adminUser.id
+    });
+    testSale = saleResult.sale;
+
+      // Debug the actual sale total
+      console.log('Created test sale:', testSale.id);
+      console.log('Test sale totalAmount:', testSale.totalAmount, 'type:', typeof testSale.totalAmount);
+      console.log('Test sale product quantity: 7, unitPrice:', testProduct.salePrice, 'type:', typeof testProduct.salePrice);
+      console.log('Expected total: 7 *', testProduct.salePrice, '=', 7 * Number(testProduct.salePrice));
+  });
+
+  afterEach(async () => {
+    await cleanupDatabase();
+  });
+
+  describe('processPayment - CASH without change', () => {
+    it('should process a cash payment correctly', async () => {
+      console.log('Creating paymentData');
+      const paymentData = {
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 30.0,
+        processedById: adminUser.id
+      };
+
+      console.log('About to call PaymentService.processPayment');
+      const payment = await PaymentService.processPayment(paymentData);
+      console.log('PaymentService.processPayment returned:', payment);
+
+      expect(payment).toBeDefined();
+      expect(payment.id).toBeDefined();
+      expect(payment.saleId).toBe(testSale.id);
+      expect(payment.method).toBe('CASH');
+      expect(payment.amount).toBe(30.0);
+      expect(payment.changeAmount).toBe(0);
+      expect(payment.status).toBe('PAID');
+      expect(payment.processedById).toBe(adminUser.id);
+      expect(payment.processedAt).toBeDefined();
+
+      // Verify sale still exists and is not affected
+      const sale = await SaleService.getSale(testSale.id);
+      expect(sale).toBeDefined();
+
+      // Verify cash movement was created correctly
+      const cashMovementsResult = await CashMovementService.getCashMovementsBySession(testCashSession.id);
+      const movements = cashMovementsResult.movements;
+
+      // Should have: OPENING (from session) + DEPOSIT (payment)
+      expect(movements).toHaveLength(2);
+
+      const depositMovement = movements.find(m => m.type === 'DEPOSIT' && m.description === 'Cash payment');
+      expect(depositMovement).toBeDefined();
+      expect(depositMovement.amount).toBe(30.0);
+      expect(depositMovement.performedById).toBe(adminUser.id);
+    });
+
+    it('should create correct cash movements for cash payment without change', async () => {
+      const paymentData = {
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 50.0,
+        processedById: adminUser.id
+      };
+
+      await PaymentService.processPayment(paymentData);
+
+      // Verify cash movements
+      const cashMovementsResult = await CashMovementService.getCashMovementsBySession(testCashSession.id);
+      const movements = cashMovementsResult.movements;
+
+      // Should have: OPENING + DEPOSIT
+      expect(movements).toHaveLength(2);
+
+      const depositMovement = movements.find(m => m.type === 'DEPOSIT' && m.description === 'Cash payment');
+      expect(depositMovement).toBeDefined();
+      expect(depositMovement.amount).toBe(50.0);
+
+      // No WITHDRAWAL movement should exist for change
+      const withdrawalMovements = movements.filter(m => m.type === 'WITHDRAWAL');
+      expect(withdrawalMovements).toHaveLength(0);
+    });
+  });
+
+  describe('processPayment - CASH with change', () => {
+    it('should process a cash payment with change correctly', async () => {
+      const paymentData = {
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 50.0,
+        changeAmount: 20.0,
+        processedById: adminUser.id
+      };
+
+      const payment = await PaymentService.processPayment(paymentData);
+
+      expect(payment).toBeDefined();
+      expect(payment.id).toBeDefined();
+      expect(payment.saleId).toBe(testSale.id);
+      expect(payment.method).toBe('CASH');
+      expect(payment.amount).toBe(50.0);
+      expect(payment.changeAmount).toBe(20.0);
+      expect(payment.status).toBe('PAID');
+      expect(payment.processedById).toBe(adminUser.id);
+      expect(payment.processedAt).toBeDefined();
+
+      // Verify sale still exists and is not affected
+      const sale = await SaleService.getSale(testSale.id);
+      expect(sale).toBeDefined();
+
+      // Verify cash movements were created correctly
+      const cashMovementsResult = await CashMovementService.getCashMovementsBySession(testCashSession.id);
+      const movements = cashMovementsResult.movements;
+
+      // Should have: OPENING (from session) + DEPOSIT (payment) + WITHDRAWAL (change)
+      expect(movements).toHaveLength(3);
+
+      const depositMovement = movements.find(m => m.type === 'DEPOSIT' && m.description === 'Cash payment');
+      expect(depositMovement).toBeDefined();
+      expect(depositMovement.amount).toBe(50.0);
+      expect(depositMovement.performedById).toBe(adminUser.id);
+
+      const withdrawalMovement = movements.find(m => m.type === 'WITHDRAWAL' && m.description === 'Change return');
+      expect(withdrawalMovement).toBeDefined();
+      expect(withdrawalMovement.amount).toBe(20.0);
+      expect(withdrawalMovement.performedById).toBe(adminUser.id);
+    });
+
+    it('should create correct cash movements for cash payment with change', async () => {
+      const paymentData = {
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 60.0,
+        changeAmount: 10.0,
+        processedById: adminUser.id
+      };
+
+      await PaymentService.processPayment(paymentData);
+
+      // Verify cash movements
+      const cashMovementsResult = await CashMovementService.getCashMovementsBySession(testCashSession.id);
+      const movements = cashMovementsResult.movements;
+
+      // Should have: OPENING + DEPOSIT + WITHDRAWAL
+      expect(movements).toHaveLength(3);
+
+      const depositMovement = movements.find(m => m.type === 'DEPOSIT' && m.description === 'Cash payment');
+      expect(depositMovement).toBeDefined();
+      expect(depositMovement.amount).toBe(60.0);
+
+      const withdrawalMovement = movements.find(m => m.type === 'WITHDRAWAL' && m.description === 'Change return');
+      expect(withdrawalMovement).toBeDefined();
+      expect(withdrawalMovement.amount).toBe(10.0);
+    });
+  });
+
+  describe('processPayment - Validation', () => {
+    it('should throw error for negative change amount', async () => {
+      await expect(
+        PaymentService.processPayment({
+          saleId: testSale.id,
+          method: 'CASH',
+          amount: 30.0,
+          changeAmount: -5.0,
+          processedById: adminUser.id
+        })
+      ).rejects.toThrow('Change amount cannot be negative');
+    });
+
+    it('should throw error for change amount greater than amount', async () => {
+      await expect(
+        PaymentService.processPayment({
+          saleId: testSale.id,
+          method: 'CASH',
+          amount: 30.0,
+          changeAmount: 40.0,
+          processedById: adminUser.id
+        })
+      ).rejects.toThrow('Change amount cannot be greater than amount');
+    });
+
+    it('should throw error for zero effective payment', async () => {
+      await expect(
+        PaymentService.processPayment({
+          saleId: testSale.id,
+          method: 'CASH',
+          amount: 20.0,
+          changeAmount: 20.0,
+          processedById: adminUser.id
+        })
+      ).rejects.toThrow('Effective payment must be positive');
+    });
+
+    it('should throw error for negative amount', async () => {
+      await expect(
+        PaymentService.processPayment({
+          saleId: testSale.id,
+          method: 'CASH',
+          amount: -10.0,
+          processedById: adminUser.id
+        })
+      ).rejects.toThrow('Amount must be positive');
+    });
+
+    it('should throw error for zero amount', async () => {
+      await expect(
+        PaymentService.processPayment({
+          saleId: testSale.id,
+          method: 'CASH',
+          amount: 0.0,
+          processedById: adminUser.id
+        })
+      ).rejects.toThrow('Amount must be positive');
+    });
+  });
+
+  describe('processPayment - Partial and multiple payments', () => {
+    it('should accept partial payment that does not exceed remaining amount', async () => {
+      // First payment of 30 on a 105 sale
+      const payment1 = await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 30.0,
+        processedById: adminUser.id
+      });
+
+      expect(payment1).toBeDefined();
+      expect(payment1.status).toBe('PAID');
+
+      // Second payment of 50 on remaining 75
+      const payment2 = await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 50.0,
+        processedById: adminUser.id
+      });
+
+      expect(payment2).toBeDefined();
+      expect(payment2.status).toBe('PAID');
+
+      // Verify sale still exists
+      const sale = await SaleService.getSale(testSale.id);
+      expect(sale).toBeDefined();
+    });
+
+    it('should accept exact payment that completes the sale', async () => {
+      // Payment of exactly 105 on a 105 sale
+      const payment = await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 105.0,
+        processedById: adminUser.id
+      });
+
+      expect(payment).toBeDefined();
+      expect(payment.status).toBe('PAID');
+
+      // Verify sale still exists
+      const sale = await SaleService.getSale(testSale.id);
+      expect(sale).toBeDefined();
+    });
+
+    it('should accept overpayment with correct change', async () => {
+      // Payment of 125 with 20 change on a 105 sale (effective = 105)
+      const payment = await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 125.0,
+        changeAmount: 20.0,
+        processedById: adminUser.id
+      });
+
+      expect(payment).toBeDefined();
+      expect(payment.amount).toBe(125.0);
+      expect(payment.changeAmount).toBe(20.0);
+      expect(payment.status).toBe('PAID');
+
+      // Verify sale still exists
+      const sale = await SaleService.getSale(testSale.id);
+      expect(sale).toBeDefined();
+
+      // Verify cash movements
+      const cashMovementsResult = await CashMovementService.getCashMovementsBySession(testCashSession.id);
+      const movements = cashMovementsResult.movements;
+
+      // Should have: OPENING + DEPOSIT(125) + WITHDRAWAL(20)
+      expect(movements).toHaveLength(3);
+
+      const depositMovement = movements.find(m => m.type === 'DEPOSIT' && m.description === 'Cash payment');
+      expect(depositMovement).toBeDefined();
+      expect(depositMovement.amount).toBe(125.0);
+
+      const withdrawalMovement = movements.find(m => m.type === 'WITHDRAWAL' && m.description === 'Change return');
+      expect(withdrawalMovement).toBeDefined();
+      expect(withdrawalMovement.amount).toBe(20.0)
+    });
+
+    it('should throw error when payment exceeds remaining amount', async () => {
+      // First payment of 60 on a 105 sale (remaining 45)
+      await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 60.0,
+        processedById: adminUser.id
+      });
+
+      // Try to pay 50 when only 45 remaining
+      await expect(
+        PaymentService.processPayment({
+          saleId: testSale.id,
+          method: 'CASH',
+          amount: 50.0,
+          processedById: adminUser.id
+        })
+      ).rejects.toThrow('Payment amount exceeds remaining amount');
+    });
+
+    it('should throw error when payment with change exceeds remaining amount', async () => {
+      // First payment of 30 on a 105 sale (remaining 75)
+      await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 30.0,
+        processedById: adminUser.id
+      });
+
+      // Try to pay 60 with 10 change (effective 50) when only 75 remaining - should work
+      const payment1 = await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 60.0,
+        changeAmount: 10.0,
+        processedById: adminUser.id
+      });
+
+      expect(payment1).toBeDefined();
+
+      // Try to pay 30 with 2 change (effective 28) when only 25 remaining - should fail
+      await expect(
+        PaymentService.processPayment({
+          saleId: testSale.id,
+          method: 'CASH',
+          amount: 30.0,
+          changeAmount: 2.0,
+          processedById: adminUser.id
+        })
+      ).rejects.toThrow('Payment amount exceeds remaining amount');
+    });
+  });
+
+  describe('getPaymentById', () => {
+    it('should return payment by valid ID', async () => {
+      // Process a payment
+      const processedPayment = await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 30.0,
+        processedById: adminUser.id
+      });
+
+      // Retrieve the payment
+      const payment = await PaymentService.getPaymentById(processedPayment.id);
+
+      expect(payment).toBeDefined();
+      expect(payment.id).toBe(processedPayment.id);
+      expect(payment.saleId).toBe(testSale.id);
+      expect(payment.method).toBe('CASH');
+      expect(payment.amount).toBe(30.0);
+      expect(payment.changeAmount).toBe(0);
+      expect(payment.status).toBe('PAID');
+      expect(payment.processedById).toBe(adminUser.id);
+    });
+
+    it('should throw error for non-existent payment ID', async () => {
+      await expect(
+        PaymentService.getPaymentById('non-existent-id')
+      ).rejects.toThrow('Payment not found');
+    });
+  });
+
+  describe('getPaymentsBySale', () => {
+    it('should return all payments for a sale', async () => {
+      // Process multiple payments for the same sale
+      const payment1 = await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 15.0,
+        processedById: adminUser.id
+      });
+
+      const payment2 = await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CREDIT_CARD',
+        amount: 15.0,
+        processedById: adminUser.id,
+        cardLastFour: '1234',
+        cardBrand: 'VISA'
+      });
+
+      // Get payments for sale
+      const payments = await PaymentService.getPaymentsBySale(testSale.id);
+
+      expect(payments).toHaveLength(2);
+      // Should be ordered by processing date descending (most recent first)
+      expect(payments[0].id).toBe(payment2.id); // Credit card (most recent)
+      expect(payments[1].id).toBe(payment1.id); // Cash (older)
+    });
+
+    it('should return empty array when no payments exist', async () => {
+      // Create a sale with no payments
+      const saleNoPaymentsResult = await SaleService.createSale({
+        cashSessionId: testCashSession.id,
+        customerId: testCustomer.id,
+        items: [
+          {
+            productId: testProduct.id,
+            quantity: 1,
+            unitPrice: testProduct.salePrice
+          }
+        ],
+        paymentMethod: 'CASH', // This is just initial method, no actual payment processed
+        createdById: adminUser.id
+      });
+      const saleNoPayments = saleNoPaymentsResult.sale;
+
+      const payments = await PaymentService.getPaymentsBySale(saleNoPayments.id);
+      expect(payments).toHaveLength(0);
+    });
+
+    it('should throw error for non-existent sale', async () => {
+      await expect(
+        PaymentService.getPaymentsBySale('non-existent-id')
+      ).rejects.toThrow('Sale not found');
+    });
+  });
+
+  describe('getPaymentsByMethod', () => {
+    it('should return payments filtered by method', async () => {
+      // Process payments of different methods
+      await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 10.0,
+        processedById: adminUser.id
+      });
+
+      // Need a different sale for second payment since sale can only be completed once
+      const testSale2Result = await SaleService.createSale({
+        cashSessionId: testCashSession.id,
+        customerId: testCustomer.id,
+        items: [
+          {
+            productId: testProduct.id,
+            quantity: 1,
+            unitPrice: testProduct.salePrice
+          }
+        ],
+        paymentMethod: 'CASH',
+        createdById: adminUser.id
+      });
+      const testSale2 = testSale2Result.sale;
+
+      await PaymentService.processPayment({
+        saleId: testSale2.id,
+        method: 'CREDIT_CARD',
+        amount: 15.0,
+        processedById: adminUser.id,
+        cardLastFour: '1234',
+        cardBrand: 'VISA'
+      });
+
+      // Get CASH payments - should have 1 payment (for testSale)
+      const cashPayments = await PaymentService.getPaymentsByMethod('CASH');
+
+      expect(cashPayments).toHaveLength(1);
+      expect(cashPayments[0].method).toBe('CASH');
+      expect(cashPayments[0].amount).toBe(10.0);
+      expect(cashPayments[0].changeAmount).toBe(0);
+
+      // Get CREDIT_CARD payments - should have 1 payment (for testSale2)
+      const creditCardPayments = await PaymentService.getPaymentsByMethod('CREDIT_CARD');
+
+      expect(creditCardPayments).toHaveLength(1);
+      expect(creditCardPayments[0].method).toBe('CREDIT_CARD');
+      expect(creditCardPayments[0].amount).toBe(15.0);
+    });
+
+    it('should return empty array when no payments of specified method exist', async () => {
+      // Process only CASH payment
+      await PaymentService.processPayment({
+        saleId: testSale.id,
+        method: 'CASH',
+        amount: 10.0,
+        processedById: adminUser.id
+      });
+
+      // Try to get PIX payments (none exist)
+      const pixPayments = await PaymentService.getPaymentsByMethod('PIX');
+      expect(pixPayments).toHaveLength(0);
+    });
+
+    it('should throw error for invalid payment method', async () => {
+      await expect(
+        PaymentService.getPaymentsByMethod('INVALID_METHOD' as any)
+      ).rejects.toThrow('Invalid payment method');
+    });
+  });
+});
