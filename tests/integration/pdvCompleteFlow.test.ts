@@ -60,14 +60,6 @@ describe('Complete PDV (Point of Sale) Flow', () => {
         }
       });
 
-      // Create test customer
-      const customer = await prisma.customer.create({
-        data: {
-          name: 'Cliente Teste',
-          status: 'ACTIVE'
-        }
-      });
-
       // Add initial stock to products
       await StockService.createOrUpdateStock({
         productId: product1.id,
