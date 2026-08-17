@@ -6,8 +6,8 @@ import { CashMovementService } from '@/services/cashMovementService';
 import { AuditService } from '@/services/auditService';
 import { ProductService } from '@/services/productService';
 import { CustomerService } from '@/services/customerService';
-import { prisma } from './setup';
-import { cleanupDatabase } from './utils';
+import { prisma } from '../setup';
+import { cleanupDatabase } from '../utils';
 
 describe('Complete PDV (Point of Sale) Flow', () => {
   beforeEach(async () => {
