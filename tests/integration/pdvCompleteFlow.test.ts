@@ -1,11 +1,11 @@
 import { describe, beforeEach, afterEach, it, expect } from 'vitest';
 import { SaleService } from '@/services/saleService';
 import { StockService } from '@/services/stockService';
-import { CashService } from '@/services/cashService';
-import { ShiftService } from '@/services/shiftService';
+import { CashSessionService } from '@/services/cashSessionService';
+import { CashMovementService } from '@/services/cashMovementService';
+import { AuditService } from '@/services/auditService';
 import { ProductService } from '@/services/productService';
 import { CustomerService } from '@/services/customerService';
-import { AuditService } from '@/services/auditService';
 import { prisma } from './setup';
 import { cleanupDatabase } from './utils';
 
