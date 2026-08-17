@@ -123,12 +123,12 @@ describe('Complete PDV (Point of Sale) Flow', () => {
       });
 
       // Record cash transaction for first sale
-      await CashService.recordCashMovement({
-        type: 'ENTRY',
+      await CashMovementService.createCashMovement({
+        cashSessionId: testCashSession.id,
+        type: 'SALE',
         amount: sale1.totalAmount,
         description: `Venda #${sale1.id}`,
-        referenceId: sale1.id,
-        referenceType: 'SALE'
+        performedById: customer.id
       });
 
       // Create audit log for first sale
@@ -136,7 +136,7 @@ describe('Complete PDV (Point of Sale) Flow', () => {
         action: 'CREATE',
         entity: 'SALE',
         entityId: sale1.id,
-        userId: 'user-1' // Assuming current user
+        userId: customer.id
       });
 
       // 3. PROCESS SECOND SALE
@@ -165,12 +165,12 @@ describe('Complete PDV (Point of Sale) Flow', () => {
       });
 
       // Record cash transaction for second sale
-      await CashService.recordCashMovement({
-        type: 'ENTRY',
+      await CashMovementService.createCashMovement({
+        cashSessionId: testCashSession.id,
+        type: 'SALE',
         amount: sale2.totalAmount,
         description: `Venda #${sale2.id}`,
-        referenceId: sale2.id,
-        referenceType: 'SALE'
+        performedById: customer.id
       });
 
       // Create audit log for second sale
@@ -178,7 +178,7 @@ describe('Complete PDV (Point of Sale) Flow', () => {
         action: 'CREATE',
         entity: 'SALE',
         entityId: sale2.id,
-        userId: 'user-1'
+        userId: customer.id
       });
 
       // 4. CLOSING: Verify final state
