@@ -7,7 +7,7 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     exclude: ['node_modules', 'dist', '.next', 'out'],
-    setupFiles: ['./tests/setup-db.ts'],
+    setupFiles: ['./tests/setup.ts'],
     teardownTimeout: 30000,
     testTimeout: 15000, // Increased from 10000ms to 15000ms to accommodate slower tests
     maxWorkers: 1,
