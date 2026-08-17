@@ -23,8 +23,7 @@ describe('Complete PDV (Point of Sale) Flow', () => {
       // Create test customer
       const customer = await prisma.customer.create({
         data: {
-          name: 'Cliente Teste',
-          status: 'ACTIVE'
+          name: 'Cliente Teste'
         }
       });
 
