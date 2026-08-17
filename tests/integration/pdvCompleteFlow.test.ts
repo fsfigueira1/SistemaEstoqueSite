@@ -20,20 +20,43 @@ describe('Complete PDV (Point of Sale) Flow', () => {
 
   describe('Complete PDV flow: opening → sales → payments → closing', () => {
     it('should execute complete PDV cycle correctly', async () => {
+      // Create test customer
+      const customer = await prisma.customer.create({
+        data: {
+          name: 'Cliente Teste',
+          status: 'ACTIVE'
+        }
+      });
+
+      // Create category for test products
+      const category = await prisma.category.create({
+        data: {
+          name: 'Test Category'
+        }
+      });
+
       // Create test products
       const product1 = await prisma.product.create({
         data: {
           name: 'Produto A',
+          sku: `PROD-A-${Date.now()}`,
           status: 'ACTIVE',
-          minStock: 10
+          minStockLevel: 10,
+          costPrice: 10.0,
+          salePrice: 15.0,
+          categoryId: category.id
         }
       });
 
       const product2 = await prisma.product.create({
         data: {
           name: 'Produto B',
+          sku: `PROD-B-${Date.now()}`,
           status: 'ACTIVE',
-          minStock: 5
+          minStockLevel: 5,
+          costPrice: 15.0,
+          salePrice: 25.0,
+          categoryId: category.id
         }
       });
 
