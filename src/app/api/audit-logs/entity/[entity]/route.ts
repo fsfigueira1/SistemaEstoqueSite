@@ -1,0 +1,35 @@
+import { NextResponse } from "next/server"
+import { AuditService } from "@/services/auditService"
+import { requireAuthAndRole } from "@/lib/authUtils"
+import { handleApiError } from "@/lib/errorHandler"
+
+export async function GET(request: Request, { params }: { params: { entity: string } }) {
+  try {
+    await requireAuthAndRole(["ADMIN"])
+
+    const { searchParams } = new URL(request.url)
+    const olderThanDateStr = searchParams.get("olderThanDate")
+
+    if (!olderThanDateStr) {
+      return NextResponse.json(
+        { success: false, error: { message: "olderThanDate parameter is required" } },
+        { status: 400 }
+      )
+    }
+
+    const filters = {
+      olderThanDate: new Date(olderThanDateStr),
+      entity: params.entity,
+      dryRun: searchParams.get("dryRun") === "true"
+    }
+
+    const result = await AuditService.getOldLogsByEntity(filters)
+
+    return NextResponse.json({
+      success: true,
+      data: result
+    })
+  } catch (error) {
+    return handleApiError(error)
+  }
+}
