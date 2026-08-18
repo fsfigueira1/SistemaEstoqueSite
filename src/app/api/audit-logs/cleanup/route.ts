@@ -8,19 +8,19 @@ export async function POST(request: Request) {
     await requireAuthAndRole(["ADMIN"])
 
     const { searchParams } = new URL(request.url)
-    const filters = {
-      olderThanDate: searchParams.get("olderThanDate")
-        ? new Date(searchParams.get("olderThanDate"))
-        : undefined,
-      entity: searchParams.get("entity") || undefined,
-      dryRun: searchParams.get("dryRun") === "true"
-    }
+    const olderThanDateStr = searchParams.get("olderThanDate")
 
-    if (!filters.olderThanDate) {
+    if (!olderThanDateStr) {
       return NextResponse.json(
         { success: false, error: { message: "olderThanDate parameter is required" } },
         { status: 400 }
       )
+    }
+
+    const filters = {
+      olderThanDate: new Date(olderThanDateStr),
+      entity: searchParams.get("entity") || undefined,
+      dryRun: searchParams.get("dryRun") === "true"
     }
 
     const result = await AuditService.cleanupOldLogs(filters)
