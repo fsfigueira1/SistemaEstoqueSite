@@ -23,7 +23,11 @@ export async function GET(request: Request) {
       dryRun: searchParams.get("dryRun") === "true"
     }
 
-    const result = await AuditService.getLogs(filters)
+    const result = await AuditService.getAuditLogs({
+      entity: filters.entity,
+      page: 1,
+      limit: 100
+    })
 
     return NextResponse.json({
       success: true,

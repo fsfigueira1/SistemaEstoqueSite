@@ -23,7 +23,12 @@ export async function GET(request: Request, { params }: { params: { userId: stri
       dryRun: searchParams.get("dryRun") === "true"
     }
 
-    const result = await AuditService.getLogsByUser(params.userId, filters)
+    const result = await AuditService.getAuditLogsByUser({
+      userId: params.userId,
+      entity: filters.entity,
+      page: 1,
+      limit: 100
+    })
 
     return NextResponse.json({
       success: true,

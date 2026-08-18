@@ -23,7 +23,9 @@ export async function GET(request: Request) {
       dryRun: searchParams.get("dryRun") === "true"
     }
 
-    const result = await AuditService.getStatistics(filters)
+    const result = await AuditService.getStatistics({
+      entity: filters.entity
+    })
 
     return NextResponse.json({
       success: true,
