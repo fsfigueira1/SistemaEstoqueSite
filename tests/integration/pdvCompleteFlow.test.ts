@@ -7,11 +7,43 @@ import { AuditService } from '@/services/auditService';
 import { ProductService } from '@/services/productService';
 import { CustomerService } from '@/services/customerService';
 import { prisma } from '../setup';
+import { PaymentMethod } from '@prisma/client';
 import { cleanupDatabase } from '../utils';
 
 describe('Complete PDV (Point of Sale) Flow', () => {
+  let testCashRegister: any;
+  let testCashSession: any;
+  let adminUser: any;
+
   beforeEach(async () => {
     await cleanupDatabase();
+
+    // Create admin user for performing operations
+    adminUser = await prisma.user.create({
+      data: {
+        name: 'Admin User',
+        email: 'admin@test.com',
+        password: 'hashedpassword',
+        role: 'ADMIN',
+        status: 'ACTIVE'
+      }
+    });
+
+    // Create a cash register for our tests
+    testCashRegister = await prisma.cashRegister.create({
+      data: {
+        name: 'Test Register',
+        description: 'Test description',
+        isActive: true
+      }
+    });
+
+    // Open a cash session
+    testCashSession = await CashSessionService.openCashSession({
+      cashRegisterId: testCashRegister.id,
+      openedById: adminUser.id,
+      openingAmount: 100.0
+    });
   });
 
   afterEach(async () => {
@@ -24,6 +56,7 @@ describe('Complete PDV (Point of Sale) Flow', () => {
       const customer = await prisma.customer.create({
         data: {
           name: 'Cliente Teste'
+          // Removed invalid status field
         }
       });
 
@@ -59,146 +92,149 @@ describe('Complete PDV (Point of Sale) Flow', () => {
         }
       });
 
-      // Add initial stock to products
-      await StockService.createOrUpdateStock({
+      // Add initial stock to products - USE ADMIN USER ID FOR performedById
+      await StockService.addStock({
         productId: product1.id,
-        quantityChange: 50,
-        operation: 'SET',
-        referenceId: 'initial-setup',
-        referenceType: 'SETUP'
+        quantity: 50,
+        performedById: adminUser.id // FIXED: Use admin user ID instead of customer ID
       });
 
-      await StockService.createOrUpdateStock({
+      await StockService.addStock({
         productId: product2.id,
-        quantityChange: 30,
-        operation: 'SET',
-        referenceId: 'initial-setup',
-        referenceType: 'SETUP'
+        quantity: 30,
+        performedById: adminUser.id // FIXED: Use admin user ID instead of customer ID
       });
 
       // Verify initial stock levels
-      let initialStock1 = await StockService.getStockByProductId(product1.id);
-      let initialStock2 = await StockService.getStockByProductId(product2.id);
-      expect(initialStock1.quantity).toBe(50);
-      expect(initialStock2.quantity).toBe(30);
+      let initialStock1 = await StockService.getStock(product1.id);
+      let initialStock2 = await StockService.getStock(product2.id);
+      expect(initialStock1.currentStock).toBe(50);
+      expect(initialStock1.minStockLevel).toBe(10);
+      expect(initialStock2.currentStock).toBe(30);
+      expect(initialStock2.minStockLevel).toBe(5);
 
       // Execute complete PDV flow
-
-      // 1. OPENING: No explicit shift opening needed for this test
-      // In a real PDV, the cashier would open a shift, but we'll simulate cash tracking
 
       // 2. PROCESS FIRST SALE
       const saleData1 = {
         customerId: customer.id,
+        cashSessionId: testCashSession.id, // Required field
+        createdById: adminUser.id, // Required field
         items: [
           { productId: product1.id, quantity: 2, unitPrice: 15.0 }, // 30.00
           { productId: product2.id, quantity: 1, unitPrice: 25.0 }  // 25.00
         ],
-        paymentStatus: 'PAID',
-        paymentMethod: 'DINHEIRO',
         notes: 'PDV Sale 1'
+        // paymentStatus and paymentMethod are NOT fields on Sale - they're in SalePayments relation
       };
 
       const sale1 = await SaleService.createSale(saleData1);
       expect(sale1).toBeDefined();
-      expect(sale1.totalAmount).toBe(55.0); // 30 + 25
-      expect(sale1.paymentStatus).toBe('PAID');
-      expect(sale1.paymentMethod).toBe('DINHEIRO');
+      expect(sale1.sale.totalAmount).toBe(55.0); // 30 + 25
+      // Note: Sale starts as PENDING status, payment info is in SalePayments
 
-      // Update stock for first sale
-      await StockService.createOrUpdateStock({
-        productId: product1.id,
-        quantityChange: 2,
-        operation: 'SUBTRACT',
-        referenceId: sale1.id,
-        referenceType: 'SALE'
+      // Complete the sale to make it PAID and trigger stock reduction
+      const completedSale1 = await SaleService.completeSale(sale1.sale.id, {
+        method: 'CASH',
+        amount: 55.0,
+        processedById: adminUser.id,
+        notes: 'PDV Sale 1 payment'
       });
+      expect(completedSale1.status).toBe('COMPLETED');
 
-      await StockService.createOrUpdateStock({
-        productId: product2.id,
-        quantityChange: 1,
-        operation: 'SUBTRACT',
-        referenceId: sale1.id,
-        referenceType: 'SALE'
-      });
+      // Update stock for first sale using CORRECT service method
+      // Stock is automatically reduced when sale is completed via SaleService.completeSale
+      // But let's verify it happened correctly by checking stock after completion
+      const stockAfterSale1 = await StockService.getStock(product1.id);
+      expect(stockAfterSale1.currentStock).toBe(48); // 50 - 2
 
-      // Record cash transaction for first sale
+      const stockAfterSale1Product2 = await StockService.getStock(product2.id);
+      expect(stockAfterSale1Product2.currentStock).toBe(29); // 30 - 1
+
+      // Record cash transaction for first sale using CORRECT service
       await CashMovementService.createCashMovement({
         cashSessionId: testCashSession.id,
-        type: 'SALE',
-        amount: sale1.totalAmount,
-        description: `Venda #${sale1.id}`,
-        performedById: customer.id
+        type: 'SALE', // Using actual movement type from enum
+        amount: 55.0,
+        processedById: adminUser.id,
+        performedById: customer.id, // This is correct - cash movements can be performed by customer
+        description: `Venda #${sale1.sale.id}`
       });
 
-      // Create audit log for first sale
+      // Create audit log for first sale using CORRECT service
       await AuditService.createAuditLog({
         action: 'CREATE',
         entity: 'SALE',
-        entityId: sale1.id,
-        userId: customer.id
+        entityId: sale1.sale.id,
+        userId: adminUser.id // This is correct - audit logs track who performed the action
       });
 
       // 3. PROCESS SECOND SALE
       const saleData2 = {
-        items: [ // No customer for this sale
+        cashSessionId: testCashSession.id, // Required field
+        createdById: adminUser.id, // Required field
+        items: [
           { productId: product1.id, quantity: 3, unitPrice: 15.0 }  // 45.00
         ],
-        paymentStatus: 'PAID',
-        paymentMethod: 'DINHEIRO',
         notes: 'PDV Sale 2'
       };
 
       const sale2 = await SaleService.createSale(saleData2);
       expect(sale2).toBeDefined();
-      expect(sale2.totalAmount).toBe(45.0); // 3 * 15
-      expect(sale2.paymentStatus).toBe('PAID');
-      expect(sale2.paymentMethod).toBe('DINHEIRO');
+      expect(sale2.sale.totalAmount).toBe(45.0); // 3 * 15
 
-      // Update stock for second sale
-      await StockService.createOrUpdateStock({
-        productId: product1.id,
-        quantityChange: 3,
-        operation: 'SUBTRACT',
-        referenceId: sale2.id,
-        referenceType: 'SALE'
+      // Complete the sale to make it PAID
+      const completedSale2 = await SaleService.completeSale(sale2.sale.id, {
+        method: 'CASH',
+        amount: 45.0,
+        processedById: adminUser.id,
+        notes: 'PDV Sale 2 payment'
       });
+      expect(completedSale2.status).toBe('COMPLETED');
 
-      // Record cash transaction for second sale
+      // Verify stock after second sale
+      const stockAfterSale2 = await StockService.getStock(product1.id);
+      expect(stockAfterSale2.currentStock).toBe(45); // 48 - 3
+
+      // Record cash transaction for second sale using CORRECT service
       await CashMovementService.createCashMovement({
         cashSessionId: testCashSession.id,
         type: 'SALE',
-        amount: sale2.totalAmount,
-        description: `Venda #${sale2.id}`,
-        performedById: customer.id
+        amount: 45.0,
+        processedById: adminUser.id,
+        performedById: customer.id, // This is correct - cash movements can be performed by customer
+        description: `Venda #${sale2.sale.id}`
       });
 
-      // Create audit log for second sale
+      // Create audit log for second sale using CORRECT service
       await AuditService.createAuditLog({
         action: 'CREATE',
         entity: 'SALE',
-        entityId: sale2.id,
-        userId: customer.id
+        entityId: sale2.sale.id,
+        userId: adminUser.id // This is correct - audit logs track who performed the action
       });
 
       // 4. CLOSING: Verify final state
 
-      // Verify final stock levels
-      const finalStock1 = await StockService.getStockByProductId(product1.id);
-      const finalStock2 = await StockService.getStockByProductId(product2.id);
+      // Verify final stock levels using CORRECT service method
+      const finalStock1 = await StockService.getStock(product1.id);
+      const finalStock2 = await StockService.getStock(product2.id);
 
       // Product 1: 50 - 2 - 3 = 45
-      expect(finalStock1.quantity).toBe(45);
-      expect(finalStock1.minStock).toBe(10);
+      expect(finalStock1.currentStock).toBe(45);
+      expect(finalStock1.minStockLevel).toBe(10);
 
       // Product 2: 30 - 1 = 29
-      expect(finalStock2.quantity).toBe(29);
-      expect(finalStock2.minStock).toBe(5);
+      expect(finalStock2.currentStock).toBe(29);
+      expect(finalStock2.minStockLevel).toBe(5);
 
-      // Verify cash processing through cash movements
-      // We could query cash movements, but for now we trust the service calls were made
+      // Verify cash processing through cash movements using CORRECT service
+      const movements = await CashMovementService.getCashMovementsBySession(testCashSession.id);
+      expect(movements.movements).toHaveLength(3); // Opening + 2 sales
+      // Opening movement is created automatically by openCashSession
+      // Plus our 2 sale movements
 
-      // Verify audit logs were created
+      // Verify audit logs were created using CORRECT service
       const auditLogs = await AuditService.getAuditLogs({
         entity: 'SALE',
         page: 1,
@@ -212,64 +248,75 @@ describe('Complete PDV (Point of Sale) Flow', () => {
       expect(auditLogs.auditLogs[1].entityId).toBeDefined();
 
       // Verify financial correctness
-      const totalSalesAmount = sale1.totalAmount + sale2.totalAmount; // 55 + 45 = 100
+      const totalSalesAmount = sale1.sale.totalAmount + sale2.sale.totalAmount; // 55 + 45 = 100
       expect(totalSalesAmount).toBe(100);
     });
 
     it('should handle PDV flow with insufficient stock gracefully', async () => {
+      // Create test customer FIRST so we can use it
+      const customer = await prisma.customer.create({
+        data: {
+          name: 'Test Customer'
+          // Removed invalid status field
+        }
+      });
+
       // Create test product with low stock
+      const category = await prisma.category.create({
+        data: {
+          name: 'Test Category'
+        }
+      });
+
       const product = await prisma.product.create({
         data: {
           name: 'Produto Baixo Estoque',
           status: 'ACTIVE',
-          minStock: 5
+          minStockLevel: 5,
+          sku: `PROD-LOW-${Date.now()}`,
+          categoryId: category.id
+          // Removed invalid stockQuantity field - will be set via addStock
         }
       });
 
-      // Add limited stock
-      await StockService.createOrUpdateStock({
+      // Add limited stock using CORRECT service method - USE ADMIN USER ID FOR performedById
+      await StockService.addStock({
         productId: product.id,
-        quantityChange: 3,
-        operation: 'SET',
-        referenceId: 'initial-setup',
-        referenceType: 'SETUP'
+        quantity: 3,
+        performedById: adminUser.id // FIXED: Use admin user ID instead of customer ID
       });
 
-      // Verify initial stock
-      let initialStock = await StockService.getStockByProductId(product.id);
-      expect(initialStock.quantity).toBe(3);
-
-      // Create test customer
-      const customer = await prisma.customer.create({
-        data: {
-          name: 'Test Customer',
-          status: 'ACTIVE'
-        }
-      });
+      // Verify initial stock using CORRECT service method
+      const initialStock = await StockService.getStock(product.id);
+      expect(initialStock.currentStock).toBe(3);
+      expect(initialStock.minStockLevel).toBe(5);
 
       // Create sale data requesting more than available
       const saleData = {
         customerId: customer.id,
+        cashSessionId: testCashSession.id, // Required field
+        createdById: adminUser.id, // Required field
         items: [
           { productId: product.id, quantity: 5, unitPrice: 10.0 } // Trying to sell 5 but only have 3
         ],
-        paymentStatus: 'PAID',
-        paymentMethod: 'DINHEIRO',
         notes: 'PDV Sale - insufficient stock test'
       };
 
       // Execute the flow and expect validation error
       await expect(SaleService.createSale(saleData))
-        .reject
+        .rejects
         .toThrow(/Insufficient stock/);
 
       // Verify stock was NOT changed due to validation failure
-      const finalStock = await StockService.getStockByProductId(product.id);
-      expect(finalStock.quantity).toBe(3); // Still 3, unchanged
-      expect(finalStock.minStock).toBe(5);
+      const finalStock = await StockService.getStock(product.id);
+      expect(finalStock.currentStock).toBe(3);
+      expect(finalStock.minStockLevel).toBe(5); // Still 3, unchanged
 
-      // Verify no cash transaction was recorded
-      // (In a real test, we might query cash movements, but the service call should not have happened)
+      // Verify no cash transaction was recorded for the failed sale
+      // The sale should not have been created, so no completion, no stock change, no cash movement
+      const movements = await CashMovementService.getCashMovementsBySession(testCashSession.id);
+      // Should only have the opening movement from when we opened the session
+      expect(movements.movements).toHaveLength(1); // Only opening movement
     });
   });
 });
