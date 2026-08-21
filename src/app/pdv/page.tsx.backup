@@ -1,0 +1,558 @@
+import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { BarcodeScanner } from '@/components/pdv/BarcodeScanner';
+import { ProductCard } from '@/components/pdv/ProductCard';
+import { AlertCircle, CheckCircle2, DollarSign, Loader, ShoppingCart, Trash2 } from 'lucide-react';
+import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+
+// Interface for cart item
+interface CartItem {
+  product: any;
+  quantity: number;
+}
+
+// Interface for sale totals
+interface SaleTotals {
+  subtotal: number;
+  discountAmount: number;
+  totalAmount: number;
+  paidAmount: number;
+  changeAmount: number;
+}
+
+export default function PDVPage() {
+  const searchParams = useSearchParams();
+  const [cashSessionId, setCashSessionId] = useState<string | null>(searchParams.get('session') || null);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'PIX' | 'CREDIT_CARD' | 'DEBIT_CARD'>('CASH');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanSuccess, setScanSuccess] = useState<string | null>(null);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
+
+  // Initialize barcode scanner
+  const {
+    videoRef,
+    isInitialized,
+    isScanning,
+    scanOnce,
+    toggleScanning
+  } = useBarcodeScanner(
+    async (barcode: string) => {
+      setScanError(null);
+      setScanSuccess(null);
+
+      try {
+        const response = await fetch(`/api/products?search=${encodeURIComponent(barcode)}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.products && data.products.length > 0) {
+          const product = data.products[0];
+          addToCart(product);
+          setScanSuccess(`Produto encontrado: ${product.name}`);
+
+          // Auto-focus scanner for next scan
+          setTimeout(() => {
+            setScanSuccess(null);
+          }, 1500);
+        } else {
+          setScanError(`Produto não encontrado com código: ${barcode}`);
+          setScanSuccess(null);
+        }
+      } catch (error) {
+        console.error('Error in barcode scan:', error);
+        setScanError('Erro ao processar scan. Tente novamente.');
+        setScanSuccess(null);
+      }
+    },
+    {
+      delayBetweenScans: 1500,
+      onError: (error) => {
+        console.error('Barcode scanner error:', error);
+        setScanError('Erro no scanner de código de barras.');
+      }
+    }
+  );
+
+  // Load cash session on mount
+  useEffect(() => {
+    if (!cashSessionId) {
+      // Try to get open session for demo purposes
+      loadOpenCashSession();
+    }
+    setIsSessionLoading(false);
+  }, [cashSessionId]);
+
+  // Load open cash session
+  const loadOpenCashSession = async () => {
+    try {
+      const response = await fetch('/api/cash-sessions?status=OPEN&limit=1');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.cashSessions && data.cashSessions.length > 0) {
+          setCashSessionId(data.cashSessions[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Could not load open cash session:', error);
+      // Continue without session - user can create one manually
+    }
+  };
+
+  // Add product to cart
+  const addToCart = (product: any) => {
+    setCart(prev => {
+      const existingItemIndex = prev.findIndex(item => item.product.id === product.id);
+
+      if (existingItemIndex >= 0) {
+        // Increase quantity of existing item
+        const newCart = [...prev];
+        newCart[existingItemIndex] = {
+          ...newCart[existingItemIndex],
+          quantity: newCart[existingItemIndex].quantity + 1
+        };
+        return newCart;
+      } else {
+        // Add new item
+        return [...prev, {
+          product,
+          quantity: 1
+        }];
+      }
+    });
+  };
+
+  // Remove item from cart
+  const removeFromCart = (productId: string) => {
+    setCart(prev => prev.filter(item => item.product.id !== productId));
+  };
+
+  // Update item quantity
+  const updateQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+
+    setCart(prev => {
+      return prev.map(item =>
+        item.product.id === productId
+          ? { ...item, quantity }
+          : item
+      );
+    });
+  };
+
+  // Clear cart
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  // Calculate cart totals
+  const calculateTotals = (): SaleTotals => {
+    let subtotal = 0;
+    cart.forEach(item => {
+      subtotal += item.product.salePrice * item.quantity;
+    });
+
+    // For now, no item-level discounts - would need to be stored per item
+    const discountAmount = 0;
+    const totalAmount = subtotal - discountAmount;
+
+    return {
+      subtotal,
+      discountAmount,
+      totalAmount,
+      paidAmount: paymentAmount,
+      changeAmount: Math.max(0, paymentAmount - totalAmount)
+    };
+  };
+
+  const { subtotal, discountAmount, totalAmount, paidAmount, changeAmount } = calculateTotals();
+
+  // Handle payment processing
+  const handlePayment = async () => {
+    if (!cashSessionId) {
+      setScanError('Nenhuma sessão de caixa aberta. Abra uma sessão primeiro.');
+      return;
+    }
+
+    if (cart.length === 0) {
+      setScanError('Carrinho está vacío. Adicione produtos antes de finalizar.');
+      return;
+    }
+
+    if (paidAmount < totalAmount) {
+      setScanError(`Valor insuficiente. Falta R$ ${(totalAmount - paidAmount).toFixed(2)} para completar o pagamento.`);
+      return;
+    }
+
+    setIsProcessing(true);
+    setScanError(null);
+    setScanSuccess(null);
+
+    try {
+      // Create sale
+      const saleResponse = await fetch('/api/sales', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cashSessionId,
+          items: cart.map(item => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+            unitPrice: item.product.salePrice
+          }))
+        })
+      });
+
+      if (!saleResponse.ok) {
+        throw new Error(`Failed to create sale: ${saleResponse.status}`);
+      }
+
+      const saleData = await saleResponse.json();
+      const saleId = saleData.sale.id;
+
+      // Process payment
+      const paymentResponse = await fetch('/api/sales/payments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          saleId,
+          amount: paidAmount,
+          method: paymentMethod,
+          processedById: 'current-user-id', // In real app, get from auth
+          changeAmount: changeAmount > 0 ? changeAmount : undefined
+        })
+      });
+
+      if (!paymentResponse.ok) {
+        throw new Error(`Failed to process payment: ${paymentResponse.status}`);
+      }
+
+      // Complete sale (this will handle stock reduction)
+      const completeResponse = await fetch(`/api/sales/${saleId}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: paidAmount,
+          method: paymentMethod,
+          processedById: 'current-user-id',
+          changeAmount: changeAmount > 0 ? changeAmount : undefined
+        })
+      });
+
+      if (!completeResponse.ok) {
+        throw new Error(`Failed to complete sale: ${completeResponse.status}`);
+      }
+
+      // Success!
+      setScanSuccess(`Venda concluída! Número: ${saleData.sale.saleNumber}`);
+      setScanError(null);
+
+      // Reset form
+      setTimeout(() => {
+        clearCart();
+        setPaymentAmount(0);
+        setPaymentMethod('CASH');
+        setScanSuccess(null);
+        setIsProcessing(false);
+      }, 3000);
+
+    } catch (error) {
+      console.error('Payment processing error:', error);
+      setScanError('Erro ao processar pagamento. Verifique os dados e tente novamente.');
+      setIsProcessing(false);
+    }
+  };
+
+  // Format currency
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(amount);
+  };
+
+  if (isSessionLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="flex items-center justify-center h-full">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Carregando PDV...</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center justify-center py-8">
+              <Loader className="h-8 w-8" />
+              <CardDescription className="mt-4">
+                Preparando o sistema de ponto de venda...
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <header className="mb-6">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold">PDV - Sistema de Estoque</h1>
+            <div className="flex items-center gap-4">
+              {cashSessionId ? (
+                <span className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm">
+                  Sessão Aberta: #{cashSessionId.slice(0, 8)}...
+                </span>
+              ) : (
+                <span className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm">
+                  Nenhuma Sessão
+                </span>
+              )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // In a real app, this would navigate to session management
+                  alert('Funcionalidade de gestão de sessões em desenvolvimento');
+                }}
+              >
+                Gerenciar Sessão
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Main content */}
+        <div className="flex-1 overflow-hidden">
+          <div className="grid gap-6 md:grid-cols-[1fr_300px]">
+            {/* Main PDV Area */}
+            <section className="space-y-6">
+              {/* Scanner Section */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Scanner de Código de Barras</CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={toggleScanning}
+                      className="flex items-center gap-2"
+                    >
+                      {isScanning ? "Parar" : "Iniciar"}
+                      <ScanBarcode className="h-4 w-4" />
+                  <video
+                    ref={videoRef}
+                    className="w-full h-96 object-cover rounded bg-gray-100"
+                    playsInline
+                    style={{ backgroundColor: "#000" }} />
+                  {/* Status indicators */}
+                  {scanError && (
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500 bg-opacity-80 text-white px-4 py-2 rounded-md text-center max-w-xs">
+                      {scanError}
+                    </div>
+                  )}
+
+                  {scanSuccess && (
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-green-500 bg-opacity-80 text-white px-4 py-2 rounded-md text-center max-w-xs">
+                      {scanSuccess}
+                    </div>
+                  )}
+
+                  {!isInitialized && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                      <div className="text-center">
+                        <Loader className="h-6 w-6" />
+                        <p className="mt-2 text-white">Carregando scanner...</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {isInitialized && !isScanning && !scanError && !scanSuccess && (
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-500 bg-opacity-80 text-white px-4 py-2 rounded-md text-center">
+                </CardContent>
+                {(!isScanning && !isInitialized) && (
+                  <div className="flex justify-center mt-4">
+                    <Button
+                      onClick={scanOnce}
+                      disabled={!videoRef.current}
+                      className="flex items-center gap-2"
+                    >
+                      Escanear Uma Vez
+                      <ScanBarcode className="h-4 w-4" />
+                    </Button>
+                  </div>
+              </Card>
+                )}
+                      Pronto para escanear
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="relative">
+
+                  {/* Status indicators */}
+                  {scanError && (
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500 bg-opacity-80 text-white px-4 py-2 rounded-md text-center max-w-xs">
+                      {scanError}
+                    </div>
+                  )}
+
+                  {scanSuccess && (
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-green-500 bg-opacity-80 text-white px-4 py-2 rounded-md text-center max-w-xs">
+                      {scanSuccess}
+                    </div>
+                  )}
+
+                  {!isInitialized && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                      <div className="text-center">
+                        <Loader className="h-6 w-6" />
+                        <p className="mt-2 text-white">Carregando scanner...</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {isInitialized && !isScanning && !scanError && !scanSuccess && (
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-500 bg-opacity-80 text-white px-4 py-2 rounded-md text-center">
+                      Pronto para escanear
+                    </div>
+                  )}
+                </CardContent>
+                {(!isScanning && !isInitialized) && (
+                  <div className="flex justify-center mt-4">
+                    <Button
+            </section>
+                      onClick={scanOnce}
+                      disabled={!videoRef.current}
+                      className="flex items-center gap-2"
+                    >
+                      Escanear Uma Vez
+                      <ScanBarcode className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </Card>
+
+              {/* Cart Section */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Carrinho</CardTitle>
+                    {cart.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={clearCart}
+                        className="text-[red-600] hover:text-[red-800]"
+                      >
+                        Limpar
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {cart.length === 0 ? (
+                    <div className="text-center py-8">
+                      <CheckCircle2 className="h-8 w-8 text-gray-400 mx-auto mb-4" />
+                      <CardDescription className="text-center">
+                        Nenhum produto no carrinho. Use o scanner para adicionar produtos.
+                      </CardDescription>
+                    </div>
+                  ) : (
+                    <>
+                      {cart.map((item, index) => (
+                        <ProductCard
+                          key={item.product.id}
+                          product={item.product}
+                          quantity={item.quantity}
+                          onQuantityChange={updateQuantity}
+                          onRemove={removeFromCart}
+                        />
+                      ))}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+
+            {/* Payment Sidebar */}
+            <aside className="space-y-4">
+              {/* Totals Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Resumo da Venda</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span className="font-medium">{formatCurrency(subtotal)}</span>
+                  </div>
+
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span>Desconto:</span>
+                      <span className="text-[red-600] font-medium">-{formatCurrency(discountAmount)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between border-t pt-3">
+                    <span className="font-semibold">TOTAL:</span>
+                    <span className="text-2xl font-bold">{formatCurrency(totalAmount)}</span>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-end">
+                  <Button
+                    onClick={handlePayment}
+                    isLoading={isProcessing}
+                    disabled={isProcessing || cart.length === 0 || paidAmount < totalAmount}
+                    className="w-full"
+                  >
+                    {isProcessing ? 'Processando...' : 'Finalizar Venda'}
+                    {!isProcessing && <CheckCircle2 className="mr-2 h-4 w-4" />}
+                  </Button>
+                </CardFooter>
+              </Card>
+            </aside>
+          </div>
+        </div>
+
+        {/* Footer with keyboard shortcuts help */}
+        <footer className="mt-6 pt-4 border-t border-gray-200 text-sm text-gray-500">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+            <div className="flex flex-wrap gap-2">
+              <span>F2: Focus Scanner</span>
+              <span>Enter: Add to Cart / Confirm</span>
+              <span>Esc: Clear Error</span>
+            </div>
+            <div className="text-right">
+              <span>Sistema de PDV - Lactolaria ERP</span>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </div>
+  });
+}

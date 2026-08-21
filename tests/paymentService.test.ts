@@ -7,6 +7,7 @@ import { CashRegisterService } from '../src/services/cashRegisterService';
 import { CashMovementService } from '../src/services/cashMovementService';
 import { prisma } from './setup';
 import { cleanupDatabase, createAdminUser, createTestUser } from './utils';
+import { PaymentMethod } from '@/generated/prisma/client';
 
 describe('Payment Service', () => {
   let adminUser: any;
@@ -29,8 +30,7 @@ describe('Payment Service', () => {
     // Create a category for our test product
     const category = await prisma.category.create({
       data: {
-        name: 'Test Category',
-        id: '11111111-1111-1111-1111-111111111111'
+        name: 'Test Category'
       }
     });
 
@@ -38,7 +38,7 @@ describe('Payment Service', () => {
     testProduct = await prisma.product.create({
       data: {
         name: 'Test Product',
-        sku: 'PAYMENTTEST001',
+        sku: `PAYMENTTEST_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         categoryId: category.id,
         costPrice: 10.0,
         salePrice: 15.0,
@@ -51,7 +51,7 @@ describe('Payment Service', () => {
     testCustomer = await prisma.customer.create({
       data: {
         name: 'Test Customer',
-        email: 'test@example.com'
+        email: `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@example.com`
       }
     });
 
@@ -80,7 +80,6 @@ describe('Payment Service', () => {
           unitPrice: testProduct.salePrice
         }
       ],
-      paymentMethod: 'CASH',
       createdById: adminUser.id
     });
     testSale = saleResult.sale;
@@ -101,7 +100,7 @@ describe('Payment Service', () => {
       console.log('Creating paymentData');
       const paymentData = {
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 30.0,
         processedById: adminUser.id
       };
@@ -140,7 +139,7 @@ describe('Payment Service', () => {
     it('should create correct cash movements for cash payment without change', async () => {
       const paymentData = {
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 50.0,
         processedById: adminUser.id
       };
@@ -168,7 +167,7 @@ describe('Payment Service', () => {
     it('should process a cash payment with change correctly', async () => {
       const paymentData = {
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 50.0,
         changeAmount: 20.0,
         processedById: adminUser.id
@@ -211,7 +210,7 @@ describe('Payment Service', () => {
     it('should create correct cash movements for cash payment with change', async () => {
       const paymentData = {
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 60.0,
         changeAmount: 10.0,
         processedById: adminUser.id
@@ -241,7 +240,7 @@ describe('Payment Service', () => {
       await expect(
         PaymentService.processPayment({
           saleId: testSale.id,
-          method: 'CASH',
+          method: PaymentMethod.CASH,
           amount: 30.0,
           changeAmount: -5.0,
           processedById: adminUser.id
@@ -253,7 +252,7 @@ describe('Payment Service', () => {
       await expect(
         PaymentService.processPayment({
           saleId: testSale.id,
-          method: 'CASH',
+          method: PaymentMethod.CASH,
           amount: 30.0,
           changeAmount: 40.0,
           processedById: adminUser.id
@@ -265,7 +264,7 @@ describe('Payment Service', () => {
       await expect(
         PaymentService.processPayment({
           saleId: testSale.id,
-          method: 'CASH',
+          method: PaymentMethod.CASH,
           amount: 20.0,
           changeAmount: 20.0,
           processedById: adminUser.id
@@ -277,7 +276,7 @@ describe('Payment Service', () => {
       await expect(
         PaymentService.processPayment({
           saleId: testSale.id,
-          method: 'CASH',
+          method: PaymentMethod.CASH,
           amount: -10.0,
           processedById: adminUser.id
         })
@@ -288,7 +287,7 @@ describe('Payment Service', () => {
       await expect(
         PaymentService.processPayment({
           saleId: testSale.id,
-          method: 'CASH',
+          method: PaymentMethod.CASH,
           amount: 0.0,
           processedById: adminUser.id
         })
@@ -301,7 +300,7 @@ describe('Payment Service', () => {
       // First payment of 30 on a 105 sale
       const payment1 = await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 30.0,
         processedById: adminUser.id
       });
@@ -312,7 +311,7 @@ describe('Payment Service', () => {
       // Second payment of 50 on remaining 75
       const payment2 = await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 50.0,
         processedById: adminUser.id
       });
@@ -329,7 +328,7 @@ describe('Payment Service', () => {
       // Payment of exactly 105 on a 105 sale
       const payment = await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 105.0,
         processedById: adminUser.id
       });
@@ -346,7 +345,7 @@ describe('Payment Service', () => {
       // Payment of 125 with 20 change on a 105 sale (effective = 105)
       const payment = await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 125.0,
         changeAmount: 20.0,
         processedById: adminUser.id
@@ -381,7 +380,7 @@ describe('Payment Service', () => {
       // First payment of 60 on a 105 sale (remaining 45)
       await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 60.0,
         processedById: adminUser.id
       });
@@ -390,7 +389,7 @@ describe('Payment Service', () => {
       await expect(
         PaymentService.processPayment({
           saleId: testSale.id,
-          method: 'CASH',
+          method: PaymentMethod.CASH,
           amount: 50.0,
           processedById: adminUser.id
         })
@@ -401,7 +400,7 @@ describe('Payment Service', () => {
       // First payment of 30 on a 105 sale (remaining 75)
       await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 30.0,
         processedById: adminUser.id
       });
@@ -409,7 +408,7 @@ describe('Payment Service', () => {
       // Try to pay 60 with 10 change (effective 50) when only 75 remaining - should work
       const payment1 = await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 60.0,
         changeAmount: 10.0,
         processedById: adminUser.id
@@ -421,7 +420,7 @@ describe('Payment Service', () => {
       await expect(
         PaymentService.processPayment({
           saleId: testSale.id,
-          method: 'CASH',
+          method: PaymentMethod.CASH,
           amount: 30.0,
           changeAmount: 2.0,
           processedById: adminUser.id
@@ -435,7 +434,7 @@ describe('Payment Service', () => {
       // Process a payment
       const processedPayment = await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 30.0,
         processedById: adminUser.id
       });
@@ -472,11 +471,9 @@ describe('Payment Service', () => {
 
       const payment2 = await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CREDIT_CARD',
+        method: PaymentMethod.CREDIT_CARD,
         amount: 15.0,
-        processedById: adminUser.id,
-        cardLastFour: '1234',
-        cardBrand: 'VISA'
+        processedById: adminUser.id
       });
 
       // Get payments for sale
@@ -500,7 +497,6 @@ describe('Payment Service', () => {
             unitPrice: testProduct.salePrice
           }
         ],
-        paymentMethod: 'CASH', // This is just initial method, no actual payment processed
         createdById: adminUser.id
       });
       const saleNoPayments = saleNoPaymentsResult.sale;
@@ -521,7 +517,7 @@ describe('Payment Service', () => {
       // Process payments of different methods
       await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 10.0,
         processedById: adminUser.id
       });
@@ -537,18 +533,15 @@ describe('Payment Service', () => {
             unitPrice: testProduct.salePrice
           }
         ],
-        paymentMethod: 'CASH',
         createdById: adminUser.id
       });
       const testSale2 = testSale2Result.sale;
 
       await PaymentService.processPayment({
         saleId: testSale2.id,
-        method: 'CREDIT_CARD',
+        method: PaymentMethod.CREDIT_CARD,
         amount: 15.0,
-        processedById: adminUser.id,
-        cardLastFour: '1234',
-        cardBrand: 'VISA'
+        processedById: adminUser.id
       });
 
       // Get CASH payments - should have 1 payment (for testSale)
@@ -571,13 +564,13 @@ describe('Payment Service', () => {
       // Process only CASH payment
       await PaymentService.processPayment({
         saleId: testSale.id,
-        method: 'CASH',
+        method: PaymentMethod.CASH,
         amount: 10.0,
         processedById: adminUser.id
       });
 
       // Try to get PIX payments (none exist)
-      const pixPayments = await PaymentService.getPaymentsByMethod('PIX');
+      const pixPayments = await PaymentService.getPaymentsByMethod(PaymentMethod.PIX);
       expect(pixPayments).toHaveLength(0);
     });
 

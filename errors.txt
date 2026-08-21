@@ -1,0 +1,150 @@
+src/services/auditService.ts(319,38): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/services/auditService.ts(319,43): error TS7006: Parameter 'curr' implicitly has an 'any' type.
+src/services/auditService.ts(323,38): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/services/auditService.ts(323,43): error TS7006: Parameter 'curr' implicitly has an 'any' type.
+src/services/auditService.ts(327,34): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/services/auditService.ts(327,39): error TS7006: Parameter 'curr' implicitly has an 'any' type.
+src/services/cashMovementService.ts(148,48): error TS7006: Parameter 'movement' implicitly has an 'any' type.
+src/services/cashMovementService.ts(219,48): error TS7006: Parameter 'movement' implicitly has an 'any' type.
+src/services/cashRegisterService.ts(205,55): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/services/cashRegisterService.ts(206,57): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/services/cashSessionService.ts(40,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/cashSessionService.ts(156,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/cashSessionService.ts(420,54): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/services/cashSessionService.ts(422,50): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/services/cashSessionService.ts(422,55): error TS7006: Parameter 'sale' implicitly has an 'any' type.
+src/services/paymentService.ts(34,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/paymentService.ts(256,25): error TS7006: Parameter 'payment' implicitly has an 'any' type.
+src/services/productService.ts(291,28): error TS7006: Parameter 'product' implicitly has an 'any' type.
+src/services/purchaseService.ts(104,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/purchaseService.ts(163,30): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/services/purchaseService.ts(163,30): error TS18048: 'unitPrice' is possibly 'undefined'.
+src/services/purchaseService.ts(256,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/purchaseService.ts(337,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/purchaseService.ts(349,30): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/services/purchaseService.ts(349,30): error TS18048: 'unitPrice' is possibly 'undefined'.
+src/services/purchaseService.ts(423,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/purchaseService.ts(510,9): error TS1117: An object literal cannot have multiple properties with the same name.
+src/services/purchaseService.ts(533,50): error TS7006: Parameter 'order' implicitly has an 'any' type.
+src/services/purchaseService.ts(605,11): error TS18046: 'error' is of type 'unknown'.
+src/services/purchaseService.ts(619,11): error TS18046: 'error' is of type 'unknown'.
+src/services/purchaseService.ts(633,11): error TS18046: 'error' is of type 'unknown'.
+src/services/salePaymentService.ts(81,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/salePaymentService.ts(191,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/salePaymentService.ts(250,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/salePaymentService.ts(322,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/salePaymentService.ts(358,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/salePaymentService.ts(570,41): error TS7006: Parameter 'payment' implicitly has an 'any' type.
+src/services/saleService.ts(71,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/saleService.ts(142,26): error TS2358: The left-hand side of an 'instanceof' expression must be of type 'any', an object type or a type parameter.
+src/services/saleService.ts(321,40): error TS7006: Parameter 'sale' implicitly has an 'any' type.
+src/services/saleService.ts(344,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/saleService.ts(377,49): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/services/saleService.ts(481,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/saleService.ts(685,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/saleService.ts(715,46): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/services/stockService.ts(68,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/stockService.ts(120,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/stockService.ts(179,39): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+src/services/stockService.ts(272,28): error TS7006: Parameter 'product' implicitly has an 'any' type.
+tests/cashMovementService.test.ts(46,69): error TS2345: Argument of type '{ cashSessionId: any; type: string; amount: number; description: string; performedById: any; }' is not assignable to parameter of type 'CreateCashMovementInput'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type 'CashMovementType'.
+tests/cashMovementService.test.ts(213,14): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }'.
+  Property '0' does not exist on type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }'.
+tests/cashMovementService.test.ts(214,14): error TS7053: Element implicitly has an 'any' type because expression of type '1' can't be used to index type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }'.
+  Property '1' does not exist on type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }'.
+tests/cashMovementService.test.ts(215,14): error TS7053: Element implicitly has an 'any' type because expression of type '2' can't be used to index type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }'.
+  Property '2' does not exist on type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }'.
+tests/cashMovementService.test.ts(264,30): error TS2488: Type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }' must have a '[Symbol.iterator]()' method that returns an iterator.
+tests/cashMovementService.test.ts(275,14): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }'.
+  Property '0' does not exist on type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }'.
+tests/cashMovementService.test.ts(276,14): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }'.
+  Property '0' does not exist on type '{ movements: any; pagination: { total: any; limit: number; page: number; hasMore: boolean; }; }'.
+tests/cashRegisterService.test.ts(421,11): error TS1117: An object literal cannot have multiple properties with the same name.
+tests/cashSessionService.test.ts(237,49): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/cashSessionService.test.ts(285,43): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/cashSessionService.test.ts(335,44): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/cashSessionService.test.ts(699,14): error TS18047: 'summary.closedBy' is possibly 'null'.
+tests/check-category.ts(21,66): error TS18046: 'createError' is of type 'unknown'.
+tests/check-category.ts(32,63): error TS18046: 'createError2' is of type 'unknown'.
+tests/check-product.ts(31,68): error TS18046: 'createError' is of type 'unknown'.
+tests/check-product.ts(48,70): error TS18046: 'createError2' is of type 'unknown'.
+tests/check-purchaseorder.ts(41,75): error TS18046: 'createError' is of type 'unknown'.
+tests/check-purchaseorder.ts(56,77): error TS18046: 'createError2' is of type 'unknown'.
+tests/check-purchaseorderitem.ts(63,80): error TS18046: 'createError' is of type 'unknown'.
+tests/check-purchaseorderitem.ts(78,82): error TS18046: 'createError2' is of type 'unknown'.
+tests/check-stockmovement.ts(48,75): error TS18046: 'createError' is of type 'unknown'.
+tests/check-stockmovement.ts(62,77): error TS18046: 'createError2' is of type 'unknown'.
+tests/check-supplier.ts(28,69): error TS18046: 'createError' is of type 'unknown'.
+tests/check-user.ts(21,62): error TS18046: 'createError' is of type 'unknown'.
+tests/check-user.ts(34,80): error TS18046: 'createError2' is of type 'unknown'.
+tests/check-user.ts(49,69): error TS18046: 'createError3' is of type 'unknown'.
+tests/customerService.test.ts(260,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/customerService.test.ts(287,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/paymentService.test.ts(80,11): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/paymentService.test.ts(104,59): error TS2345: Argument of type '{ saleId: any; method: string; amount: number; processedById: any; }' is not assignable to parameter of type '{ saleId: string; amount: number | Decimal; method: PaymentMethod; transactionId?: string | null | undefined; processingFee?: number | Decimal | null | undefined; installmentCount?: number | ... 1 more ... | undefined; changeAmount?: number | ... 2 more ... | undefined; processedById: string; }'.
+  Types of property 'method' are incompatible.
+    Type 'string' is not assignable to type 'PaymentMethod'.
+tests/paymentService.test.ts(128,46): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/paymentService.test.ts(142,43): error TS2345: Argument of type '{ saleId: any; method: string; amount: number; processedById: any; }' is not assignable to parameter of type '{ saleId: string; amount: number | Decimal; method: PaymentMethod; transactionId?: string | null | undefined; processingFee?: number | Decimal | null | undefined; installmentCount?: number | ... 1 more ... | undefined; changeAmount?: number | ... 2 more ... | undefined; processedById: string; }'.
+  Types of property 'method' are incompatible.
+    Type 'string' is not assignable to type 'PaymentMethod'.
+tests/paymentService.test.ts(151,46): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/paymentService.test.ts(156,52): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/paymentService.test.ts(171,59): error TS2345: Argument of type '{ saleId: any; method: string; amount: number; changeAmount: number; processedById: any; }' is not assignable to parameter of type '{ saleId: string; amount: number | Decimal; method: PaymentMethod; transactionId?: string | null | undefined; processingFee?: number | Decimal | null | undefined; installmentCount?: number | ... 1 more ... | undefined; changeAmount?: number | ... 2 more ... | undefined; processedById: string; }'.
+  Types of property 'method' are incompatible.
+    Type 'string' is not assignable to type 'PaymentMethod'.
+tests/paymentService.test.ts(194,46): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/paymentService.test.ts(199,49): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/paymentService.test.ts(214,43): error TS2345: Argument of type '{ saleId: any; method: string; amount: number; changeAmount: number; processedById: any; }' is not assignable to parameter of type '{ saleId: string; amount: number | Decimal; method: PaymentMethod; transactionId?: string | null | undefined; processingFee?: number | Decimal | null | undefined; installmentCount?: number | ... 1 more ... | undefined; changeAmount?: number | ... 2 more ... | undefined; processedById: string; }'.
+  Types of property 'method' are incompatible.
+    Type 'string' is not assignable to type 'PaymentMethod'.
+tests/paymentService.test.ts(223,46): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/paymentService.test.ts(227,49): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/paymentService.test.ts(365,46): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/paymentService.test.ts(369,49): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/paymentService.test.ts(472,9): error TS2353: Object literal may only specify known properties, and 'cardLastFour' does not exist in type '{ saleId: string; amount: number | Decimal; method: PaymentMethod; transactionId?: string | null | undefined; processingFee?: number | Decimal | null | undefined; installmentCount?: number | ... 1 more ... | undefined; changeAmount?: number | ... 2 more ... | undefined; processedById: string; }'.
+tests/paymentService.test.ts(494,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/paymentService.test.ts(531,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/paymentService.test.ts(544,9): error TS2353: Object literal may only specify known properties, and 'cardLastFour' does not exist in type '{ saleId: string; amount: number | Decimal; method: PaymentMethod; transactionId?: string | null | undefined; processingFee?: number | Decimal | null | undefined; installmentCount?: number | ... 1 more ... | undefined; changeAmount?: number | ... 2 more ... | undefined; processedById: string; }'.
+tests/productService.test.ts(472,44): error TS7006: Parameter 'p' implicitly has an 'any' type.
+tests/purchaseService.test.ts(525,9): error TS2353: Object literal may only specify known properties, and 'paymentMethod' does not exist in type 'CreatePurchaseOrderInput'.
+tests/purchaseService.test.ts(548,9): error TS2353: Object literal may only specify known properties, and 'paymentMethod' does not exist in type 'CreatePurchaseOrderInput'.
+tests/saleService.test.ts(217,15): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(243,15): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(261,15): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(285,15): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(303,17): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(321,15): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(339,15): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(354,11): error TS2353: Object literal may only specify known properties, and 'paymentMethod' does not exist in type 'CreateSaleInput'.
+tests/saleService.test.ts(369,15): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(387,15): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(407,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(443,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(458,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(507,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(619,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(647,43): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/saleService.test.ts(672,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(704,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(735,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(785,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(813,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(840,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(875,45): error TS7006: Parameter 'm' implicitly has an 'any' type.
+tests/saleService.test.ts(896,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/saleService.test.ts(918,13): error TS2353: Object literal may only specify known properties, and 'unitPrice' does not exist in type '{ productId: string; quantity: number; discountAmount?: number | Decimal | undefined; }'.
+tests/setup-db.ts(18,78): error TS18046: 'e' is of type 'unknown'.
+tests/setup-db.ts(28,14): error TS7017: Element implicitly has an 'any' type because type 'typeof globalThis' has no index signature.
+tests/setup-db.ts(29,32): error TS7017: Element implicitly has an 'any' type because type 'typeof globalThis' has no index signature.
+tests/setup-db.ts(30,29): error TS7017: Element implicitly has an 'any' type because type 'typeof globalThis' has no index signature.
+tests/setup-db.ts(37,12): error TS7017: Element implicitly has an 'any' type because type 'typeof globalThis' has no index signature.
+tests/setup-db.ts(50,76): error TS18046: 'e' is of type 'unknown'.
+tests/setup-db.ts(57,57): error TS18046: 'copyError' is of type 'unknown'.
+tests/utils.ts(30,64): error TS18046: 'error' is of type 'unknown'.
+tests/utils.ts(64,78): error TS18046: 'e' is of type 'unknown'.
+tests/utils.ts(80,48): error TS18046: 'e' is of type 'unknown'.
+tests/utils.ts(80,71): error TS18046: 'e' is of type 'unknown'.
+tests/utils.ts(80,94): error TS18046: 'e' is of type 'unknown'.

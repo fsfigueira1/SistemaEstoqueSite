@@ -1,36 +1,179 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Laçolaria ERP
+
+A professional ERP system for stationery stores, built with Next.js 15, React 19, TypeScript, and a modern tech stack.
+
+## Overview
+
+Laçolaria ERP is a comprehensive enterprise resource planning system designed specifically for stationery and paper stores. It includes modules for product management, inventory control, sales, purchasing, customer management, and financial reporting.
+
+## Tech Stack
+
+### Frontend
+- **Next.js 15** - React framework with App Router
+- **React 19** - Latest React features
+- **TypeScript** - Type-safe JavaScript
+- **Tailwind CSS** - Utility-first CSS framework
+- **shadcn/ui** - Beautiful, accessible UI components
+- **Lucide React** - Modern icon set
+- **Framer Motion** - Animation library
+
+### Backend
+- **Next.js Route Handlers** - Serverless API functions
+- **Prisma ORM** - TypeScript-first ORM
+- **PostgreSQL** - Relational database (Supabase for development)
+- **Auth.js (NextAuth)** - Authentication solution
+
+### Additional Libraries
+- **Zod** - Schema validation
+- **React Hook Form** - Form management
+- **TanStack Table** - Data tables
+- **Recharts** - Data visualization
+- **Sonner** - Toast notifications
+- **Cloudinary** - File uploads
+- **QuaggaJS** - Barcode scanning
+- **qrcode** - QR code generation
+- **Pino** - Logging
+- **date-fns** - Date formatting
+
+## Project Structure
+
+```
+src/
+├── app/                  # Next.js App Router
+├── components/           # Reusable UI components
+├── components/ui/        # shadcn/ui components
+├── modules/              # Feature modules
+├── services/             # Business logic services
+├── repositories/         # Data access layer
+├── hooks/                # Custom React hooks
+├── lib/                  # Utilities and helpers
+├── types/                # TypeScript type definitions
+├── schemas/              # Validation schemas (Zod)
+├── prisma/               # Prisma ORM configuration and migrations
+├── public/               # Static assets
+�└── docs/                 # Documentation
+```
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Node.js 20+ 
+- npm or yarn
+- PostgreSQL database (or Supabase account for development)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Set up environment variables:
+   Copy `.env.example` to `.env` and fill in the required values:
+   ```env
+   # Supabase PostgreSQL Connection
+   DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-ID].supabase.co:5432/postgres"
 
-## Learn More
+   # NextAuth Configuration
+   NEXTAUTH_URL="http://localhost:3000"
+   NEXTAUTH_SECRET="your-super-secret-key-change-this-in-production"
 
-To learn more about Next.js, take a look at the following resources:
+   # Cloudinary Configuration
+   CLOUDINARY_NAME="your-cloudinary-name"
+   CLOUDINARY_API_KEY="your-cloudinary-api-key"
+   CLOUDINARY_API_SECRET="your-cloudinary-api-secret"
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. Initialize the database:
+   ```bash
+   npx prisma migrate dev --name init
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. Seed the database with sample data (optional):
+   ```bash
+   npm run seed
+   ```
 
-## Deploy on Vercel
+6. Start the development server:
+   ```bash
+   npm run dev
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+7. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm start` - Start production server
+- `npm run lint` - Run ESLint
+- `npx prisma studio` - Open Prisma database GUI
+- `npm run seed` - Seed database with sample data
+
+## Features
+
+### Authentication
+- Secure login with NextAuth
+- Role-based access control (Admin, Manager, User, Accountant)
+- Session management
+
+### Product Management
+- Complete product catalog with SKU, barcode, categories
+- Inventory tracking with real-time stock updates
+- Supplier management
+- Product variants and bundles
+
+### Sales & Orders
+- Point of sale interface
+- Order management and tracking
+- Customer management
+- Payment processing (cash, card, PIX, etc.)
+
+### Purchasing
+- Purchase order management
+- Supplier management
+- Goods receiving
+
+### Reporting & Analytics
+- Sales reports
+- Inventory reports
+- Financial summaries
+- Data visualization with charts
+
+### Additional Features
+- Barcode scanning with QuaggaJS
+- QR code generation
+- File uploads with Cloudinary
+- Audit trail for all important actions
+- Responsive design (desktop-first)
+- Professional, modern UI inspired by Stripe and Vercel dashboards
+
+## Database Schema
+
+The ERP includes the following main entities:
+- **User** - System users with roles and permissions
+- **Product** - Items for sale with inventory tracking
+- **Category** - Product categorization
+- **Supplier** - Vendors and manufacturers
+- **Customer** - Buyers and clients
+- **Order** - Sales transactions
+- **PurchaseOrder** - Purchases from suppliers
+- **StockMovement** - Inventory audit trail
+- **And more...**
+
+## Contributing
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+
+## Acknowledgments
+
+- Inspired by modern ERP systems and SaaS platforms
+- Built with the awesome Next.js and React ecosystem
+- Component library powered by shadcn/ui
+- Icons by Lucide

@@ -1,0 +1,72 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // Enable production builds for Electron
+  output: 'export', // This enables static exports which work well with Electron
+
+  // Asset prefix for Electron builds
+  assetPrefix: './',
+
+  // Images configuration
+  images: {
+    unoptimized: true, // Required for static export
+  },
+
+  // Webpack configuration for Electron compatibility
+  webpack: (config, { isServer }) => {
+    // Fixes npm packages that depend on `fs` module
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+
+    return config;
+  },
+
+  // React Strict Mode for better error reporting
+  reactStrictMode: true,
+
+  // Swc minification
+  swcMinify: true,
+
+  // Experimental features (if needed)
+  experimental: {
+    // Add any experimental features you need here
+  },
+
+  // Headers for security
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:* https:;",
+          },
+        ],
+      },
+    ];
+  },
+};
+
+module.exports = nextConfig;

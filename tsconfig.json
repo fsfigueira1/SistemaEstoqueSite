@@ -13,13 +13,15 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "allowImportingTsExtensions": true,
     "plugins": [
       {
         "name": "next"
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@/generated/*": ["./src/generated/*"]
     }
   },
   "include": [
@@ -30,5 +32,12 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "tests/check-*.ts",
+    "test_structure.ts",
+    "tests/*.test.ts",
+    "tests/integration/*.test.ts",
+    "tests/validation/*.test.ts"
+  ]
 }
