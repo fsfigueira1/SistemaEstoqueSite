@@ -1,0 +1,34 @@
+
+Iniciando Next.js...
+(node:10004) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `electron --trace-deprecation ...` to show where the warning was created)
+Carregando http://localhost:3000
+[10004:0821/221047.690:ERROR:net\disk_cache\cache_util_win.cc:25] Unable to move the cache: Acesso negado. (0x5)
+[10004:0821/221047.696:ERROR:net\disk_cache\disk_cache.cc:284] Unable to create cache
+[10004:0821/221047.696:ERROR:gpu\ipc\host\gpu_disk_cache.cc:737] Gpu Cache Creation failed: -2
+[10004:0821/221047.698:ERROR:net\disk_cache\cache_util_win.cc:25] Unable to move the cache: Acesso negado. (0x5)
+[10004:0821/221047.699:ERROR:net\disk_cache\cache_util_win.cc:25] Unable to move the cache: Acesso negado. (0x5)
+[10004:0821/221047.825:ERROR:net\disk_cache\disk_cache.cc:284] Unable to create cache
+[10004:0821/221047.825:ERROR:gpu\ipc\host\gpu_disk_cache.cc:737] Gpu Cache Creation failed: -2
+[10004:0821/221047.825:ERROR:net\disk_cache\disk_cache.cc:284] Unable to create cache
+[10004:0821/221047.825:ERROR:gpu\ipc\host\gpu_disk_cache.cc:737] Gpu Cache Creation failed: -2
+
+> lacolaria-erp@0.1.0 dev
+> next dev -p 3000
+
+[10004:0821/221049.978:ERROR:storage\browser\quota\quota_database.cc:989] Could not open the quota database, resetting.
+⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use :::3000
+    at <unknown> (Error: listen EADDRINUSE: address already in use :::3000)
+    at new Promise (<anonymous>) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+[?25h
+Next.js encerrado com código 1
+[10004:0821/221053.143:ERROR:storage\browser\quota\quota_database.cc:989] Could not open the quota database, resetting.
+[10004:0821/221056.073:ERROR:storage\browser\quota\quota_database.cc:994] Failed to reset the quota database.
+[10004:0821/221056.073:ERROR:storage\browser\quota\quota_database.cc:994] Failed to reset the quota database.

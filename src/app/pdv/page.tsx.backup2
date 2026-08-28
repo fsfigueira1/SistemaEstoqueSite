@@ -1,28 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { BarcodeScanner } from '@/components/pdv/BarcodeScanner';
 import { ProductCard } from '@/components/pdv/ProductCard';
-import { CheckCircle2, Loader, ScanBarcode } from 'lucide-react';
+import { AlertCircle, CheckCircle2, DollarSign, Loader, ShoppingCart, Trash2, ScanBarcode } from 'lucide-react';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 
 // Interface for cart item
 interface CartItem {
-  product: {
-    id: string;
-    name: string;
-    sku: string;
-    barcode: string | null;
-    salePrice: number;
-    stockQuantity: number;
-    minStockLevel: number;
-    status: string;
-    category?: {
-      name: string;
-      icon?: string | undefined;
-      color?: string | undefined;
-    } | undefined;
-  };
+  product: any;
   quantity: number;
 }
 
@@ -46,120 +33,12 @@ export default function PDVPage() {
   const [scanSuccess, setScanSuccess] = useState<string | null>(null);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
 
-  // Get system user ID for single-user desktop app
-  const getSystemUserId = async (): Promise<string> => {
-    // For single-user desktop app, we can use a fixed ID or fetch from a config
-    // In a real app with multiple users, this would come from auth
-    try {
-      const response = await fetch('/api/system-user');
-      if (response.ok) {
-        const data = await response.json();
-        return data.userId || 'system-user';
-      }
-      return 'system-user';
-    } catch (error) {
-      console.warn('Could not fetch system user, using default:', error);
-      return 'system-user';
-    }
-  };
-
-  // Calculate cart totals
-  const calculateTotals = (): SaleTotals => {
-    let subtotal = 0;
-    cart.forEach(item => {
-      subtotal += item.product.salePrice * item.quantity;
-    });
-
-    // For now, no item-level discounts - would need to be stored per item
-    const discountAmount = 0;
-    const totalAmount = subtotal - discountAmount;
-
-    return {
-      subtotal,
-      discountAmount,
-      totalAmount,
-      paidAmount: paymentAmount,
-      changeAmount: Math.max(0, paymentAmount - totalAmount)
-    };
-  };
-
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(amount);
-  };
-
-  // Add product to cart
-  const addToCart = (product: CartItem['product']) => {
-    setCart(prev => {
-      const existingItemIndex = prev.findIndex(item => item.product.id === product.id);
-
-      if (existingItemIndex >= 0) {
-        // Increase quantity of existing item
-        const newCart = [...prev];
-        newCart[existingItemIndex] = {
-          ...newCart[existingItemIndex],
-          quantity: newCart[existingItemIndex].quantity + 1
-        };
-        return newCart;
-      } else {
-        // Add new item
-        return [...prev, {
-          product,
-          quantity: 1
-        }];
-      }
-    });
-  };
-
-  // Remove item from cart
-  const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId));
-  };
-
-  // Update item quantity
-  const updateQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-
-    setCart(prev => {
-      return prev.map(item =>
-        item.product.id === productId
-          ? { ...item, quantity }
-          : item
-      );
-    });
-  };
-
-  // Clear cart
-  const clearCart = () => {
-    setCart([]);
-  };
-
-  // Load open cash session
-  const loadOpenCashSession = async () => {
-    try {
-      const response = await fetch('/api/cash-sessions?status=OPEN&limit=1');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.cashSessions && data.cashSessions.length > 0) {
-          setCashSessionId(data.cashSessions[0].id);
-        }
-      }
-    } catch (error) {
-      console.error('Could not load open cash session:', error);
-      // Continue without session - user can create one manually
-    }
-  };
-
   // Initialize barcode scanner
   const {
     videoRef,
     isInitialized,
     isScanning,
+    scanOnce,
     toggleScanning
   } = useBarcodeScanner(
     async (barcode: string) => {
@@ -210,36 +89,99 @@ export default function PDVPage() {
 
   // Load cash session on mount
   useEffect(() => {
-    const loadSession = async () => {
-      if (!cashSessionId) {
-        // Try to get open session for demo purposes
-        await loadOpenCashSession();
-      }
-      setIsSessionLoading(false);
-    };
-
-    loadSession();
+    if (!cashSessionId) {
+      // Try to get open session for demo purposes
+      loadOpenCashSession();
+    }
+    setIsSessionLoading(false);
   }, [cashSessionId]);
 
-  if (isSessionLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="flex items-center justify-center h-full">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle>Carregando PDV...</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center justify-center py-8">
-              <Loader className="h-8 w-8" />
-              <CardDescription className="mt-4">
-                Preparando o sistema de ponto de venda...
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  // Load open cash session
+  const loadOpenCashSession = async () => {
+    try {
+      const response = await fetch('/api/cash-sessions?status=OPEN&limit=1');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.cashSessions && data.cashSessions.length > 0) {
+          setCashSessionId(data.cashSessions[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Could not load open cash session:', error);
+      // Continue without session - user can create one manually
+    }
+  };
+
+  // Add product to cart
+  const addToCart = (product: any) => {
+    setCart(prev => {
+      const existingItemIndex = prev.findIndex(item => item.product.id === product.id);
+
+      if (existingItemIndex >= 0) {
+        // Increase quantity of existing item
+        const newCart = [...prev];
+        newCart[existingItemIndex] = {
+          ...newCart[existingItemIndex],
+          quantity: newCart[existingItemIndex].quantity + 1
+        };
+        return newCart;
+      } else {
+        // Add new item
+        return [...prev, {
+          product,
+          quantity: 1
+        }];
+      }
+    });
+  };
+
+  // Remove item from cart
+  const removeFromCart = (productId: string) => {
+    setCart(prev => prev.filter(item => item.product.id !== productId));
+  };
+
+  // Update item quantity
+  const updateQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+
+    setCart(prev => {
+      return prev.map(item =>
+        item.product.id === productId
+          ? { ...item, quantity }
+          : item
+      );
+    });
+  };
+
+  // Clear cart
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  // Calculate cart totals
+  const calculateTotals = (): SaleTotals => {
+    let subtotal = 0;
+    cart.forEach(item => {
+      subtotal += item.product.salePrice * item.quantity;
+    });
+
+    // For now, no item-level discounts - would need to be stored per item
+    const discountAmount = 0;
+    const totalAmount = subtotal - discountAmount;
+
+    return {
+      subtotal,
+      discountAmount,
+      totalAmount,
+      paidAmount: paymentAmount,
+      changeAmount: Math.max(0, paymentAmount - totalAmount)
+    };
+  };
+
+  const { subtotal, discountAmount, totalAmount, paidAmount, changeAmount } = calculateTotals();
 
   // Handle payment processing
   const handlePayment = async () => {
@@ -252,8 +194,6 @@ export default function PDVPage() {
       setScanError('Carrinho está vacío. Adicione produtos antes de finalizar.');
       return;
     }
-
-    const { totalAmount, paidAmount } = calculateTotals();
 
     if (paidAmount < totalAmount) {
       setScanError(`Valor insuficiente. Falta R$ ${(totalAmount - paidAmount).toFixed(2)} para completar o pagamento.`);
@@ -296,10 +236,10 @@ export default function PDVPage() {
         },
         body: JSON.stringify({
           saleId,
-          amount: calculateTotals().paidAmount,
+          amount: paidAmount,
           method: paymentMethod,
-          processedById: await getSystemUserId(),
-          changeAmount: Math.max(0, calculateTotals().paidAmount - calculateTotals().totalAmount)
+          processedById: 'current-user-id', // In real app, get from auth
+          changeAmount: changeAmount > 0 ? changeAmount : undefined
         })
       });
 
@@ -314,19 +254,15 @@ export default function PDVPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: calculateTotals().paidAmount,
+          amount: paidAmount,
           method: paymentMethod,
-          processedById: await getSystemUserId(),
-          changeAmount: Math.max(0, calculateTotals().paidAmount - calculateTotals().totalAmount)
+          processedById: 'current-user-id',
+          changeAmount: changeAmount > 0 ? changeAmount : undefined
         })
       });
 
       if (!completeResponse.ok) {
-        const errorData = await completeResponse.json();
-        setScanError(`Falha ao completar venda: ${errorData.error?.message || 'Erro desconhecido'}`);
-        setScanSuccess(null);
-        setIsProcessing(false);
-        return;
+        throw new Error(`Failed to complete sale: ${completeResponse.status}`);
       }
 
       // Success!
@@ -338,8 +274,8 @@ export default function PDVPage() {
         clearCart();
         setPaymentAmount(0);
         setPaymentMethod('CASH');
-        setIsProcessing(false);
         setScanSuccess(null);
+        setIsProcessing(false);
       }, 3000);
 
     } catch (error) {
@@ -348,6 +284,34 @@ export default function PDVPage() {
       setIsProcessing(false);
     }
   };
+
+  // Format currency
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(amount);
+  };
+
+  if (isSessionLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="flex items-center justify-center h-full">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Carregando PDV...</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center justify-center py-8">
+              <Loader className="h-8 w-8" />
+              <CardDescription className="mt-4">
+                Preparando o sistema de ponto de venda...
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -432,12 +396,25 @@ export default function PDVPage() {
                       </div>
                     </div>
                   )}
+
                   {isInitialized && !isScanning && !scanError && !scanSuccess && (
                     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-500 bg-opacity-80 text-white px-4 py-2 rounded-md text-center">
                       Pronto para escanear
                     </div>
                   )}
                 </CardContent>
+                {(!isScanning && !isInitialized) && (
+                  <div className="flex justify-center mt-4">
+                    <Button
+                      onClick={scanOnce}
+                      disabled={!videoRef.current}
+                      className="flex items-center gap-2"
+                    >
+                      Escanear Uma Vez
+                      <ScanBarcode className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </Card>
 
               {/* Cart Section */}
@@ -445,6 +422,17 @@ export default function PDVPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle>Carrinho</CardTitle>
+                    {cart.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={clearCart}
+                        className="text-[red-600] hover:text-[red-800]"
+                      >
+                        Limpar
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -457,7 +445,7 @@ export default function PDVPage() {
                     </div>
                   ) : (
                     <>
-                      {cart.map((item) => (
+                      {cart.map((item, index) => (
                         <ProductCard
                           key={item.product.id}
                           product={item.product}
@@ -482,25 +470,25 @@ export default function PDVPage() {
                 <CardContent className="space-y-3">
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span className="font-medium">{formatCurrency(calculateTotals().subtotal)}</span>
+                    <span className="font-medium">{formatCurrency(subtotal)}</span>
                   </div>
 
-                  {calculateTotals().discountAmount > 0 && (
+                  {discountAmount > 0 && (
                     <div className="flex justify-between">
                       <span>Desconto:</span>
-                      <span className="text-[red-600] font-medium">-{formatCurrency(calculateTotals().discountAmount)}</span>
+                      <span className="text-[red-600] font-medium">-{formatCurrency(discountAmount)}</span>
                     </div>
                   )}
 
                   <div className="flex justify-between border-t pt-3">
                     <span className="font-semibold">TOTAL:</span>
-                    <span className="text-2xl font-bold">{formatCurrency(calculateTotals().totalAmount)}</span>
+                    <span className="text-2xl font-bold">{formatCurrency(totalAmount)}</span>
                   </div>
                 </CardContent>
                 <CardFooter className="flex justify-end">
                   <Button
                     onClick={handlePayment}
-                    disabled={isProcessing || cart.length === 0 || calculateTotals().paidAmount < calculateTotals().totalAmount}
+                    disabled={isProcessing || cart.length === 0 || paidAmount < totalAmount}
                     className="w-full"
                   >
                     {isProcessing ? 'Processando...' : 'Finalizar Venda'}
@@ -519,6 +507,9 @@ export default function PDVPage() {
               <span>F2: Focus Scanner</span>
               <span>Enter: Add to Cart / Confirm</span>
               <span>Esc: Clear Error</span>
+            </div>
+            <div className="text-right">
+              <span>Sistema de PDV - Lactolaria ERP</span>
             </div>
           </div>
         </footer>
