@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 
+// Define Quagga interface based on actual usage in the code
+interface QuaggaInstance {
+  init: (config: unknown, callback: (err: unknown) => void) => Promise<void>;
+  start: () => void;
+  stop: () => void;
+  isRunning: () => boolean;
+  onDetected: (callback: (result: { codeResult: { code: string | null } }) => void) => { removeAllListeners: () => void };
+  offDetected: (callback: (result: unknown) => void) => void;
+  decodeSingle: (options: unknown) => Promise<{ codeResult: { code: string | null } | null }>;
+}
+
 // Import quagga dynamically to avoid SSR issues
-let Quagga: any = null;
+let Quagga: QuaggaInstance | null = null;
 
 async function loadQuagga() {
   if (!Quagga) {
@@ -58,6 +69,8 @@ export function useBarcodeScanner(
   useEffect(() => {
     if (!isInitialized || !videoRef.current) return;
 
+    let onDetectedHandler: { removeAllListeners: () => void } | null = null;
+
     const startScanning = async () => {
       if (isScanning.current) return;
 
@@ -67,6 +80,9 @@ export function useBarcodeScanner(
 
         await loadQuagga(); // Ensure Quagga is loaded
 
+        if (!Quagga) {
+          throw new Error('Quagga is not loaded');
+        }
         Quagga.init({
           inputStream: {
             name: 'Live',
@@ -87,7 +103,7 @@ export function useBarcodeScanner(
             readers: ['ean_reader', 'ean_8_reader', 'upc_reader', 'upc_e_reader', 'code_128_reader'],
           },
           locate: true,
-        }, (err: any) => {
+        }, (err: unknown) => {
             if (err) {
               console.error('Quagga initialization error:', err);
               isScanning.current = false;
@@ -96,10 +112,13 @@ export function useBarcodeScanner(
               return;
             }
 
+            if (!Quagga) {
+              throw new Error('Quagga is not loaded');
+            }
             Quagga.start();
 
             // Register scan listener
-            Quagga.onDetected((result: any) => {
+            onDetectedHandler = Quagga.onDetected((result: { codeResult: { code: string | null } }) => {
               const now = Date.now();
 
               // Prevent duplicate scans within delay period
@@ -143,7 +162,9 @@ export function useBarcodeScanner(
     return () => {
       if (Quagga && Quagga.isRunning()) {
         Quagga.stop();
-        Quagga.onDetected.removeAllListeners();
+        if (onDetectedHandler) {
+          onDetectedHandler.removeAllListeners();
+        }
       }
       isScanning.current = false;
       setIsScanningState(false);

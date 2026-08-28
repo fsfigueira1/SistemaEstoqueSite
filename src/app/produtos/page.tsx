@@ -112,6 +112,11 @@ export default function ProdutosPage() {
     codigo?: string;
     nome?: string;
     categoriaId?: string;
+    preco?: string;
+    estoque?: string;
+    custo?: string;
+    estoqueMinimo?: string;
+    status?: string;
   }>({});
   const [scannerStatus, setScannerStatus] = useState<'ready' | 'scanning' | 'added' | 'not-found'>('ready');
   const [loading, setLoading] = useState(true);
@@ -225,7 +230,16 @@ export default function ProdutosPage() {
   // ---------- CRUD handlers ----------
   const handleSubmit = async () => {
     // Validate form fields inline
-    const newErrors: { codigo?: string; nome?: string; categoriaId?: string } = {};
+    const newErrors: {
+      codigo?: string;
+      nome?: string;
+      categoriaId?: string;
+      preco?: string;
+      estoque?: string;
+      custo?: string;
+      estoqueMinimo?: string;
+      status?: string;
+    } = {};
 
     if (!formData.codigo?.trim()) {
       newErrors.codigo = 'Código/SKU é obrigatório';
@@ -314,10 +328,6 @@ export default function ProdutosPage() {
       const newErrors: { [key: string]: string } = {};
       newErrors.base = "Erro ao salvar produto";
       setFormErrors(newErrors);
-    }
-    } catch (error) {
-      console.error('Error submitting product form:', error);
-      alert('Erro ao salvar produto');
     }
   };
 
@@ -447,10 +457,10 @@ export default function ProdutosPage() {
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="Digite para buscar produtos..."
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                           
-                            <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                          )}
                     />
+                    {formErrors.estoque && (
+                      <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
+                    )}
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4">
                       <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35M11 15h2m-3 4h2" />
@@ -465,16 +475,16 @@ export default function ProdutosPage() {
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive' | 'discontinued')}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                           
-                            <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                          )}
                   >
+                    {formErrors.estoque && (
+                      <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
+                    )}
                     <option value="all">Todos os status</option>
                     <option value="active">Ativos</option>
                     <option value="inactive">Inativos</option>
                     <option value="discontinued">Descontinuados</option>
                   </select>
-                </div>
+                  </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estoque</label>
@@ -482,16 +492,16 @@ export default function ProdutosPage() {
                     value={stockFilter}
                     onChange={(e) => setStockFilter(e.target.value as 'all' | 'normal' | 'low' | 'out')}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                           
-                            <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                          )}
                   >
-                    <option value="all">Todos os estoques</option>
-                    <option value="normal">Estoque normal</option>
-                    <option value="low">Estoque baixo</option>
-                    <option value="out">Sem estoque</option>
+                    {formErrors.estoque && (
+                      <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
+                    )}
+                    <option value="all">Todos os status</option>
+                    <option value="active">Ativos</option>
+                    <option value="inactive">Inativos</option>
+                    <option value="out">Esgotado</option>
                   </select>
-                </div>
+                  </div>
 
                 <div className="flex items-end">
                   <button
@@ -750,20 +760,11 @@ export default function ProdutosPage() {
                             value={formData.preco}
                             onChange={(e) => setFormData((prev) => ({ ...prev, preco: parseFloat(e.target.value) || 0 }))}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            placeholder="0.00"
                           />
                           {formErrors.preco && (
                             <p className="text-sm text-red-600" role="alert">{formErrors.preco}</p>
                           )}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, preco: parseFloat(e.target.value) || 0 }))}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                           
-                            <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                          )}
-                            placeholder="0.00"
-                           
-                            <p className="text-sm text-red-600" role="alert">{formErrors.preco}</p>
-                          )}
-                          />
                         </div>
 
                         {/* Preço de Custo */}
@@ -776,9 +777,6 @@ export default function ProdutosPage() {
                             value={formData.custo}
                             onChange={(e) => setFormData((prev) => ({ ...prev, custo: parseFloat(e.target.value) || 0 }))}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                           
-                            <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                          )}
                           />
                         </div>
                       </div>
@@ -793,9 +791,6 @@ export default function ProdutosPage() {
                             value={formData.estoque}
                             onChange={(e) => setFormData((prev) => ({ ...prev, estoque: parseInt(e.target.value) || 0 }))}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                           
-                            <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                          )}
                           />
                         </div>
 
@@ -808,10 +803,10 @@ export default function ProdutosPage() {
                             value={formData.estoqueMinimo}
                             onChange={(e) => setFormData((prev) => ({ ...prev, estoqueMinimo: parseInt(e.target.value) || 0 }))}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                           
+                          />
+                          {formErrors.estoque && (
                             <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
                           )}
-                          />
                         </div>
                       </div>
 
@@ -823,14 +818,14 @@ export default function ProdutosPage() {
                             value={formData.status}
                             onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as ProductStatus }))}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                           
-                            <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                          )}
                           >
                             <option value={ProductStatus.ACTIVE}>Ativo</option>
                             <option value={ProductStatus.INACTIVE}>Inativo</option>
                             <option value={ProductStatus.DISCONTINUED}>Descontinuado</option>
                           </select>
+                          {formErrors.estoque && (
+                            <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
+                          )}
                         </div>
                       </div>
                     </form>
