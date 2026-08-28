@@ -192,8 +192,10 @@ export function useBarcodeScanner(
 
       if (result && result.codeResult) {
         const code = result.codeResult.code;
-        onBarcodeDetected(code);
-        onScanComplete?.();
+        if (code) {
+          onBarcodeDetected(code);
+          onScanComplete?.();
+        }
 
         // Vibrate on success
         if ('vibrate' in navigator) {
