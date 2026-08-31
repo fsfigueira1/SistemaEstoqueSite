@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart } from 'lucide-react';
+import { ReceiptPrint } from '@/components/pdv/ReceiptPrint';
 
 // Constants
 const DEFAULT_ERROR_MESSAGE = 'Erro desconhecido ao finalizar venda';
@@ -67,6 +68,20 @@ export default function PDVPage() {
   const [selectedCashRegisterId, setSelectedCashRegisterId] = useState('');
   const [openingAmount, setOpeningAmount] = useState('');
   const [isOpeningSession, setIsOpeningSession] = useState(false);
+
+  // Receipt printing states
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [receiptData, setReceiptData] = useState<{
+    saleId: string;
+    date: Date;
+    items: Array<{ name: string; quantity: number; unitPrice: number; total: number }>;
+    subtotal: number;
+    paymentMethod: 'dinheiro' | 'pix' | 'cartao';
+    interest: number;
+    total: number;
+    installments?: number;
+    installmentValue?: number;
+  } | null>(null);
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -459,9 +474,27 @@ export default function PDVPage() {
         }
       }
 
-      setSuccess(`Venda finalizada! Total: ${formatCurrency(metodoPagamento === 'cartao' ? totalComJuros : subtotal)}`);
+      // Prepare receipt data for printing
+      const newReceiptData = {
+        saleId: data.data.id,
+        date: new Date(),
+        items: carrinho.map((item) => ({
+          name: item.nome,
+          quantity: item.quantidade,
+          unitPrice: item.preco,
+          total: item.preco * item.quantidade,
+        })),
+        subtotal,
+        paymentMethod: metodoPagamento,
+        interest: juros,
+        total: metodoPagamento === 'cartao' ? totalComJuros : subtotal,
+        installments: metodoPagamento === 'cartao' ? parcelas : undefined,
+        installmentValue: metodoPagamento === 'cartao' && parcelas > 1 ? totalComJuros / parcelas : undefined,
+      };
+
+      setReceiptData(newReceiptData);
+      setShowReceiptModal(true);
       setCarrinho([]);
-      setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
       // Properly type the error as unknown and narrow it down
       console.error('Erro ao finalizar venda:', err);
@@ -861,6 +894,48 @@ export default function PDVPage() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Dialog: Impressão de Comprovante */}
+        {showReceiptModal && receiptData && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={() => setShowReceiptModal(false)} />
+              <div className="relative w-full max-w-md bg-white rounded-lg shadow-xl p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Venda Finalizada!</h2>
+                <p className="text-gray-600 mb-6">
+                  A venda foi concluída com sucesso. Deseja imprimir o comprovante?
+                </p>
+
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowReceiptModal(false);
+                      setReceiptData(null);
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    Não Imprimir
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowReceiptModal(false);
+                    }}
+                    className="flex-1 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    Imprimir Comprovante
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Print-only Receipt Component */}
+        {receiptData && !showReceiptModal && (
+          <div className="receipt-print-container" style={{ position: 'fixed', top: '-9999px', left: '-9999px' }}>
+            <ReceiptPrint data={receiptData} onPrintComplete={() => setReceiptData(null)} />
           </div>
         )}
       </div>
