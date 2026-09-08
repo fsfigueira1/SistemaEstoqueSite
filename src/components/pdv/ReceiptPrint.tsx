@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { getSettings } from '@/lib/settings';
 
 function formatCurrency(value: unknown): string {
   const n =
@@ -36,8 +37,6 @@ export interface ReceiptData {
 
 interface ReceiptPrintProps {
   data: ReceiptData;
-  storeName?: string;
-  storeInfo?: string;
   onPrintComplete?: () => void;
 }
 
@@ -52,12 +51,10 @@ const METHOD_LABEL: Record<string, string> = {
  * Epson TM-T20X — bobina de 80mm, área de impressão ~72mm.
  * Não imprime sozinho: o operador decide pelo botão.
  */
-export function ReceiptPrint({
-  data,
-  storeName = 'LAÇOLARIA',
-  storeInfo = 'Papelaria e Presentes',
-  onPrintComplete,
-}: ReceiptPrintProps) {
+export function ReceiptPrint({ data, onPrintComplete }: ReceiptPrintProps) {
+  const [cfg] = React.useState(() => getSettings());
+  const storeName = cfg.companyName || 'LAÇOLARIA';
+  const storeInfo = cfg.companyTagline;
   const printingRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -86,9 +83,22 @@ export function ReceiptPrint({
 
   return (
     <div>
-      <div className="receipt" id="receipt-print-area">
+      <div
+        className="receipt"
+        id="receipt-print-area"
+        style={{ width: cfg.receiptWidth === '58mm' ? '48mm' : '72mm' }}
+      >
         <div className="center bold big">{storeName}</div>
         {storeInfo && <div className="center small">{storeInfo}</div>}
+        {cfg.receiptShowCompany && cfg.companyDoc && (
+          <div className="center small">{cfg.companyDoc}</div>
+        )}
+        {cfg.receiptShowCompany && cfg.companyAddress && (
+          <div className="center small">{cfg.companyAddress}</div>
+        )}
+        {cfg.receiptShowCompany && cfg.companyPhone && (
+          <div className="center small">Tel: {cfg.companyPhone}</div>
+        )}
         <div className="sep" />
         <div className="center bold">COMPROVANTE DE COMPRA</div>
         <div className="center small">NAO E DOCUMENTO FISCAL</div>
@@ -150,8 +160,13 @@ export function ReceiptPrint({
         )}
 
         <div className="sep" />
-        <div className="center small">Obrigado pela preferencia!</div>
-        <div className="center small">Troca em ate 7 dias com este comprovante</div>
+        {cfg.receiptFooter
+          .split('\n')
+          .map((line, i) => (
+            <div key={i} className="center small">
+              {line}
+            </div>
+          ))}
         <div className="feed" />
       </div>
 

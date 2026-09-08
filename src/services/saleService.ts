@@ -302,11 +302,7 @@ export class SaleService {
       }
     }
     if (endDate) {
-      if (where.createdAt) {
-        where.createdAt = { ...(where.createdAt as Record<string, unknown>), lte: endDate }
-      } else {
-        // where.createdAt = { lte: endDate }
-      }
+      where.createdAt = { ...(where.createdAt as Record<string, unknown> | undefined), lte: endDate }
     }
 
     const [sales, total] = await Promise.all([
@@ -332,7 +328,8 @@ export class SaleService {
           payments: {
             take: 3, // Limit payments in list view
             select: { id: true, method: true, amount: true, status: true }
-          }
+          },
+          _count: { select: { items: true } }
         }
       }),
       prisma.sale.count({ where })

@@ -1,85 +1,89 @@
 import { NextResponse } from "next/server"
 import { ProductService } from "@/services/productService"
-import SaleService from "@/services/saleService"
-import StockService from "@/services/stockService"
+import { SaleService } from "@/services/saleService"
+import { SaleStatus } from "@/generated/prisma/enums"
 
-
-// GET /api/dashboard/stats - Get dashboard statistics
-export async function GET(request: Request) {
+// GET /api/dashboard/stats - indicadores da tela inicial
+export async function GET() {
   try {
-    // Get inventory stats
-    const products = await ProductService.getProducts({ limit: 10000 })
+    const now = new Date()
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
-    const lowStockProducts = products.products.filter(
-      p => p.stockQuantity > 0 && p.stockQuantity <= (p.minStockLevel || 5)
-    ).length
+    const { products } = await ProductService.getProducts({ limit: 100000 })
 
-    const outOfStockProducts = products.products.filter(
-      p => p.stockQuantity === 0
-    ).length
+    const toNum = (v: unknown) =>
+      typeof v === "number"
+        ? v
+        : v && typeof v === "object" && "toNumber" in v
+          ? (v as { toNumber: () => number }).toNumber()
+          : Number(v) || 0
 
-    // Get today's sales stats
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    const salesResult = await SaleService.listSales({
-      startDate: today,
-      limit: 1000
-    })
-
-    const salesToday = salesResult?.sales || []
-    const todaySalesFiltered = salesToday.filter(sale =>
-      new Date(sale.createdAt).toDateString() === today.toDateString()
+    const activeProducts = products.filter((p) => p.status === "ACTIVE")
+    const lowStock = activeProducts.filter(
+      (p) => p.stockQuantity > 0 && p.stockQuantity <= (p.minStockLevel || 5),
+    )
+    const outOfStock = activeProducts.filter((p) => p.stockQuantity === 0)
+    const stockValue = products.reduce(
+      (sum, p) => sum + p.stockQuantity * toNum(p.costPrice),
+      0,
     )
 
-    const todayRevenue = todaySalesFiltered.reduce((sum: number, sale: any) => sum + sale.totalAmount, 0)
-    const todaySalesCount = todaySalesFiltered.length
-    const avgTicket = todaySalesCount > 0 ? todayRevenue / todaySalesCount : 0
+    const [todayStats, monthStats, recent] = await Promise.all([
+      SaleService.getSalesStatistics({ startDate: startOfDay, status: SaleStatus.COMPLETED }),
+      SaleService.getSalesStatistics({ startDate: startOfMonth, status: SaleStatus.COMPLETED }),
+      SaleService.listSales({ limit: 8, page: 1 }),
+    ])
 
-    // Get top products (simplified)
-    const productSales: Record<string, { nome: string; vendas: number; receita: number }> = {}
-    todaySalesFiltered.forEach((sale: any) => {
-      sale.items?.forEach((item: any) => {
-        if (!productSales[item.productId]) {
-          productSales[item.productId] = {
-            nome: item.product?.name || 'Produto Desconhecido',
-            vendas: 0,
-            receita: 0
-          }
-        }
-        productSales[item.productId].vendas += item.quantity
-        productSales[item.productId].receita += item.quantity * item.unitPrice
-      })
-    })
+    const recentSales = (recent?.sales ?? []).map((s: {
+      id: string
+      saleNumber?: string
+      status: string
+      totalAmount: number
+      createdAt: Date | string
+      customer?: { name?: string } | null
+      items?: unknown[]
+    }) => ({
+      id: s.id,
+      numero: s.saleNumber ?? s.id.slice(0, 8),
+      status: s.status,
+      total: toNum(s.totalAmount),
+      itens: Array.isArray(s.items) ? s.items.length : 0,
+      cliente: s.customer?.name ?? "Consumidor",
+      data: s.createdAt,
+    }))
 
-    const topProducts = Object.values(productSales)
-      .sort((a, b) => b.vendas - a.vendas)
-      .slice(0, 3)
-      .map(p => ({
-        nome: p.nome,
-        vendas: p.vendas,
-        receita: `R$ ${p.receita.toFixed(2).replace('.', ',')}`
+    const lowStockList = [...lowStock, ...outOfStock]
+      .sort((a, b) => a.stockQuantity - b.stockQuantity)
+      .slice(0, 8)
+      .map((p) => ({
+        id: p.id,
+        nome: p.name,
+        estoque: p.stockQuantity,
+        minimo: p.minStockLevel ?? 5,
       }))
-
-    // Get recent sales
-    const recentSales = salesToday.slice(0, 5).map((sale: any) => ({
-      id: sale.id,
-      cliente: sale.customer?.name || 'Cliente',
-      total: `R$ ${sale.totalAmount.toFixed(2).replace('.', ',')}`,
-      data: new Date(sale.createdAt).toLocaleString('pt-BR')
-    })) || []
 
     return NextResponse.json({
       success: true,
       data: {
-        lowStockProducts,
-        outOfStockProducts,
-        todayRevenue,
-        todaySalesCount,
-        avgTicket,
-        topProducts,
-        recentSales
-      }
+        totalProducts: products.length,
+        activeProducts: activeProducts.length,
+        lowStockCount: lowStock.length,
+        outOfStockCount: outOfStock.length,
+        stockValue,
+        todayRevenue: todayStats.totals.totalAmount,
+        todaySalesCount: todayStats.count,
+        todayAvgTicket: todayStats.averages.totalAmount,
+        monthRevenue: monthStats.totals.totalAmount,
+        monthSalesCount: monthStats.count,
+        recentSales,
+        lowStockList,
+      },
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 },
+    )
+  }
 }
