@@ -1,4 +1,4 @@
-import { ProductStatus } from '@/generated/prisma';
+import { ProductStatus } from '@/generated/prisma/enums';
 
 export type ProductFormData = {
   codigo: string;

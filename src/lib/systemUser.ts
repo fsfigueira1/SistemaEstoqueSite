@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { Role } from "@prisma/client"
+import { Role } from "@/generated/prisma/enums"
 
 export async function getSystemUserId(): Promise<string> {
   try {
