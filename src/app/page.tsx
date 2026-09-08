@@ -1,12 +1,6 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 
-export default async function RootPage() {
-  const session = await auth()
-  
-  if (session) {
-    return redirect("/dashboard")
-  }
-  
-  return redirect("/auth/signin")
+export default function RootPage() {
+  // This is a POS system without authentication - redirect directly to PDV
+  return redirect("/pdv")
 }

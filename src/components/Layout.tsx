@@ -33,6 +33,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </div>
         <nav className="flex-1 p-4 overflow-y-auto">
           {menuItems.map((item) => {
+            const Icon = item.icon;
             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
             return (
               <Link
@@ -44,7 +45,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                     : 'hover:bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                 }`}
               >
-                <item.icon size={20} className={isActive ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600'}/>
+                <Icon size={20} className={isActive ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600'} />
                 <span>{item.name}</span>
               </Link>
             );

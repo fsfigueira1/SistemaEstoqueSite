@@ -1,22 +1,10 @@
 import { NextResponse } from "next/server"
 import { ProductService } from "@/services/productService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
-import { validatePaginationParams } from "@/lib/pagination"
 
 // GET /api/products - List products with filters
 export async function GET(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for product listing
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const { searchParams } = new URL(request.url)
-
-    // Validate pagination
-    const { page, limit } = validatePaginationParams(
-      searchParams.get("page"),
-      searchParams.get("limit")
-    )
 
     // Build filters
     const filters = {
@@ -29,8 +17,22 @@ export async function GET(request: Request) {
           ? statusValue as "ACTIVE" | "INACTIVE" | "DISCONTINUED"
           : undefined
       })(),
-      page,
-      limit
+      page: parseInt(searchParams.get("page") || "1"),
+      limit: parseInt(searchParams.get("limit") || "10")
+    }
+
+    // Validate pagination
+    if (isNaN(filters.page) || filters.page < 1) {
+      return NextResponse.json(
+        { error: "Invalid page number" },
+        { status: 400 }
+      )
+    }
+    if (isNaN(filters.limit) || filters.limit < 1) {
+      return NextResponse.json(
+        { error: "Invalid limit" },
+        { status: 400 }
+      )
     }
 
     const result = await ProductService.getProducts(filters)
@@ -41,18 +43,34 @@ export async function GET(request: Request) {
       data: result
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 // POST /api/products - Create new product
 export async function POST(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for product creation
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const data = await request.json()
-    const product = await ProductService.createProduct(data)
+    // Support both Portuguese (nome, codigo, categoriaId, preco, custo, estoque, estoqueMinimo)
+    // and English (name, sku, categoryId, salePrice, costPrice, stockQuantity, minStockLevel) field names
+    const productData = {
+      name: data.name || data.nome,
+      sku: data.sku || data.codigo,
+      categoryId: data.categoryId || data.categoriaId,
+      salePrice: data.salePrice ?? data.preco,
+      costPrice: data.costPrice ?? data.custo,
+      stockQuantity: data.stockQuantity ?? data.estoque,
+      minStockLevel: data.minStockLevel ?? data.estoqueMinimo,
+      maxStockLevel: data.maxStockLevel,
+      unit: data.unit,
+      description: data.description,
+      barcode: data.barcode,
+      supplierId: data.supplierId,
+      status: data.status,
+      isFeatured: data.isFeatured,
+    }
+
+    const product = await ProductService.createProduct(productData)
 
     // Return standardized success response with 201 status
     return NextResponse.json(
@@ -63,6 +81,6 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

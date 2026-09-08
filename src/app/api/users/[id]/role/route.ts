@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server"
 import { UserService } from "@/services/userService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuthAndRole(["ADMIN"])
-
-    const { id } = params
+    const { id } = await params
     const { role } = await request.json()
 
     if (!role) {
@@ -24,6 +20,6 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       data: result
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

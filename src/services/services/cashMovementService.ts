@@ -1,6 +1,5 @@
-import { PrismaClient, Prisma } from "../../generated/prisma/client"
+import { PrismaClient, Prisma, CashMovementType  } from "../../generated/prisma/client"
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3"
-import { CashMovementType } from "../../generated/prisma/client"
 
 import { prisma } from "../../lib/lib/prisma"
 

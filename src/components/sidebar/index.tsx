@@ -1,10 +1,13 @@
+"use client"
+
 import Link from "next/link"
-import { 
-  Menu, 
-  LayoutDashboard, 
-  ShoppingCart, 
-  Users, 
-  Settings, 
+import { usePathname } from "next/navigation"
+import {
+  Menu,
+  LayoutDashboard,
+  ShoppingCart,
+  Users,
+  Settings,
   LogOut
 } from "lucide-react"
 
@@ -15,6 +18,7 @@ type NavItem = {
 }
 
 export default function Sidebar() {
+  const pathname = usePathname()
   const navItems: NavItem[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/products", icon: ShoppingCart, label: "Products" },
@@ -39,8 +43,8 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center space-x-3 rounded-md px-3 py-2 text-sm font-medium 
-                ${window.location.pathname === item.href ? "bg-primary text-primary-foreground" : "text-foreground/60 hover:bg-muted hover:text-foreground"}`}
+              className={`flex items-center space-x-3 rounded-md px-3 py-2 text-sm font-medium
+                ${pathname === item.href ? "bg-primary text-primary-foreground" : "text-foreground/60 hover:bg-muted hover:text-foreground"}`}
             >
               <Icon />
               <span className="ml-3">{item.label}</span>

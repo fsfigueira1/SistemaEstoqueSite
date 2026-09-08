@@ -1,18 +1,13 @@
 import { NextResponse } from "next/server"
 import { CashSessionService } from "@/services/cashSessionService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
 
 // GET /api/cash-sessions/[id]/summary - Get cash session summary
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for cash session summary
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
-    const result = await CashSessionService.getCashSessionSummary(params.id)
+    const result = await CashSessionService.getCashSessionSummary((await params).id)
 
     // Return standardized success response
     return NextResponse.json({
@@ -20,6 +15,6 @@ export async function GET(
       data: result
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

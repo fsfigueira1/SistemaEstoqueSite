@@ -9,12 +9,14 @@ const publicRoutes = [
   "/auth/signin",
   "/auth/signup",
   "/api/auth/*",
+  "/senha",
+  "/api/senha/*",
   "/_next/*",
   "/favicon.ico",
   "/robots.txt"
 ]
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const session = await auth()
   const { pathname } = request.nextUrl
 

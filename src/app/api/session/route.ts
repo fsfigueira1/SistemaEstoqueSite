@@ -11,16 +11,6 @@ export async function GET() {
       data: systemUser
     })
   } catch (error) {
-    console.error('Session API error:', error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          message: 'Failed to retrieve system user',
-          code: 'SESSION_FETCH_ERROR'
-        }
-      },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

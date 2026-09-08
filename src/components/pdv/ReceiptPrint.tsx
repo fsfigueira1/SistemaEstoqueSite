@@ -66,8 +66,11 @@ export function ReceiptPrint({
   };
 
   const handlePrint = () => {
+    // Prevent double printing
+    if (printedRef.current) return;
+    printedRef.current = true;
     window.print();
-    onPrintComplete?.();
+    // onPrintComplete is called via afterprint event listener
   };
 
   // Auto-print when component mounts (for print dialog)
@@ -75,24 +78,35 @@ export function ReceiptPrint({
   const printedRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (!printedRef.current) {
+    // Reset printedRef when data changes to allow re-printing
+    printedRef.current = false;
+
+    // Auto-print when component mounts and data is available
+    if (!printedRef.current && data) {
       printedRef.current = true;
-      // Small delay to allow render before print
-      const timer = setTimeout(() => {
+      // Use requestAnimationFrame for better timing
+      const handleAutoPrint = () => {
         window.print();
-      }, 100);
-      return () => clearTimeout(timer);
+      };
+      
+      if (document.readyState === 'complete') {
+        requestAnimationFrame(handleAutoPrint);
+      } else {
+        const timer = setTimeout(handleAutoPrint, 100);
+        return () => clearTimeout(timer);
+      }
     }
 
-    // Handle print completion
+    // Handle print completion - stable callback
     const handleAfterPrint = () => {
       onPrintComplete?.();
+      printedRef.current = false; // Reset to allow future prints
       window.removeEventListener('afterprint', handleAfterPrint);
     };
 
     window.addEventListener('afterprint', handleAfterPrint);
     return () => window.removeEventListener('afterprint', handleAfterPrint);
-  }, [onPrintComplete]);
+  }, [data, onPrintComplete]); // Added data to dependency array
 
   return (
     <div className="receipt-print">

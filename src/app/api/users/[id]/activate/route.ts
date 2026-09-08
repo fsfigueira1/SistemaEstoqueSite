@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server"
 import { UserService } from "@/services/userService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuthAndRole(["ADMIN"])
-
-    const { id } = params
+    const { id } = await params
     const result = await UserService.activateUser(id)
 
     return NextResponse.json({
@@ -15,6 +11,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
       data: result
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

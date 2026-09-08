@@ -1,6 +1,6 @@
-import { PrismaClient, Prisma } from "../generated/prisma/client"
+import { PrismaClient, Prisma, StockMovementType  } from "../generated/prisma/client"
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3"
-import { StockMovementType } from "../generated/prisma/client"
+
 
 // Import the shared PrismaClient instance to prevent SQLite_BUSY errors with multiple connections
 import { prisma } from "../lib/prisma"
@@ -107,7 +107,7 @@ export class StockService {
     }
 
     // Check if sufficient stock exists
-    const currentStock = await this.getStock(productId)
+    const currentStock = await this.getStock(input.productId)
     if (currentStock.currentStock < input.quantity) {
       throw new Error('Insufficient stock')
     }
@@ -161,7 +161,7 @@ export class StockService {
     }
 
     // Get current stock
-    const currentStock = await this.getStock(productId)
+    const currentStock = await this.getStock(input.productId)
 
     // Calculate the difference needed to reach target quantity
     // If quantity is positive, we need to ADD (target - current)

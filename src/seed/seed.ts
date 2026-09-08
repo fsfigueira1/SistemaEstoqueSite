@@ -3,8 +3,7 @@ import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3"
 import { hash } from "bcryptjs"
 
 const adapter = new PrismaBetterSqlite3({ url: "file:./dev.db" })
-import { prisma } from "../lib/prisma"
-// const prisma = new PrismaClient({ adapter }) - REMOVED to use shared instance
+const prisma = new PrismaClient({ adapter })
 
 async function main() {
   console.log("Starting database seed...")

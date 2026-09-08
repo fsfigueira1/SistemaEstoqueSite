@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server"
 import { CashSessionService } from "@/services/cashSessionService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
+
+
 
 // POST /api/cash-sessions/[id]/close - Close cash session
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authentication - Require ADMIN or MANAGER role for closing cash session
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
+
 
     const data = await request.json()
     const { closedById, countedAmount } = data
@@ -43,7 +43,7 @@ export async function POST(
     }
 
     const result = await CashSessionService.closeCashSession({
-      cashSessionId: params.id,
+      cashSessionId: (await params).id,
       closedById,
       countedAmount
     })
@@ -53,7 +53,5 @@ export async function POST(
       success: true,
       data: result
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

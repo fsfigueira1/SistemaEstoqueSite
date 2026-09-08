@@ -1,55 +1,33 @@
 import { NextResponse } from "next/server"
-import { CashSessionService } from "@/services/services/cashSessionService"
-import { prisma } from "@/lib/lib/prisma"
+import { CashSessionService } from "@/services/cashSessionService"
 
-// GET /api/cash-session/current - Get current open cash session for the authenticated user
+// GET /api/cash-session/current - Get the currently open cash session (if any)
 export async function GET() {
   try {
-    // Find the first active cash register
-    const cashRegister = await prisma.cashRegister.findFirst({
-      where: { isActive: true },
-      select: { id: true }
+    // Get any open cash session (we assume only one cash register in desktop mode)
+    const openSessions = await CashSessionService.listCashSessions({
+      status: "OPEN",
+      limit: 1
     })
 
-    if (!cashRegister) {
+    if (openSessions.cashSessions.length > 0) {
+      // Return the first open session
+      const session = openSessions.cashSessions[0]
       return NextResponse.json({
         success: true,
-        data: null,
-        message: 'Nenhum caixa ativo configurado.'
+        data: session
       })
     }
 
-    const openSession = await CashSessionService.getOpenCashSession(cashRegister.id)
-
-    if (!openSession) {
-      return NextResponse.json({
-        success: true,
-        data: null,
-        message: 'Não existe uma sessão de caixa aberta.'
-      })
-    }
-
+    // No open session
     return NextResponse.json({
-      success: true,
-      data: {
-        id: openSession.id,
-        cashRegisterId: openSession.cashRegisterId,
-        openedById: openSession.openedById,
-        openedAt: openSession.openedAt,
-        openingAmount: openSession.openingAmount,
-        status: openSession.status
-      }
+      success: false,
+      data: null
     })
   } catch (error) {
-    console.error('Cash session API error:', error)
+    console.error("Cash session current API error:", error)
     return NextResponse.json(
-      {
-        success: false,
-        error: {
-          message: 'Erro ao buscar sessão de caixa',
-          code: 'CASH_SESSION_FETCH_ERROR'
-        }
-      },
+      { error: "Internal server error" },
       { status: 500 }
     )
   }

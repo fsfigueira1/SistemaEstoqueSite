@@ -1,22 +1,10 @@
 import { NextResponse } from "next/server"
 import { CashRegisterService } from "@/services/cashRegisterService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
-import { validatePaginationParams } from "@/lib/pagination"
 
 // GET /api/cash-registers - List cash registers with filters and pagination
 export async function GET(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for cash register listing
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const { searchParams } = new URL(request.url)
-
-    // Validate pagination
-    const { page, limit } = validatePaginationParams(
-      searchParams.get("page"),
-      searchParams.get("limit")
-    )
 
     // Build options for CashRegisterService
     const options: {
@@ -34,6 +22,10 @@ export async function GET(request: Request) {
       options.search = searchParam
     }
 
+    // Default pagination
+    const page = 1
+    const limit = 10
+
     const result = await CashRegisterService.listCashRegisters({
       ...options,
       page,
@@ -46,16 +38,17 @@ export async function GET(request: Request) {
       data: result
     })
   } catch (error) {
-    return handleApiError(error)
+    console.error("Cash registers API error:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }
 
 // POST /api/cash-registers - Create new cash register
 export async function POST(request: Request) {
   try {
-    // Authentication - Require ADMIN role for cash register creation
-    await requireAuthAndRole(["ADMIN"])
-
     const data = await request.json()
     const { name, description, isActive } = data
 
@@ -88,6 +81,10 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    return handleApiError(error)
+    console.error("Cash registers API error:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }

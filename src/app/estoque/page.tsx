@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ProductStatus } from '@/generated/prisma/client';
 import type { ProductFormData } from '@/app/estoque/form/types';
+import Layout from '@/components/Layout';
 
 type Category = {
   id: string;
@@ -332,30 +333,31 @@ export default function EstoquePage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Estoque</h1>
-        <button
-          onClick={() => {
-            setMode('add');
-            setSelectedProduct(null);
-            setFormData({
-              codigo: '',
-              nome: '',
-              categoriaId: null,
-              preco: 0,
-              custo: 0,
-              estoque: 0,
-              estoqueMinimo: 5,
-              status: ProductStatus.ACTIVE
-            });
-            setModalOpen(true);
-          }}
-          className="btn-primary"
-        >
-          Novo Produto
-        </button>
-      </div>
+    <Layout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Estoque</h1>
+          <button
+            onClick={() => {
+              setMode('add');
+              setSelectedProduct(null);
+              setFormData({
+                codigo: '',
+                nome: '',
+                categoriaId: null,
+                preco: 0,
+                custo: 0,
+                estoque: 0,
+                estoqueMinimo: 5,
+                status: ProductStatus.ACTIVE
+              });
+              setModalOpen(true);
+            }}
+            className="btn-primary"
+          >
+            Novo Produto
+          </button>
+        </div>
 
       {/* Barcode Scanner Input */}
       <div className="bg-white rounded-lg shadow p-6">
@@ -594,6 +596,7 @@ export default function EstoquePage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </Layout>
   );
 }

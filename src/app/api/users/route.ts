@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server"
 import { UserService } from "@/services/userService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
-import { validatePaginationParams } from "@/lib/pagination"
 import { Role, UserStatus } from "@/generated/prisma/client"
 
 export async function GET(request: Request) {
   try {
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const { searchParams } = new URL(request.url)
     const filters = {
       role: searchParams.get("role"),
@@ -25,22 +20,26 @@ export async function GET(request: Request) {
       status: filters.status ? (Object.values(UserStatus) as string[]).includes(filters.status) ? filters.status as UserStatus : undefined : undefined,
     }
 
-    const { page, limit } = validatePaginationParams(typedFilters.page, typedFilters.limit)
-    const result = await UserService.getUsers({ ...typedFilters, page, limit })
+    // Default pagination
+    const page = parseInt(typedFilters.page || "1")
+    const limit = parseInt(typedFilters.limit || "10")
+    // Ensure page and limit are valid numbers
+    const safePage = isNaN(page) || page < 1 ? 1 : page
+    const safeLimit = isNaN(limit) || limit < 1 ? 10 : limit
+
+    const result = await UserService.getUsers({ ...typedFilters, page: safePage, limit: safeLimit })
 
     return NextResponse.json({
       success: true,
       data: result
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    await requireAuthAndRole(["ADMIN"])
-
     const data = await request.json()
     const result = await UserService.createUser(data)
 
@@ -49,6 +48,6 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

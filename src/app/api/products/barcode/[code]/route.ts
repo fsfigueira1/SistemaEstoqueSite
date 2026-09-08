@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { ProductService } from "@/services/services/productService"
-import { handleApiError } from "@/lib/lib/errorHandler"
+import { ProductService } from "@/services/productService"
+
 
 // GET /api/products/barcode/[code] - Get product by barcode
 export async function GET(
@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const { code } = await params
-    const product = await ProductService.getProductByBarcode(code)
+    const product = await ProductService.getProductByBarcode(decodeURIComponent(code).trim())
 
     if (!product) {
       return NextResponse.json({
@@ -25,7 +25,5 @@ export async function GET(
       success: true,
       data: product
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

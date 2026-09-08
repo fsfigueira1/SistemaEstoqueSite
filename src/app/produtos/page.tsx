@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { ProductStatus } from '@/generated/prisma/client';
+import Layout from '@/components/Layout';
 
 // ---------- Helper functions ----------
 function toNumber(value: unknown): number {
@@ -119,103 +120,132 @@ export default function ProdutosPage() {
     status?: string;
   }>({});
   const [scannerStatus, setScannerStatus] = useState<'ready' | 'scanning' | 'added' | 'not-found'>('ready');
-  const [loading, setLoading] = useState(true);
-  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+    const [loading, setLoading] = useState(true);
+    const barcodeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load initial data
-  useEffect(() => {
-    const loadData = async () => {
+    // Load initial data
+    useEffect(() => {
+      const loadData = async () => {
+        try {
+          const [productsRes, categoriesRes] = await Promise.all([
+            fetch('/api/products'),
+            fetch('/api/categories'),
+          ]);
+          const productsData: ProductResponse = await productsRes.json();
+          const categoriesData: CategoryResponse = await categoriesRes.json();
+          if (productsData.success) {
+            setProducts(productsData.data?.products || []);
+          }
+          if (categoriesData.success) {
+            setCategories(categoriesData.data?.categories || []);
+          }
+        } catch (error) {
+          console.error('Error loading products or categories:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadData();
+    }, []);
+
+    // Focus logic for input after modal open/close
+    useEffect(() => {
+      if (modalOpen) {
+        inputRef.current?.focus();
+      }
+    }, [modalOpen]);
+
+    // Process barcode when complete code is detected
+    const processBarcode = async (code: string) => {
+      const cleanCode = code.trim();
+      if (!cleanCode) return;
+
+      setScannerStatus('scanning');
+
       try {
-        const [productsRes, categoriesRes] = await Promise.all([
-          fetch('/api/products'),
-          fetch('/api/categories'),
-        ]);
-        const productsData: ProductResponse = await productsRes.json();
-        const categoriesData: CategoryResponse = await categoriesRes.json();
-        if (productsData.success) {
-          setProducts(productsData.data?.products || []);
+        const response = await fetch(`/api/products/barcode/${encodeURIComponent(cleanCode)}`);
+        const result = await response.json();
+        if (result.success && result.data) {
+          const produto = result.data as Product;
+          setSelectedProduct(produto);
+          setMode('edit');
+          setFormData({
+            codigo: produto.sku || produto.codigo || '',
+            nome: produto.name || produto.nome || '',
+            categoriaId: produto.categoryId || produto.categoriaId || '',
+            preco: produto.salePrice || produto.preco || 0,
+            custo: produto.costPrice || produto.custo || 0,
+            estoque: produto.stockQuantity || produto.estoque || 0,
+            estoqueMinimo: produto.minStockLevel || produto.estoqueMinimo || 5,
+            status: produto.status || ProductStatus.ACTIVE,
+          });
+          setModalOpen(true);
+          setScannerStatus('added');
+        } else {
+          // Product not found → prepare to add new one
+          setSelectedProduct(null);
+          setMode('add');
+          setFormData({
+            codigo: cleanCode,
+            nome: '',
+            categoriaId: '',
+            preco: 0,
+            custo: 0,
+            estoque: 0,
+            estoqueMinimo: 5,
+            status: ProductStatus.ACTIVE,
+          });
+          setSearchTerm(''); // Clear the input after preparing to add
+          setModalOpen(true);
+          setScannerStatus('not-found');
         }
-        if (categoriesData.success) {
-          setCategories(categoriesData.data?.categories || []);
-        }
-      } catch (error) {
-        console.error('Error loading products or categories:', error);
+      } catch (err) {
+        setScannerStatus('not-found');
+        console.error('Barcode processing error:', err);
       } finally {
-        setLoading(false);
+        // Small delay to show status before resetting
+        setTimeout(() => {
+          setScannerStatus('ready');
+        }, 1500);
       }
     };
-    loadData();
-  }, []);
 
-  // Focus logic for input after modal open/close
-  useEffect(() => {
-    if (modalOpen) {
-      inputRef.current?.focus();
-    }
-  }, [modalOpen]);
+    // Handle barcode input changes - Smart debounce for USB scanner vs manual typing
+    const handleBarcodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setSearchTerm(value);
 
-  // Barcode scanner effect
-  useEffect(() => {
-    if (!searchTerm) return;
-    const handleBarcode = async () => {
-      setScannerStatus('scanning');
-      if (timeoutId) clearTimeout(timeoutId);
-      const newTimeout = setTimeout(async () => {
-        try {
-          const response = await fetch(`/api/products/barcode/${searchTerm}`);
-          const result = await response.json();
-          if (result.success && result.data) {
-            const produto = result.data as Product;
-            setSelectedProduct(produto);
-            setMode('edit');
-            setFormData({
-              codigo: produto.sku || produto.codigo || '',
-              nome: produto.name || produto.nome || '',
-              categoriaId: produto.categoryId || produto.categoriaId || '',
-              preco: produto.salePrice || produto.preco || 0,
-              custo: produto.costPrice || produto.custo || 0,
-              estoque: produto.stockQuantity || produto.estoque || 0,
-              estoqueMinimo: produto.minStockLevel || produto.estoqueMinimo || 5,
-              status: produto.status || ProductStatus.ACTIVE,
-            });
-            setModalOpen(true);
-            setScannerStatus('added');
-          } else {
-            // Product not found → prepare to add new one
-            setSelectedProduct(null);
-            setMode('add');
-            setFormData({
-              codigo: searchTerm,
-              nome: '',
-              categoriaId: '',
-              preco: 0,
-              custo: 0,
-              estoque: 0,
-              estoqueMinimo: 5,
-              status: ProductStatus.ACTIVE,
-            });
-            setModalOpen(true);
-            setScannerStatus('not-found');
-          }
-        } catch (err) {
-          setScannerStatus('not-found');
-          console.error('Barcode processing error:', err);
-        } finally {
-          setTimeoutId(newTimeout);
+      // Clear existing timeout
+      if (barcodeTimeoutRef.current !== null) {
+        clearTimeout(barcodeTimeoutRef.current);
+      }
+
+      // Set new timeout to process barcode after inactivity (debounce)
+      // USB scanners typically send complete codes within 10-50ms
+      // Manual typing has pauses > 300ms between characters
+      barcodeTimeoutRef.current = setTimeout(() => {
+        const code = value.trim();
+        if (code) {
+          void processBarcode(code);
         }
-      }, 500);
-      setTimeoutId(newTimeout);
+      }, 300); // 300ms debounce - waits for input to settle
     };
-    // Debounce the barcode handler while the user types
-    const debounced = setTimeout(() => {
-      if (searchTerm.trim()) handleBarcode();
-    }, 800);
-    return () => {
-      if (debounced) clearTimeout(debounced);
-      if (timeoutId) clearTimeout(timeoutId);
+
+    // Handle key presses for barcode input (Enter as fallback)
+    const handleBarcodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (barcodeTimeoutRef.current !== null) {
+          clearTimeout(barcodeTimeoutRef.current);
+          barcodeTimeoutRef.current = null;
+        }
+        const code = e.currentTarget.value.trim();
+        if (code) {
+          void processBarcode(code);
+        }
+      }
     };
-  }, [searchTerm, timeoutId]);
 
   // Reset scanner status after a short delay
   useEffect(() => {
@@ -296,10 +326,10 @@ export default function ProdutosPage() {
       if (!response.ok || !result.success) {
         // Handle any unexpected backend validation errors
         if (result.error?.message) {
-      const newErrors: { [key: string]: string } = {};
-      newErrors.base = result.error.message || "Erro de validação";
-      setFormErrors(newErrors);
-      return;
+          const newErrors: { [key: string]: string } = {};
+          newErrors.base = result.error.message || "Erro de validação";
+          setFormErrors(newErrors);
+          return;
         }
         return;
       }
@@ -392,52 +422,46 @@ export default function ProdutosPage() {
 
   // ---------- Render ----------
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-            <div className="space-y-2">
-              <h1 className="text-2xl font-bold text-gray-900">Laçolaria - Gestão de Produtos</h1>
-              <p className="text-sm text-gray-600">Controle completo do seu catálogo de produtos</p>
-            </div>
-            <div className="mt-4 md:mt-0 flex items-center gap-4 px-4 py-2 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-md text-sm">
-                <div className={`h-2.5 w-2.5 rounded-full ${scannerStatus === 'ready' ? 'bg-green-500' : scannerStatus === 'scanning' ? 'bg-blue-500' : scannerStatus === 'added' ? 'bg-emerald-500' : scannerStatus === 'not-found' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
-                <span id="scanner-status-text" className={scannerStatus === 'ready' ? 'text-green-700' : scannerStatus === 'scanning' ? 'text-blue-700' : scannerStatus === 'added' ? 'text-emerald-700' : scannerStatus === 'not-found' ? 'text-red-700' : 'text-gray-700'}>
-                  {scannerStatus === 'ready' ? 'LEITOR PRONTO' : scannerStatus === 'scanning' ? 'LENDO CÓDIGO...' : scannerStatus === 'added' ? 'PRODUTO ENCONTRADO' : scannerStatus === 'not-found' ? 'PRODUTO NÃO ENCONTRADO' : ''}
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  setFormData({
-                    codigo: '',
-                    nome: '',
-                    categoriaId: '',
-                    preco: 0,
-                    custo: 0,
-                    estoque: 0,
-                    estoqueMinimo: 5,
-                    status: ProductStatus.ACTIVE,
-                  });
-                  setFormErrors({});
-                  setMode('add');
-                  setSelectedProduct(null);
-                  setModalOpen(true);
-                }}
-                disabled={false}
-                className="flex items-center gap-2 px-4 py-3 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Adicionar Produto
-              </button>
-            </div>
-          </div>
+    <Layout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Laçolaria - Gestão de Produtos</h1>
+          <p className="text-sm text-gray-600">Controle completo do seu catálogo de produtos</p>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
+        <div className="flex items-center gap-4 px-4 py-2 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-md text-sm">
+            <div className={`h-2.5 w-2.5 rounded-full ${scannerStatus === 'ready' ? 'bg-green-500' : scannerStatus === 'scanning' ? 'bg-blue-500' : scannerStatus === 'added' ? 'bg-emerald-500' : scannerStatus === 'not-found' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
+            <span id="scanner-status-text" className={scannerStatus === 'ready' ? 'text-green-700' : scannerStatus === 'scanning' ? 'text-blue-700' : scannerStatus === 'added' ? 'text-emerald-700' : scannerStatus === 'not-found' ? 'text-red-700' : 'text-gray-700'}>
+              {scannerStatus === 'ready' ? 'LEITOR PRONTO' : scannerStatus === 'scanning' ? 'LENDO CÓDIGO...' : scannerStatus === 'added' ? 'PRODUTO ENCONTRADO' : scannerStatus === 'not-found' ? 'PRODUTO NÃO ENCONTRADO' : ''}
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              setFormData({
+                codigo: '',
+                nome: '',
+                categoriaId: '',
+                preco: 0,
+                custo: 0,
+                estoque: 0,
+                estoqueMinimo: 5,
+                status: ProductStatus.ACTIVE,
+              });
+              setFormErrors({});
+              setMode('add');
+              setSelectedProduct(null);
+              setModalOpen(true);
+            }}
+            disabled={false}
+            className="flex items-center gap-2 px-4 py-3 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Adicionar Produto
+          </button>
+        </div>
         {loading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full border-4 border-t-emerald-600 border-b-transparent w-12 h-12"></div>
@@ -454,7 +478,8 @@ export default function ProdutosPage() {
                     <input
                       type="text"
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={handleBarcodeChange}
+                      onKeyDown={handleBarcodeKeyDown}
                       placeholder="Digite para buscar produtos..."
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                     />
@@ -855,7 +880,7 @@ export default function ProdutosPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </Layout>
   );
 }

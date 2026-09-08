@@ -61,9 +61,9 @@ export class ProductService {
       supplierId?: string
       status?: ProductStatus
       OR?: Array<{
-        name?: { contains: string; mode: "insensitive" }
-        sku?: { contains: string; mode: "insensitive" }
-        barcode?: { contains: string; mode: "insensitive" }
+        name?: { contains: string }
+        sku?: { contains: string }
+        barcode?: { contains: string }
       }>
     } = {}
 
@@ -72,9 +72,9 @@ export class ProductService {
     if (status !== undefined) where.status = status
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { sku: { contains: search, mode: "insensitive" } },
-        { barcode: { contains: search, mode: "insensitive" } }
+        { name: { contains: search } },
+        { sku: { contains: search } },
+        { barcode: { contains: search } }
       ]
     }
 

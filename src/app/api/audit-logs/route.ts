@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
 import { AuditService } from "@/services/auditService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
+
+
 
 export async function GET(request: Request) {
   try {
-    await requireAuthAndRole(["ADMIN"])
+
 
     const { searchParams } = new URL(request.url)
     const olderThanDateStr = searchParams.get("olderThanDate")
@@ -33,7 +33,5 @@ export async function GET(request: Request) {
       success: true,
       data: result
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

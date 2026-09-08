@@ -1,37 +1,35 @@
 import { NextResponse } from "next/server"
 import { CashRegisterService } from "@/services/cashRegisterService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
+
+
 
 // GET /api/cash-registers/[id] - Get cash register by ID
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authentication - Require ADMIN or MANAGER role for cash register retrieval
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
 
-    const result = await CashRegisterService.getCashRegister(params.id)
+
+    const result = await CashRegisterService.getCashRegister((await params).id)
 
     // Return standardized success response
     return NextResponse.json({
       success: true,
       data: result
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
 // PUT /api/cash-registers/[id] - Update cash register
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authentication - Require ADMIN role for cash register update
-    await requireAuthAndRole(["ADMIN"])
+
 
     const data = await request.json()
     const { name, description, isActive } = data
@@ -50,7 +48,7 @@ export async function PUT(
       )
     }
 
-    const result = await CashRegisterService.updateCashRegister(params.id, {
+    const result = await CashRegisterService.updateCashRegister((await params).id, {
       name,
       description,
       isActive
@@ -61,28 +59,24 @@ export async function PUT(
       success: true,
       data: result
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
 // DELETE /api/cash-registers/[id] - Deactivate cash register
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authentication - Require ADMIN role for cash register deactivation
-    await requireAuthAndRole(["ADMIN"])
 
-    const result = await CashRegisterService.deactivateCashRegister(params.id)
+
+    const result = await CashRegisterService.deactivateCashRegister((await params).id)
 
     // Return standardized success response
     return NextResponse.json({
       success: true,
       data: result
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

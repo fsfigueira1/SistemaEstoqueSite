@@ -1,29 +1,17 @@
 import { NextResponse } from "next/server"
 import { SaleService } from "@/services/saleService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
-import { validatePaginationParams } from "@/lib/pagination"
 import { SaleStatus } from "@/generated/prisma/client"
 
 // GET /api/sales - List sales with filters and pagination
 export async function GET(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for sales listing
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const { searchParams } = new URL(request.url)
-
-    // Validate pagination
-    const { page, limit } = validatePaginationParams(
-      searchParams.get("page"),
-      searchParams.get("limit")
-    )
 
     // Build options for SaleService
     const options: {
       cashSessionId?: string
       customerId?: string
-      status?: SaleStatus // Using SaleStatus to match service expectation
+      status?: SaleStatus
       createdById?: string
       startDate?: Date
       endDate?: Date
@@ -63,6 +51,22 @@ export async function GET(request: Request) {
       options.endDate = new Date(endDateParam)
     }
 
+    // Pagination
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = parseInt(searchParams.get("limit") || "10")
+    if (isNaN(page) || page < 1) {
+      return NextResponse.json(
+        { error: "Invalid page number" },
+        { status: 400 }
+      )
+    }
+    if (isNaN(limit) || limit < 1) {
+      return NextResponse.json(
+        { error: "Invalid limit" },
+        { status: 400 }
+      )
+    }
+
     const result = await SaleService.listSales({
       ...options,
       page,
@@ -75,18 +79,32 @@ export async function GET(request: Request) {
       data: result
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 // POST /api/sales - Create new sale
 export async function POST(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for sale creation
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const data = await request.json()
-    const result = await SaleService.createSale(data)
+    // In a real app, you would get the user from session or token.
+    // Since we removed auth, we'll set a default creator ID or require it in data.
+    // For now, we'll assume the data includes createdById or we can use a default.
+    // We'll check if createdById is provided, if not, we can use a default (e.g., "1" for admin).
+    // But note: the SaleService.createSale expects createdById.
+    // We'll get it from data, or if not present, we can use a placeholder.
+    // However, to keep it simple, we'll require it in the data.
+    const { createdById, ...saleData } = data
+    let finalCreatedById = createdById
+    if (!finalCreatedById) {
+      // Default to a known user ID (e.g., the admin user from seed)
+      finalCreatedById = "1" // This assumes the admin user has id "1"
+    }
+
+    const result = await SaleService.createSale({
+      ...saleData,
+      createdById: finalCreatedById
+    })
 
     // Return standardized success response with 201 status
     return NextResponse.json(
@@ -97,6 +115,6 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

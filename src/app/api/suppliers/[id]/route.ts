@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server"
 import { SupplierService } from "@/services/supplierService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
+
+
 
 // GET /api/suppliers/[id] - Get supplier by ID
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authentication - Require ADMIN or MANAGER role for supplier viewing
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
 
-    const supplier = await SupplierService.getSupplierById(params.id)
+
+    const supplier = await SupplierService.getSupplierById((await params).id)
 
     if (!supplier) {
       return NextResponse.json(
@@ -31,47 +31,41 @@ export async function GET(
       success: true,
       data: supplier
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
 // PUT /api/suppliers/[id] - Update supplier
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authentication - Require ADMIN or MANAGER role for supplier updates
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
+
 
     const data = await request.json()
-    const supplier = await SupplierService.updateSupplier(params.id, data)
+    const supplier = await SupplierService.updateSupplier((await params).id, data)
 
     return NextResponse.json({
       success: true,
       data: supplier
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 
 // DELETE /api/suppliers/[id] - Delete supplier
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authentication - Require ADMIN role for supplier deletion
-    await requireAuthAndRole(["ADMIN"])
 
-    await SupplierService.deleteSupplier(params.id)
+
+    await SupplierService.deleteSupplier((await params).id)
     return NextResponse.json({
       success: true,
       data: { deleted: true }
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

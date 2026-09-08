@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server"
 import { CashSessionService } from "@/services/cashSessionService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
+
+
 
 // GET /api/cash-sessions/open - Get open cash session for a cash register
 export async function GET(request: Request) {
   try {
     // Authentication - Require ADMIN or MANAGER role for getting open cash session
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
+
 
     const { searchParams } = new URL(request.url)
     const cashRegisterId = searchParams.get("cashRegisterId")
@@ -32,7 +32,5 @@ export async function GET(request: Request) {
       success: true,
       data: result
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

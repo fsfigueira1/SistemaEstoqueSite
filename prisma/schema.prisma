@@ -1,10 +1,10 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -26,7 +26,6 @@ model User {
   salesCreated            Sale[]          @relation("SaleCreatedBy")
   salePaymentsProcessed   SalePayment[]   @relation("SalePaymentProcessedBy")
   stockMovementsPerformed StockMovement[] @relation("StockMovementPerformedBy")
-
   @@index([email])
 }
 
@@ -39,7 +38,6 @@ model Category {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   products    Product[] @relation("CategoryProducts")
-
   @@index([name])
 }
 
@@ -54,7 +52,6 @@ model Supplier {
   updatedAt      DateTime        @updatedAt
   products       Product[]       @relation("SupplierProducts")
   purchaseOrders PurchaseOrder[] @relation("SupplierPurchaseOrders")
-
   @@index([name])
 }
 
@@ -66,7 +63,6 @@ model CashRegister {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   sessions    CashSession[] @relation("CashRegisterSessions")
-
   @@index([name])
 }
 
@@ -90,7 +86,6 @@ model CashSession {
   openedBy       User              @relation("CashSessionOpenedBy", fields: [openedById], references: [id])
   cashRegister   CashRegister      @relation("CashRegisterSessions", fields: [cashRegisterId], references: [id])
   sales          Sale[]            @relation("CashSessionSales")
-
   @@index([cashRegisterId])
   @@index([status])
   @@index([openedAt])
@@ -106,7 +101,6 @@ model CashMovement {
   createdAt     DateTime         @default(now())
   createdBy     User             @relation("CashMovementCreatedBy", fields: [createdById], references: [id])
   cashSession   CashSession      @relation("CashSessionMovements", fields: [cashSessionId], references: [id])
-
   @@index([cashSessionId])
   @@index([type])
   @@index([createdAt])
@@ -133,7 +127,6 @@ model Sale {
   cashSession    CashSession   @relation("CashSessionSales", fields: [cashSessionId], references: [id])
   items          SaleItem[]    @relation("SaleItems")
   payments       SalePayment[] @relation("SalePayments")
-
   @@index([saleNumber])
   @@index([cashSessionId])
   @@index([status])
@@ -152,7 +145,6 @@ model SaleItem {
   createdAt      DateTime @default(now())
   product        Product  @relation("ProductSaleItems", fields: [productId], references: [id])
   sale           Sale     @relation("SaleItems", fields: [saleId], references: [id])
-
   @@index([saleId])
   @@index([productId])
   @@index([createdAt])
@@ -175,7 +167,6 @@ model SalePayment {
   updatedAt        DateTime      @updatedAt
   processedBy      User          @relation("SalePaymentProcessedBy", fields: [processedById], references: [id])
   sale             Sale          @relation("SalePayments", fields: [saleId], references: [id])
-
   @@index([saleId])
   @@index([method])
   @@index([status])
@@ -193,7 +184,6 @@ model PriceHistory {
   changedAt     DateTime @default(now())
   changedBy     User     @relation("PriceHistoryChangedBy", fields: [changedById], references: [id])
   product       Product  @relation("ProductPriceHistory", fields: [productId], references: [id])
-
   @@index([productId])
   @@index([changedAt])
 }
@@ -207,7 +197,6 @@ model AuditLog {
   metadata  Json?
   createdAt DateTime @default(now())
   user      User?    @relation("AuditLogUser", fields: [userId], references: [id])
-
   @@index([userId])
   @@index([entity])
   @@index([entityId])
@@ -238,7 +227,6 @@ model Product {
   purchaseOrderItems PurchaseOrderItem[] @relation("ProductPurchaseOrderItems")
   saleItems          SaleItem[]          @relation("ProductSaleItems")
   stockMovements     StockMovement[]     @relation("ProductStockMovements")
-
   @@index([sku])
   @@index([barcode])
   @@index([categoryId])
@@ -256,7 +244,6 @@ model StockMovement {
   createdAt     DateTime          @default(now())
   performedBy   User              @relation("StockMovementPerformedBy", fields: [performedById], references: [id])
   product       Product           @relation("ProductStockMovements", fields: [productId], references: [id])
-
   @@index([productId])
   @@index([createdAt])
   @@index([performedById])
@@ -271,7 +258,6 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   sales     Sale[]   @relation("SaleCustomer")
-
   @@index([name])
   @@index([email])
   @@index([phone])
@@ -292,7 +278,6 @@ model PurchaseOrder {
   createdBy    User                @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
   supplier     Supplier            @relation("SupplierPurchaseOrders", fields: [supplierId], references: [id])
   items        PurchaseOrderItem[] @relation("PurchaseOrderItems")
-
   @@index([supplierId])
   @@index([createdAt])
 }
@@ -306,7 +291,6 @@ model PurchaseOrderItem {
   totalPrice      Decimal       @default(0)
   product         Product       @relation("ProductPurchaseOrderItems", fields: [productId], references: [id])
   purchaseOrder   PurchaseOrder @relation("PurchaseOrderItems", fields: [purchaseOrderId], references: [id])
-
   @@index([purchaseOrderId])
   @@index([productId])
 }
@@ -315,6 +299,8 @@ enum Role {
   ADMIN
   MANAGER
   USER
+  OWNER
+  EMPLOYEE
 }
 
 enum UserStatus {

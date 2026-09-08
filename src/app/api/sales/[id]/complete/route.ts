@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server"
 import { SaleService } from "@/services/saleService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
+import { getSystemUserId } from "@/lib/systemUser"
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Authentication - Require ADMIN or MANAGER role for sale completion
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const data = await request.json()
     const {
       amount,
@@ -18,8 +15,7 @@ export async function POST(
       transactionId,
       processingFee,
       installmentCount,
-      changeAmount,
-      processedById
+      changeAmount
     } = data
 
     // Validate required fields
@@ -36,20 +32,8 @@ export async function POST(
       )
     }
 
-    if (!processedById) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: "Processed by ID is required",
-            code: "MISSING_PROCESSED_BY_ID"
-          }
-        },
-        { status: 400 }
-      )
-    }
-
-    const result = await SaleService.completeSale(params.id, {
+    const processedById = await getSystemUserId()
+    const result = await SaleService.completeSale((await params).id, {
       amount,
       method,
       transactionId,
@@ -65,6 +49,6 @@ export async function POST(
       data: result
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

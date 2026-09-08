@@ -1,28 +1,16 @@
 import { NextResponse } from "next/server"
 import { CashSessionService } from "@/services/cashSessionService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
-import { validatePaginationParams } from "@/lib/pagination"
 import { CashSessionStatus } from "@/generated/prisma/client"
 
 // GET /api/cash-sessions - List cash sessions with filters and pagination
 export async function GET(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for cash session listing
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const { searchParams } = new URL(request.url)
-
-    // Validate pagination
-    const { page, limit } = validatePaginationParams(
-      searchParams.get("page"),
-      searchParams.get("limit")
-    )
 
     // Build options for CashSessionService
     const options: {
       cashRegisterId?: string
-      status?: CashSessionStatus // Using CashSessionStatus to match service expectation
+      status?: CashSessionStatus
     } = {}
 
     const cashRegisterId = searchParams.get("cashRegisterId")
@@ -39,6 +27,22 @@ export async function GET(request: Request) {
       }
     }
 
+    // Pagination
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = parseInt(searchParams.get("limit") || "10")
+    if (isNaN(page) || page < 1) {
+      return NextResponse.json(
+        { error: "Invalid page number" },
+        { status: 400 }
+      )
+    }
+    if (isNaN(limit) || limit < 1) {
+      return NextResponse.json(
+        { error: "Invalid limit" },
+        { status: 400 }
+      )
+    }
+
     const result = await CashSessionService.listCashSessions({
       ...options,
       page,
@@ -51,16 +55,13 @@ export async function GET(request: Request) {
       data: result
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 // POST /api/cash-sessions/open - Open a new cash session
 export async function POST(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for opening cash session
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const data = await request.json()
     const { cashRegisterId, openedById, openingAmount } = data
 
@@ -91,12 +92,14 @@ export async function POST(request: Request) {
       )
     }
 
-    if (openingAmount === undefined || Number(openingAmount) < 0) {
+    // openingAmount is optional, default to 0
+    const amount = openingAmount !== undefined ? Number(openingAmount) : 0
+    if (amount < 0) {
       return NextResponse.json(
         {
           success: false,
           error: {
-            message: "Opening amount is required and cannot be negative",
+            message: "Opening amount cannot be negative",
             code: "INVALID_OPENING_AMOUNT"
           }
         },
@@ -107,7 +110,7 @@ export async function POST(request: Request) {
     const result = await CashSessionService.openCashSession({
       cashRegisterId,
       openedById,
-      openingAmount
+      openingAmount: amount
     })
 
     // Return standardized success response with 201 status
@@ -119,6 +122,6 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,8 +1,25 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ShoppingCart } from 'lucide-react';
+import {
+  ShoppingCart,
+  Trash2,
+  DollarSign,
+  CreditCard,
+  PieChart,
+  Users,
+  Activity,
+  Settings,
+  Barcode,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Zap,
+  Menu,
+  LogIn,
+} from 'lucide-react';
 import { ReceiptPrint } from '@/components/pdv/ReceiptPrint';
+import Layout from '@/components/Layout';
 
 // Constants
 const DEFAULT_ERROR_MESSAGE = 'Erro desconhecido ao finalizar venda';
@@ -28,7 +45,6 @@ function formatCurrency(value: unknown): string {
     currency: 'BRL',
   }).format(toNumber(value));
 }
-
 
 // ----- Tipos -----
 type CartItem = {
@@ -79,345 +95,218 @@ export default function PDVPage() {
     paymentMethod: 'dinheiro' | 'pix' | 'cartao';
     interest: number;
     total: number;
-    installments?: number;
-    installmentValue?: number;
   } | null>(null);
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const barcodeTimeout = useRef<NodeJS.Timeout | null>(null);
+  const printedRef = useRef(false);
 
-  // Computado
-  const subtotal = carrinho.reduce((sum, item) => sum + item.preco * item.quantidade, 0);
-  const juros = metodoPagamento === 'cartao' ? subtotal * 0.035 : 0;
-  const totalComJuros = subtotal + juros;
-
-  // Focus no campo de código ao montar
+  // Efeitos
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  // Handle click outside to close search results
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setSearchResults([]);
-        setHighlightedIndex(-1);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Cleanup barcode timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (barcodeTimeout.current !== null) {
-        clearTimeout(barcodeTimeout.current);
-      }
-    };
-  }, []);
-
-  // Fetch open cash session for current user on mount
-  useEffect(() => {
-    const fetchOpenCashSession = async () => {
-      setError(null);
-
-      try {
-        const res = await fetch('/api/cash-session/current');
-        const data = await res.json();
-
-        if (!data.success) {
-          setError(data.error?.message || 'Erro ao verificar sessão de caixa');
-          return;
-        }
-
-        if (data.data) {
-          setCashSessionId(data.data.id);
-        } else {
-          // No open session - show dialog to open one
-          setError('Não existe uma sessão de caixa aberta. Abra o caixa antes de finalizar a venda.');
-
-          // Fetch available cash registers
-          try {
-            const registersRes = await fetch('/api/cash-session/open');
-            const registersData = await registersRes.json();
-            if (registersData.success && registersData.data) {
-              setAvailableCashRegisters(registersData.data);
-              if (registersData.data.length > 0) {
-                setSelectedCashRegisterId(registersData.data[0].id);
-              }
-            }
-          } catch (registerErr) {
-            console.error('Erro ao buscar caixas:', registerErr);
-          }
-
-          setShowOpenCashSessionDialog(true);
-        }
-      } catch (err) {
-        console.error('Erro ao buscar sessão de caixa:', err);
-        setError('Erro ao verificar sessão de caixa. Por favor, tente novamente.');
-      }
-    };
-
-    fetchOpenCashSession();
-  }, []);
-
-  // Function to open a new cash session
-  const openCashSession = async () => {
-    if (!selectedCashRegisterId || !openingAmount) {
-      setError('Selecione um caixa e informe o valor de abertura');
-      return;
+    if (inputRef.current) {
+      inputRef.current.focus();
     }
+  }, []);
 
-    setIsOpeningSession(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/cash-session/open', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cashRegisterId: selectedCashRegisterId,
-          openingAmount: Number(openingAmount)
-        })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error?.message || 'Erro ao abrir sessão de caixa');
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (barcode.trim()) {
+          handleScanBarcode();
+        } else if (searchTerm.trim()) {
+          handleSearch();
+        }
       }
+    };
 
-      // Success - set the cash session ID and close dialog
-      setCashSessionId(data.data.id);
-      setShowOpenCashSessionDialog(false);
-      setSuccess('Sessão de caixa aberta com sucesso!');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      console.error('Erro ao abrir sessão de caixa:', err);
-      setError(err instanceof Error ? err.message : 'Erro ao abrir sessão de caixa');
-    } finally {
-      setIsOpeningSession(false);
-    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [barcode, searchTerm]);
+
+  // Funções
+  const handleBarcodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setBarcode(e.target.value);
+    setScannerStatus('ready');
   };
 
-  // ----- Leitor de código de barras (USB) -----
-  // Valid barcode lengths found in database (EAN-13, EAN-8, UPC-A, Code-128, etc.)
-  const MIN_BARCODE_LENGTH = 8;
-  const MAX_BARCODE_LENGTH = 20;
-
-  // Process barcode when complete code is detected
-  const processBarcode = async (code: string) => {
-    const cleanCode = code.trim();
-    if (!cleanCode || isProcessing) return;
-
-    // Validate barcode length to avoid processing partial codes
-    if (cleanCode.length < MIN_BARCODE_LENGTH || cleanCode.length > MAX_BARCODE_LENGTH) {
-      return; // Silently ignore invalid lengths
-    }
-
-    setIsProcessing(true);
+  const handleScanBarcode = async () => {
+    if (!barcode.trim()) return;
     setScannerStatus('scanning');
-
     try {
-      const res = await fetch(`/api/products/barcode/${cleanCode}`);
-      const result = await res.json();
-
-      if (result.success && result.data) {
-        const product = {
-          id: result.data.id,
-          nome: result.data.name,
-          codigo: result.data.sku,
-          preco: toNumber(result.data.salePrice),
-          custo: toNumber(result.data.costPrice),
-          estoque: result.data.stockQuantity || 0,
-          quantidade: 1,
-        };
-
-        if (product.estoque <= 0) {
-          setScannerStatus('low-stock');
-          setError(`Produto ${product.nome} sem estoque!`);
-          return;
-        }
-
-        // Verificar se já está no carrinho
-        const existingIndex = carrinho.findIndex((item) => item.id === product.id);
-        if (existingIndex >= 0) {
-          const newQtd = carrinho[existingIndex].quantidade + 1;
-          if (newQtd > product.estoque) {
-            setScannerStatus('low-stock');
-            setError(`Estoque insuficiente! Disponível: ${product.estoque}`);
-            return;
-          }
-          setCarrinho((prev) =>
-            prev.map((item, idx) =>
-              idx === existingIndex ? { ...item, quantidade: newQtd } : item
-            )
-          );
+      const res = await fetch(`/api/products/barcode/${barcode}`);
+      const data = await res.json();
+      if (data.success && data.data) {
+        const product = data.data;
+        if (product.stockQuantity <= 0) {
+          setScannerStatus('not-found');
+          setError('Produto sem estoque');
         } else {
-          setCarrinho((prev) => [...prev, {
-            id: product.id,
-            nome: product.nome,
-            codigo: product.codigo,
-            preco: product.preco,
-            estoque: product.estoque,
-            quantidade: 1
-          }]);
+          addToCart(product);
+          setScannerStatus('added');
+          setSuccess('Produto adicionado ao carrinho');
+          if (inputRef.current) {
+            inputRef.current.value = '';
+            setBarcode('');
+          }
         }
-
-        setScannerStatus('added');
-        setSuccess(`${product.nome} adicionado!`);
       } else {
         setScannerStatus('not-found');
-        setError('Produto não encontrado com este código');
+        setError('Produto não encontrado');
       }
     } catch (err) {
-      console.error(err);
+      console.error('Erro ao buscar produto por barcode:', err);
       setScannerStatus('not-found');
       setError('Erro ao buscar produto');
-    } finally {
-      setIsProcessing(false);
-      // Small delay to show status before resetting
-      setTimeout(() => {
-        setScannerStatus('ready');
-        setSuccess(null);
-        setError(null);
-      }, 1500);
     }
   };
 
-  // Handle barcode input changes - Smart debounce for USB scanner vs manual typing
-  const handleBarcodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setBarcode(value);
-
-    // Clear existing timeout
-    if (barcodeTimeout.current !== null) {
-      clearTimeout(barcodeTimeout.current);
-    }
-
-    // Set new timeout to process barcode after inactivity (debounce)
-    // USB scanners typically send complete codes within 10-50ms
-    // Manual typing has pauses > 300ms between characters
-    barcodeTimeout.current = setTimeout(() => {
-      const code = value.trim();
-      // Only process if code looks complete (valid length and not currently typing)
-      if (code && code.length >= MIN_BARCODE_LENGTH && code.length <= MAX_BARCODE_LENGTH) {
-        processBarcode(code);
-        // Clear input after successful processing
-        setBarcode('');
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) return;
+    try {
+      const res = await fetch(`/api/products?search=${searchTerm}&limit=10`);
+      const data = await res.json();
+      if (data.success && data.data) {
+        setSearchResults(data.data.products || []);
+        setHighlightedIndex(0);
+      } else {
+        setSearchResults([]);
       }
-    }, 300); // 300ms debounce - waits for input to settle
+    } catch (err) {
+      console.error('Erro ao buscar produtos:', err);
+      setSearchResults([]);
+    }
   };
 
-  // Handle key presses for barcode input (Enter as fallback)
-  const handleBarcodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
       e.preventDefault();
-      const code = e.currentTarget.value.trim();
-      if (code) {
-        processBarcode(code);
-        // Clear after processing
-        setBarcode('');
+      if (searchResults.length > 0) {
+        setHighlightedIndex((prev) => Math.min(prev + 1, searchResults.length - 1));
       }
-    }
-  };
-
-  // ----- Busca com autocomplete (debounce) -----
-  useEffect(() => {
-    const handleSearch = async () => {
-      if (!searchTerm.trim()) {
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (searchResults.length > 0) {
+        setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
+        const product = searchResults[highlightedIndex];
+        addToCart(product);
         setSearchResults([]);
         setHighlightedIndex(-1);
-        return;
-      }
-
-      try {
-        const res = await fetch(`/api/products?search=${encodeURIComponent(searchTerm)}`);
-        const data = await res.json();
-        if (data.success && data.data?.products) {
-          // API already filters by search term, just limit results
-          setSearchResults(data.data.products.slice(0, 8));
-          setHighlightedIndex(-1);
-        } else {
-          setSearchResults([]);
-          setHighlightedIndex(-1);
+        setSearchTerm('');
+        if (searchInputRef.current) {
+          searchInputRef.current.value = '';
         }
-      } catch (err) {
-        console.error('Search error:', err);
-        setSearchResults([]);
-        setHighlightedIndex(-1);
+        setScannerStatus('added');
+        setSuccess('Produto adicionado ao carrinho');
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
       }
-    };
-
-    // Debounce: wait 300ms before executing search
-    const handler = setTimeout(handleSearch, 300);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [searchTerm]);
-
-  // ----- Adicionar produto da busca -----
-  const addProductFromSearch = (product: Product) => {
-    const novoItem = {
-      id: product.id,
-      nome: product.name,
-      codigo: product.sku,
-      preco: toNumber(product.salePrice),
-      estoque: product.stockQuantity || 0,
-      quantidade: 1,
-    };
-
-    if (novoItem.estoque <= 0) {
-      setError(`Produto ${novoItem.nome} sem estoque!`);
-      return;
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setSearchResults([]);
+      setHighlightedIndex(-1);
+      setSearchTerm('');
+      if (searchInputRef.current) {
+        searchInputRef.current.value = '';
+      }
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
     }
+  };
 
-    const existingIndex = carrinho.findIndex((item) => item.id === product.id);
-    if (existingIndex >= 0) {
-      const newQtd = carrinho[existingIndex].quantidade + 1;
-      if (newQtd > product.stockQuantity) {
-        setError(`Estoque insuficiente! Disponível: ${product.stockQuantity}`);
-        return;
+  const addToCart = (product: Product) => {
+    const existingItem = carrinho.find((item) => item.id === product.id);
+    if (existingItem) {
+      if (existingItem.quantidade < product.stockQuantity) {
+        setCarrinho(
+          carrinho.map((item) =>
+            item.id === product.id
+              ? { ...item, quantidade: item.quantidade + 1 }
+              : item
+          )
+        );
+      } else {
+        setError('Estoque insuficiente');
+        setScannerStatus('low-stock');
       }
-      setCarrinho((prev) =>
-        prev.map((item, idx) =>
-          idx === existingIndex ? { ...item, quantidade: newQtd } : item
-        )
-      );
     } else {
-      setCarrinho((prev) => [...prev, novoItem]);
+      setCarrinho([
+        ...carrinho,
+        {
+          id: product.id,
+          nome: product.name,
+          codigo: product.sku,
+          preco: product.salePrice,
+          estoque: product.stockQuantity,
+          quantidade: 1,
+        },
+      ]);
     }
-
-    setSuccess(`${novoItem.nome} adicionado!`);
-    setSearchTerm('');
-    setSearchResults([]);
-    setTimeout(() => setSuccess(null), 2000);
   };
 
-  // ----- Remover item do carrinho -----
-  const removerItem = (id: string) => {
-    setCarrinho((prev) => prev.filter((item) => item.id !== id));
+  const increaseQuantity = (index: number) => {
+    setCarrinho(
+      carrinho.map((item, i) =>
+        i === index && item.quantidade < item.estoque
+          ? { ...item, quantidade: item.quantidade + 1 }
+          : item
+      )
+    );
   };
 
-  // ----- Finalizar venda -----
+  const decreaseQuantity = (index: number) => {
+    setCarrinho(
+      carrinho.map((item, i) =>
+        i === index && item.quantidade > 1
+          ? { ...item, quantidade: item.quantidade - 1 }
+          : item
+      )
+    );
+  };
+
+  const removeFromCart = (index: number) => {
+    setCarrinho(carrinho.filter((_, i) => i !== index));
+  };
+
+  const handlePaymentMethodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setMetodoPagamento(e.target.value as 'dinheiro' | 'pix' | 'cartao');
+    if (e.target.value !== 'cartao') {
+      setParcelas(1);
+    }
+  };
+
+  const handleParcelasChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setParcelas(parseInt(e.target.value, 10) || 1);
+  };
+
+  const calcularSubtotal = (): number => {
+    return carrinho.reduce((sum, item) => sum + item.preco * item.quantidade, 0);
+  };
+
+  const calcularJuros = (): number => {
+    if (metodoPagamento === 'cartao' && parcelas > 1) {
+      // Juros fixo de 3,5% para parcelas > 1
+      return calcularSubtotal() * 0.035;
+    }
+    return 0;
+  };
+
+  const calcularTotal = (): number => {
+    return calcularSubtotal() + calcularJuros();
+  };
+
   const finalizarVenda = async () => {
-    if (isProcessing) return;
     if (carrinho.length === 0) {
       setError('Carrinho vazio');
-      return;
-    }
-
-    // Check if we have a cash session ID
-    if (!cashSessionId) {
-      setError('Não existe uma sessão de caixa aberta. Abra o caixa antes de finalizar a venda.');
       return;
     }
 
@@ -426,519 +315,430 @@ export default function PDVPage() {
     setSuccess(null);
 
     try {
-      const payload = {
-        paymentMethod: metodoPagamento.toUpperCase(),
-        items: carrinho.map((item) => ({
-          productId: item.id,
-          quantity: item.quantidade,
-          unitPrice: item.preco,
-        })),
-        discount: 0,
-        cashSessionId: cashSessionId, // Use the actual cash session ID
+      // Verificar se há sessão de caixa aberta
+      const sessionRes = await fetch('/api/cash-session/current');
+      const sessionData = await sessionRes.json();
+      let cashSessionIdToUse = cashSessionId;
+
+      if (!cashSessionIdToUse && sessionData.success && sessionData.data) {
+        cashSessionIdToUse = sessionData.data.id;
+        setCashSessionId(cashSessionIdToUse);
+      }
+
+      if (!cashSessionIdToUse) {
+        // Tentar abrir sessão de caixa automaticamente
+        const registersRes = await fetch('/api/cash-registers');
+        const registersData = await registersRes.json();
+        if (registersData.success && registersData.data && registersData.data.length > 0) {
+          const register = registersData.data[0];
+          const openRes = await fetch('/api/cash-session/open', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              cashRegisterId: register.id,
+              openingAmount: '0', // Valor de abertura zero para simplificar
+            }),
+          });
+          const openData = await openRes.json();
+          if (openData.success && openData.data) {
+            cashSessionIdToUse = openData.data.id;
+            setCashSessionId(cashSessionIdToUse);
+          } else {
+            throw new Error('Falha ao abrir sessão de caixa');
+          }
+        } else {
+          throw new Error('Nenhum caixa configurado');
+        }
+      }
+
+      // Preparar itens da venda
+      const items = carrinho.map((item) => ({
+        productId: item.id,
+        quantity: item.quantidade,
+        unitPrice: item.preco,
+      }));
+
+      const pagamento = {
+        method: metodoPagamento,
+        installments: metodoPagamento === 'cartao' ? parcelas : 1,
+        amount: calcularTotal(),
       };
 
       const res = await fetch('/api/sales', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          items,
+          payment: pagamento,
+          cashSessionId: cashSessionIdToUse,
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        // Handle standardized API error responses
-        let errorMessage = 'Erro ao finalizar venda';
-        if (data.error && typeof data.error === 'object' && data.error.message) {
-          errorMessage = data.error.message;
-        } else if (data.message) {
-          errorMessage = data.message;
-        } else if (data.error) {
-          errorMessage = String(data.error);
-        }
-        throw new Error(errorMessage);
+        throw new Error(data.error || DEFAULT_ERROR_MESSAGE);
       }
 
-      // Se a venda foi criada, tentar completar (se necessário)
-      if (data.data && data.data.id) {
-        const completeRes = await fetch(`/api/sales/${data.data.id}/complete`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            paymentMethod: metodoPagamento.toUpperCase(),
-            amount: metodoPagamento === 'cartao' ? totalComJuros : subtotal,
-          }),
+      if (data.success && data.data) {
+        const sale = data.data;
+        setReceiptData({
+          saleId: sale.id,
+          date: new Date(sale.createdAt),
+          items: sale.items.map((item: any) => ({
+            name: item.product.name,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            total: item.totalAmount,
+          })),
+          subtotal: sale.subtotal,
+          paymentMethod: metodoPagamento,
+          interest: sale.totalAmount - sale.subtotal,
+          total: sale.totalAmount,
         });
-        if (!completeRes.ok) {
-          const errData = await completeRes.json();
-          console.warn('Erro ao completar venda:', errData);
-        }
+        setShowReceiptModal(true);
+        setSuccess('Venda finalizada com sucesso');
+        setCarrinho([]);
+        setBarcode('');
+        setMetodoPagamento('dinheiro');
+        setParcelas(1);
+        // Limpar foco e retornar ao scanner
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 1000);
+      } else {
+        throw new Error(data.error || DEFAULT_ERROR_MESSAGE);
       }
-
-      // Prepare receipt data for printing
-      const newReceiptData = {
-        saleId: data.data.id,
-        date: new Date(),
-        items: carrinho.map((item) => ({
-          name: item.nome,
-          quantity: item.quantidade,
-          unitPrice: item.preco,
-          total: item.preco * item.quantidade,
-        })),
-        subtotal,
-        paymentMethod: metodoPagamento,
-        interest: juros,
-        total: metodoPagamento === 'cartao' ? totalComJuros : subtotal,
-        installments: metodoPagamento === 'cartao' ? parcelas : undefined,
-        installmentValue: metodoPagamento === 'cartao' && parcelas > 1 ? totalComJuros / parcelas : undefined,
-      };
-
-      setReceiptData(newReceiptData);
-      setShowReceiptModal(true);
-      setCarrinho([]);
     } catch (err) {
-      // Properly type the error as unknown and narrow it down
       console.error('Erro ao finalizar venda:', err);
-      // Show user-friendly error message - handle various API error formats
-      let errorMessage = DEFAULT_ERROR_MESSAGE;
-
-      if (err != null && typeof err === 'object' && 'response' in err) {
-        // Handle standardized API error responses
-        const apiError = err as { response: { data: unknown } };
-        if (apiError.response && typeof apiError.response === 'object' && apiError.response !== null) {
-          const data = apiError.response.data;
-          if (data != null && typeof data === 'object' && 'error' in data && typeof data.error === 'object' && data.error != null && 'message' in data.error) {
-            errorMessage = String(data.error.message);
-          } else if (data != null && typeof data === 'object' && 'message' in data && data.message != null) {
-            errorMessage = String(data.message);
-          } else if (data != null && typeof data === 'object' && 'error' in data && data.error != null) {
-            errorMessage = String(data.error);
-          }
-        }
-      } else if (err != null && typeof err === 'object' && 'message' in err && err.message != null) {
-        errorMessage = String(err.message);
-      }
-
-      setError(errorMessage);
+      setError(err instanceof Error ? err.message : DEFAULT_ERROR_MESSAGE);
     } finally {
       setIsProcessing(false);
     }
   };
 
-
-  // ----- Keyboard navigation for search results -----
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (searchResults.length === 0) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightedIndex((prevHighlightedIndex: number) => {
-        return (prevHighlightedIndex + 1) % searchResults.length;
-      });
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightedIndex((prevHighlightedIndex: number) => {
-        const newIndex = prevHighlightedIndex - 1;
-        return newIndex < 0 ? searchResults.length - 1 : newIndex;
-      });
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
-        addProductFromSearch(searchResults[highlightedIndex]);
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      setSearchResults([]);
-      setHighlightedIndex(-1);
-      if (searchInputRef.current) {
-        searchInputRef.current.value = '';
-      }
-      setSearchTerm('');
-    }
-  };
-
-  // ----- UI auxiliar -----
-  const getScannerColor = (status: typeof scannerStatus) => {
-    switch (status) {
-      case 'ready': return 'bg-gray-300';
-      case 'scanning': return 'bg-blue-400 animate-pulse';
-      case 'added': return 'bg-green-500';
-      case 'not-found': return 'bg-red-500';
-      case 'low-stock': return 'bg-yellow-500';
-      default: return 'bg-gray-300';
-    }
-  };
-
-  // ----- JSX -----
+  // Renderização
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Cabeçalho */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">PDV - Ponto de Venda</h1>
-          <p className="text-sm text-gray-500">Escaneie produtos ou pesquise por nome/SKU</p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Coluna principal (2/3) */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Busca por nome/SKU */}
-            <div className="bg-white rounded-lg shadow p-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Buscar produto por nome ou SKU
-              </label>
-              <div className="relative">
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Digite o nome ou SKU..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={handleSearchKeyDown}
-                  disabled={isProcessing}
-                />
-                {searchResults.length > 0 && (
-                  <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-auto border border-gray-200 rounded-lg bg-white shadow-lg z-10">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <tbody className="divide-y divide-gray-200">
-                        {searchResults.map((product) => {
-                          const existingItem = carrinho.find((item) => item.id === product.id);
-                          return (
-                            <tr key={product.id}>
-                              <td className="px-4 py-2 text-sm text-gray-900">
-                                {product.name}
-                              </td>
-                              <td className="px-4 py-2 text-sm text-center font-medium">
-                                {existingItem ? existingItem.quantidade : 0}
-                              </td>
-                              <td className="px-4 py-2 text-sm text-center">
-                                {formatCurrency(product.salePrice)}
-                              </td>
-                              <td className="px-4 py-2 text-sm text-right">
-                                <button
-                                  onClick={() => addProductFromSearch(product)}
-                                  className="text-emerald-600 hover:text-emerald-800 text-sm"
-                                >
-                                  {existingItem ? 'Adicionar +1' : 'Adicionar'}
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+    <Layout>
+      <div className="min-h-screen bg-gray-50">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">PDV - Ponto de Venda</h1>
+            <div className="flex items-center space-x-4">
+              <div className="w-3 h-3 bg-green-500 rounded"></div>
+              <span className="text-sm text-gray-600">Sistema Online</span>
             </div>
-
-            {/* Leitor de código de barras */}
-            <div className="bg-white rounded-lg shadow p-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Código de Barras (digite ou use leitor USB)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder="Aponte o leitor ou digite manualmente..."
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  value={barcode}
-                  onChange={handleBarcodeChange}
-                  onKeyDown={handleBarcodeKeyDown}
-                  disabled={isProcessing}
-                />
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${getScannerColor(scannerStatus)}`} />
-                  <span className="text-xs text-gray-500">
-                    {scannerStatus === 'ready' ? 'Pronto' :
-                     scannerStatus === 'scanning' ? 'Lendo...' :
-                     scannerStatus === 'added' ? 'Adicionado!' :
-                     scannerStatus === 'not-found' ? 'Não encontrado' :
-                     'Estoque baixo'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Carrinho */}
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="px-4 py-3 border-b flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5 text-gray-500" />
-                <h2 className="text-lg font-medium text-gray-900">Carrinho de Vendas</h2>
-              </div>
-
-              {carrinho.length === 0 ? (
-                <div className="px-4 py-8 text-center text-gray-500 text-sm">
-                  Carrinho vazio. Adicione produtos.
-                </div>
-              ) : (
-                <div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produto</th>
-                          <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Qtd</th>
-                          <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Preço</th>
-                          <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Total</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {carrinho.map((item) => (
-                          <tr key={item.id}>
-                            <td className="px-4 py-2 text-sm text-gray-900">
-                              {item.nome}
-                            </td>
-                            <td className="px-4 py-2 text-sm text-center font-medium">
-                              {item.quantidade}
-                            </td>
-                            <td className="px-4 py-2 text-sm text-center">
-                              {formatCurrency(item.preco)}
-                            </td>
-                            <td className="px-4 py-2 text-sm text-center font-bold">
-                              {formatCurrency(item.preco * item.quantidade)}
-                            </td>
-                            <td className="px-4 py-2 text-sm text-right">
-                              <button
-                                onClick={() => removerItem(item.id)}
-                                className="text-red-600 hover:text-red-800"
-                              >
-                                Remover
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="px-4 py-3 border-t bg-gray-50">
-                    <div className="flex justify-between text-sm font-medium">
-                      <span>Subtotal:</span>
-                      <span>{formatCurrency(subtotal)}</span>
-                    </div>
-                    {metodoPagamento === 'cartao' && (
-                      <>
-                        <div className="justify-between text-sm text-red-600">
-                          <span>Juros (3.5%):</span>
-                          <span>{formatCurrency(juros)}</span>
-                        </div>
-                        <div className="justify-between text-lg font-bold border-t pt-2 mt-2">
-                          <span>Total com juros:</span>
-                          <span>{formatCurrency(totalComJuros)}</span>
-                        </div>
-                      </>
-                    )}
-                    {metodoPagamento !== 'cartao' && (
-                      <div className="justify-between text-lg font-bold border-t pt-2 mt-2">
-                        <span>Total:</span>
-                        <span>{formatCurrency(subtotal)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <span className="text-sm text-gray-500">
+              {new Date().toLocaleString('pt-BR')}
+            </span>
           </div>
 
-          {/* Coluna direita (1/3): pagamento e ações */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow p-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Forma de Pagamento</h3>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="pagamento"
-                    value="dinheiro"
-                    checked={metodoPagamento === 'dinheiro'}
-                    onChange={() => setMetodoPagamento('dinheiro')}
-                  />
-                  Dinheiro
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="pagamento"
-                    value="pix"
-                    checked={metodoPagamento === 'pix'}
-                    onChange={() => setMetodoPagamento('pix')}
-                  />
-                  PIX
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="pagamento"
-                    value="cartao"
-                    checked={metodoPagamento === 'cartao'}
-                    onChange={() => setMetodoPagamento('cartao')}
-                  />
-                  Cartão
-                </label>
-              </div>
-
-              {metodoPagamento === 'cartao' && (
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Parcelas</label>
-                  <select
-                    value={parcelas}
-                    onChange={(e) => setParcelas(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
-                      <option key={n} value={n}>{n}x</option>
-                    ))}
-                  </select>
-
-                  {/* Display installment value */}
-                  {parcelas > 1 && (
-                    <div className="mt-2 text-sm text-gray-600">
-                    <span>Valor da parcela: </span>
-                    <span className="font-medium">{formatCurrency(totalComJuros / parcelas)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={finalizarVenda}
-              disabled={isProcessing || carrinho.length === 0}
-              className="w-full px-6 py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
-            >
-              {isProcessing ? 'PROCESSANDO...' : 'FINALIZAR VENDA'}
-            </button>
-
-            <button
-              onClick={() => setCarrinho([])}
-              className="w-full px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-            >
-              Limpar Carrinho
-            </button>
-          </div>
-        </div>
-
-        {/* Mensagens de erro/sucesso */}
+        {/* Status messages */}
         {error && (
-          <div className="mt-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm">
-            {error}
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <AlertTriangle className="mr-2 h-4 w-4 text-red-500" />
+            <span>{error}</span>
           </div>
         )}
         {success && (
-          <div className="mt-4 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 text-sm">
-            {success}
+          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+            <span>{success}</span>
           </div>
         )}
 
-        {/* Dialog: Abrir Caixa */}
-        {showOpenCashSessionDialog && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={() => setShowOpenCashSessionDialog(false)} />
-              <div className="relative w-full max-w-md bg-white rounded-lg shadow-xl p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Abrir Caixa</h2>
-                <p className="text-gray-600 mb-6">Não existe sessão de caixa aberta. Selecione o caixa e informe o valor de abertura.</p>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Caixa</label>
-                    <select
-                      value={selectedCashRegisterId}
-                      onChange={(e) => setSelectedCashRegisterId(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      disabled={isOpeningSession}
-                    >
-                      {availableCashRegisters.map((register) => (
-                        <option key={register.id} value={register.id}>
-                          {register.name}
-                        </option>
-                      ))}
-                    </select>
-                    {availableCashRegisters.length === 0 && (
-                      <p className="mt-1 text-sm text-red-600">Nenhum caixa ativo disponível</p>
+        {/* Main content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left column - Scanner and search */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center mb-4">
+                <Barcode className="mr-3 h-5 w-5 text-primary" />
+                <h2 className="text-xl font-bold text-gray-800">Leitor de Código de Barras</h2>
+              </div>
+              <div className="space-y-4">
+                <div className="relative">
+                  <input
+                    type="text"
+                    ref={inputRef}
+                    value={barcode}
+                    onChange={handleBarcodeChange}
+                    placeholder="Aproxime o leitor de código de barras ou digite manualmente..."
+                    className="w-full px-4 py-3 pl-10 text-lg font-medium border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200"
+                    autoComplete="off"
+                    onKeyDown={handleKeyDown}
+                  />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                </div>
+                <div className="text-sm text-gray-500">
+                  Código de barras detectado: {barcode || 'Nenhum'}
+                </div>
+                <div className="flex items-center space-x-3">
+                  <span className="px-3 py-1 rounded-full text-xs font-medium">
+                    {scannerStatus === 'ready' && (
+                      <span className="bg-green-100 text-green-800">Pronto para scan</span>
                     )}
-                  </div>
+                    {scannerStatus === 'scanning' && (
+                      <span className="bg-yellow-100 text-yellow-800">Escaneando...</span>
+                    )}
+                    {scannerStatus === 'added' && (
+                      <span className="bg-green-100 text-green-800">Produto adicionado!</span>
+                    )}
+                    {scannerStatus === 'not-found' && (
+                      <span className="bg-red-100 text-red-800">Não encontrado</span>
+                    )}
+                    {scannerStatus === 'low-stock' && (
+                      <span className="bg-orange-100 text-orange-800">Estoque baixo</span>
+                    )}
+                  </span>
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Valor de Abertura (R$)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={openingAmount}
-                      onChange={(e) => setOpeningAmount(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      placeholder="0,00"
-                      disabled={isOpeningSession}
-                    />
-                  </div>
+              {/* Search products */}
+              <div className="mt-6 bg-white rounded-lg shadow p-6">
+                <div className="flex items-center mb-4">
+                  <Search className="mr-3 h-5 w-5 text-primary" />
+                  <h2 className="text-xl font-bold text-gray-800">Busca de Produtos</h2>
                 </div>
-
-                <div className="mt-6 flex gap-3">
-                  <button
-                    onClick={() => setShowOpenCashSessionDialog(false)}
-                    disabled={isOpeningSession}
-                    className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={openCashSession}
-                    disabled={isOpeningSession || !selectedCashRegisterId || !openingAmount}
-                    className="flex-1 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                  >
-                    {isOpeningSession ? 'ABRINDO...' : 'ABRIR CAIXA'}
-                  </button>
+                <div className="relative">
+                  <input
+                    type="text"
+                    ref={searchInputRef}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Digite o nome ou SKU do produto..."
+                    className="w-full px-4 py-3 pl-10 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                    onKeyDown={handleKeyDown}
+                  />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 </div>
+                {searchResults.length > 0 && (
+                  <div className="mt-4 max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
+                    {searchResults.map((product, index) => (
+                      <div
+                        key={product.id}
+                        className={`flex items-center p-3 border-b border-gray-100 hover:bg-gray-50 ${
+                          index === highlightedIndex ? 'bg-primary/10' : ''
+                        } cursor-pointer`}
+                        onClick={() => {
+                          addToCart(product);
+                          setSearchResults([]);
+                          setHighlightedIndex(-1);
+                          setSearchTerm('');
+                          if (searchInputRef.current) {
+                            searchInputRef.current.value = '';
+                          }
+                          setScannerStatus('added');
+                          setSuccess('Produto adicionado ao carrinho');
+                          setTimeout(() => {
+                            if (inputRef.current) {
+                              inputRef.current.focus();
+                            }
+                          }, 100);
+                        }}
+                      >
+                        <div className="mr-3">
+                          <ShoppingCart className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-800">{product.name}</p>
+                          <p className="text-sm text-gray-500">SKU: {product.sku}</p>
+                          <p className="text-sm font-medium">{formatCurrency(product.salePrice)}</p>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          Estoque: {product.stockQuantity}
+                        </div>
+                      </div>
+                  ))}
+                </div>
+                )}
               </div>
             </div>
           </div>
-        )}
 
-        {/* Dialog: Impressão de Comprovante */}
-        {showReceiptModal && receiptData && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={() => setShowReceiptModal(false)} />
-              <div className="relative w-full max-w-md bg-white rounded-lg shadow-xl p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Venda Finalizada!</h2>
-                <p className="text-gray-600 mb-6">
-                  A venda foi concluída com sucesso. Deseja imprimir o comprovante?
-                </p>
-
-                <div className="mt-6 flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowReceiptModal(false);
-                      setReceiptData(null);
-                    }}
-                    className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                  >
-                    Não Imprimir
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowReceiptModal(false);
-                    }}
-                    className="flex-1 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors"
-                  >
-                    Imprimir Comprovante
-                  </button>
-                </div>
+          {/* Right column - Cart and payment */}
+          <div className="lg:col-span-1">
+            {/* Cart */}
+            <div className="bg-white rounded-lg shadow p-6 mb-6">
+              <div className="flex items-center mb-4">
+                <ShoppingCart className="mr-3 h-5 w-5 text-primary" />
+                <h2 className="text-xl font-bold text-gray-800">Carrinho ({carrinho.length} itens)</h2>
               </div>
+              {carrinho.length === 0 ? (
+                <div className="text-center py-8">
+                  <ShoppingCart className="mx-auto h-8 w-8 text-gray-300 mb-3" />
+                  <p className="text-gray-500">Seu carrinho está vazio</p>
+                  <p className="text-sm text-gray-400">
+                    Aproxime o leitor de código de barras ou use a busca para adicionar produtos
+                  </p>
+                </div>
+              )
+              : (
+                <div className="space-y-4">
+                  {carrinho.map((item, index) => (
+                    <div key={item.id} className="border border-gray-200 rounded-lg p-3 flex items-center space-x-3">
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-800">{item.nome}</p>
+                        <p className="text-sm text-gray-500">Código: {item.codigo}</p>
+                      </div>
+                      <div className="flex items-center space-x-2 text-sm">
+                        <button
+                          onClick={() => decreaseQuantity(index)}
+                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm"
+                          disabled={item.quantidade <= 1}
+                        >
+                          -
+                        </button>
+                        <span className="w-8 text-center">{item.quantidade}</span>
+                        <button
+                          onClick={() => increaseQuantity(index)}
+                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm"
+                          disabled={item.quantidade >= item.estoque}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <div className="text-right text-sm font-medium">
+                        {formatCurrency(item.preco * item.quantidade)}
+                      </div>
+                      <div className="ml-2">
+                        <button
+                          onClick={() => removeFromCart(index)}
+                          className="p-1 hover:bg-red-50 rounded text-red-500"
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                                    <div className="pt-4 border-t border-gray-200">
+                                      <div className="flex justify-between mb-2">
+                                        <span className="text-sm font-medium text-gray-600">Subtotal:</span>
+                                        <span className="text-sm font-medium">{formatCurrency(calcularSubtotal())}</span>
+                                      </div>
+                                      {calcularJuros() > 0 && (
+                                        <div className="flex justify-between mb-2">
+                                          <span className="text-sm font-medium text-gray-600">Juros do cartão (3,5%):</span>
+                                          <span className="text-sm font-medium">{formatCurrency(calcularJuros())}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                      <div className="flex justify-between pt-2 border-t border-gray-300">
+                                        <span className="text-xl font-bold text-gray-800">Total:</span>
+                                        <span className="text-xl font-bold text-primary">{formatCurrency(calcularTotal())}</span>
+                                      </div>
+                                    </div>
+              )}
             </div>
-          </div>
-        )}
 
-        {/* Print-only Receipt Component */}
-        {receiptData && !showReceiptModal && (
-          <div className="receipt-print-container" style={{ position: 'fixed', top: '-9999px', left: '-9999px' }}>
-            <ReceiptPrint data={receiptData} onPrintComplete={() => setReceiptData(null)} />
-          </div>
-        )}
+            {/* Payment method */}
+            <div className="bg-white rounded-lg shadow p-6 mb-6">
+              <div className="flex items-center mb-4">
+                <CreditCard className="mr-3 h-5 w-5 text-primary" />
+                <h2 className="text-xl font-bold text-gray-800">Forma de Pagamento</h2>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Selecione a forma de pagamento</label>
+                  <select
+                    value={metodoPagamento}
+                    onChange={handlePaymentMethodChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                  >
+                    <option value="dinheiro">Dinheiro</option>
+                    <option value="pix">PIX</option>
+                    <option value="cartao">Cartão de Crédito</option>
+                  </select>
+                </div>
+                {metodoPagamento === 'cartao' && (
+                                  <div className="space-y-2">
+                                    <label className="block text-sm font-medium text-gray-700">Número de parcelas</label>
+                                    <select
+                                      value={parcelas.toString()}
+                                      onChange={handleParcelasChange}
+                                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                                    >
+                                      {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((parcela) => (
+                                        <option key={parcela} value={parcela.toString()}>
+                                          {parcela}x
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+              </div>
+
+            {/* Finalize button */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center mb-4">
+                <Zap className="mr-3 h-5 w-5 text-primary" />
+                <h2 className="text-xl font-bold text-gray-800">Finalizar Venda</h2>
+              </div>
+              <button
+                onClick={finalizarVenda}
+                disabled={isProcessing || carrinho.length === 0}
+                className="w-full px-6 py-3 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+  {isProcessing ? (
+    <>
+      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      Finalizando...
+    </>
+    ) : (
+      'Finalizar Venda'
+    )}
+      </button>
       </div>
     </div>
+
+      {showReceiptModal && receiptData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="relative w-full max-w-md p-6 bg-white rounded-lg shadow-xl">
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">Comprovante de Venda</h2>
+              <button
+                onClick={() => {
+                  setShowReceiptModal(false);
+                  setReceiptData(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <XCircle className="h-4 w-4 text-gray-500" />
+              </button>
+            </div>
+            <ReceiptPrint
+              data={receiptData}
+              onPrintComplete={() => {
+                setShowReceiptModal(false);
+                setReceiptData(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+      </div>
+    </div>
+  </div>
+</div>
+</Layout>
+  );
+}
+
+// Helper components for icons not in lucide-react (if needed)
+function Loader2({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </svg>
+  );
+}
+
+function Search({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
   );
 }

@@ -1,18 +1,13 @@
 import { NextResponse } from "next/server"
 import { CategoryService } from "@/services/categoryService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
 
 // GET /api/categories/[id] - Get category by ID
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for category viewing
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
-    const category = await CategoryService.getCategoryById(params.id)
+    const category = await CategoryService.getCategoryById((await params).id)
 
     if (!category) {
       return NextResponse.json(
@@ -32,46 +27,40 @@ export async function GET(
       data: category
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 // PUT /api/categories/[id] - Update category
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for category updates
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const data = await request.json()
-    const category = await CategoryService.updateCategory(params.id, data)
+    const category = await CategoryService.updateCategory((await params).id, data)
 
     return NextResponse.json({
       success: true,
       data: category
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 // DELETE /api/categories/[id] - Delete category
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authentication - Require ADMIN role for category deletion
-    await requireAuthAndRole(["ADMIN"])
-
-    await CategoryService.deleteCategory(params.id)
+    await CategoryService.deleteCategory((await params).id)
     return NextResponse.json({
       success: true,
       data: { deleted: true }
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

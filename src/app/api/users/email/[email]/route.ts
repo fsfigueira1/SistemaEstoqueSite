@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server"
 import { UserService } from "@/services/userService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
 
-export async function GET(request: Request, { params }: { params: { email: string } }) {
+
+
+export async function GET(request: Request, { params }: { params: Promise<{ email: string }> }) {
   try {
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
 
-    const { email } = params
+
+    const { email } = await params
     const result = await UserService.getUserByEmail(email)
 
     if (!result) {
@@ -21,7 +21,5 @@ export async function GET(request: Request, { params }: { params: { email: strin
       success: true,
       data: result
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

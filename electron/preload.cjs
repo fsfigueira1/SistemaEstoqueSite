@@ -16,8 +16,8 @@ contextBridge.exposeInMainWorld(
     // Example: Safe barcode scanning result handler
     // handleBarcodeScan: (callback) => ipcRenderer.on('barcode-scan-result', callback),
 
-    // Example: Safe method to get app version
-    getAppVersion: () => app.getVersion(),
+    // Example: Safe method to get app version (via IPC)
+    getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
     // Example: Safe method to minimize window
     minimizeWindow: () => ipcRenderer.send('minimize-window'),

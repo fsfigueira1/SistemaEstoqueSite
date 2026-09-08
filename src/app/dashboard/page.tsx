@@ -18,7 +18,7 @@ export default function Dashboard() {
         
         <Card className="p-6">
           <CardHeader>
-            <CardTitle>Today&#39;s Sales</CardTitle>
+            <CardTitle>Today's Sales</CardTitle>
           </CardHeader>
           <CardContent className="text-right">
             <p className="text-4xl font-bold">R$ 5,678.90</p>

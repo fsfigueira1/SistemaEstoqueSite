@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server"
 import { CashMovementService } from "@/services/cashMovementService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
+
+
 
 // GET /api/cash-movements/statistics - Get cash movement statistics
 export async function GET(request: Request) {
   try {
     // Authentication - Require ADMIN or MANAGER role for cash movement statistics
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
+
 
     const { searchParams } = new URL(request.url)
 
@@ -40,7 +40,5 @@ export async function GET(request: Request) {
       success: true,
       data: result
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

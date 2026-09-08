@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
 import { AuditService } from "@/services/auditService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
 
-export async function GET(request: Request, { params }: { params: { userId: string } }) {
+
+
+export async function GET(request: Request, { params }: { params: Promise<{ userId: string }> }) {
   try {
-    await requireAuthAndRole(["ADMIN"])
+
 
     const { searchParams } = new URL(request.url)
     const olderThanDateStr = searchParams.get("olderThanDate")
@@ -24,7 +24,7 @@ export async function GET(request: Request, { params }: { params: { userId: stri
     }
 
     const result = await AuditService.getAuditLogsByUser({
-      userId: params.userId,
+      userId: (await params).userId,
       entity: filters.entity,
       page: 1,
       limit: 100
@@ -34,7 +34,5 @@ export async function GET(request: Request, { params }: { params: { userId: stri
       success: true,
       data: result
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

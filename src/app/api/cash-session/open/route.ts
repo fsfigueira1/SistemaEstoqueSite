@@ -1,7 +1,50 @@
 import { NextResponse } from "next/server"
-import { CashSessionService } from "@/services/services/cashSessionService"
-import { prisma } from "@/lib/lib/prisma"
-import { getSystemUserId } from "@/lib/lib/systemUser"
+import { CashSessionService } from "@/services/cashSessionService"
+import { prisma } from "@/lib/prisma"
+import { getSystemUserId } from "@/lib/systemUser"
+
+// GET /api/cash-session/open - Get available cash registers for opening
+export async function GET() {
+  try {
+    // Get all active cash registers
+    let cashRegisters = await prisma.cashRegister.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        description: true
+      }
+    });
+
+    // If no cash registers exist, create a default one
+    if (cashRegisters.length === 0) {
+      const defaultCashRegister = await prisma.cashRegister.create({
+        data: {
+          name: 'Caixa Principal',
+          description: 'Caixa padrão do sistema',
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          description: true
+        }
+      });
+      cashRegisters = [defaultCashRegister];
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: cashRegisters
+    });
+  } catch (error) {
+    console.error("Cash session open API error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
 
 // POST /api/cash-session/open - Open a new cash session
 export async function POST(request: Request) {
@@ -108,47 +151,9 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    console.error('Open cash session API error:', error)
+    console.error("Cash session open API error:", error)
     return NextResponse.json(
-      {
-        success: false,
-        error: {
-          message: error instanceof Error ? error.message : 'Erro ao abrir sessão de caixa',
-          code: 'CASH_SESSION_OPEN_ERROR'
-        }
-      },
-      { status: 500 }
-    )
-  }
-}
-
-// GET /api/cash-session/open - Get available cash registers for opening
-export async function GET() {
-  try {
-    // Get all active cash registers
-    const cashRegisters = await prisma.cashRegister.findMany({
-      where: { isActive: true },
-      select: {
-        id: true,
-        name: true,
-        description: true
-      }
-    })
-
-    return NextResponse.json({
-      success: true,
-      data: cashRegisters
-    })
-  } catch (error) {
-    console.error('Get cash registers API error:', error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          message: 'Erro ao buscar caixas disponíveis',
-          code: 'CASH_REGISTERS_FETCH_ERROR'
-        }
-      },
+      { error: "Internal server error" },
       { status: 500 }
     )
   }

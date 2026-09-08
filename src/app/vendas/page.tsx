@@ -1,48 +1,41 @@
-'use client';
+import Link from 'next/link'
 
 export default function VendasPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">Laçolaria - Gestão de Vendas</h1>
-          <p className="text-sm text-gray-600">Visualize e gerencie todas as vendas realizadas</p>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="text-center py-12">
-            <div className="h-16 w-16 mx-auto mb-4 text-gray-400">
-              📊
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-6">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <svg className="h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m2 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="ml-4">
+                <h1 className="text-2xl font-bold text-gray-900">Laçolaria - Gestão de Vendas</h1>
+                <p className="mt-1 text-sm text-gray-500">Visualize e gerencie todas as vendas realizadas</p>
+              </div>
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Módulo de Vendas</h2>
-            <p className="text-gray-600">
-              Este módulo está em desenvolvimento. Em breve você poderá visualizar:
-            </p>
-            <div className="mt-6 space-y-3 text-left">
-              <p className="flex items-center gap-3">
-                <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 1118 0z" />
-                </svg>
-                <span>Relatórios detalhados de vendas por período</span>
-              </p>
-              <p className="flex items-center gap-3">
-                <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 1118 0z" />
-                </svg>
-                <span>Análise de performance de produtos e categorias</span>
-              </p>
-              <p className="flex items-center gap-3">
-                <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 1118 0z" />
-                </svg>
-                <span>Gestão de clientes e histórico de compras</span>
-              </p>
+            <div className="bg-gray-50 rounded-lg p-6">
+              <h2 className="text-lg font-medium text-gray-900 mb-4">📊 Módulo de Vendas</h2>
+              <p className="text-gray-600">Este módulo está em desenvolvimento. Em breve você poderá visualizar:</p>
+              <ul className="mt-4 space-y-2 pl-5 list-disc text-gray-600">
+                <li>Relatórios detalhados de vendas por período</li>
+                <li>Análise de performance de produtos e categorias</li>
+                <li>Gestão de clientes e histórico de compras</li>
+              </ul>
+            </div>
+            <div className="mt-6">
+              <Link href="/pdv" className="inline-flex items-center px-4 py-2 bg-gray-800 text-white font-medium rounded-sm hover:bg-gray-700">
+                Voltar ao PDV
+              </Link>
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
-  );
+  )
 }

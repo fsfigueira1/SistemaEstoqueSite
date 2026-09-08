@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { ProductService } from "@/services/services/productService"
 import SaleService from "@/services/services/saleService"
 import StockService from "@/services/services/stockService"
-import { handleApiError } from "@/lib/lib/errorHandler"
+
 
 // GET /api/dashboard/stats - Get dashboard statistics
 export async function GET(request: Request) {
@@ -81,7 +81,5 @@ export async function GET(request: Request) {
         recentSales
       }
     })
-  } catch (error) {
-    return handleApiError(error)
-  }
+  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

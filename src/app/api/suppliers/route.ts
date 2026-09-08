@@ -1,28 +1,30 @@
 import { NextResponse } from "next/server"
 import { SupplierService } from "@/services/supplierService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
-import { validatePaginationParams } from "@/lib/pagination"
 
-// GET /api/suppliers - List suppliers with filters
+// GET /api/suppliers - List suppliers with filters and pagination
 export async function GET(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for supplier listing
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const { searchParams } = new URL(request.url)
-
-    // Validate pagination
-    const { page, limit } = validatePaginationParams(
-      searchParams.get("page"),
-      searchParams.get("limit")
-    )
 
     // Build filters
     const filters = {
       name: searchParams.get("name") || undefined,
-      page,
-      limit
+      page: parseInt(searchParams.get("page") || "1"),
+      limit: parseInt(searchParams.get("limit") || "10")
+    }
+
+    // Validate pagination
+    if (isNaN(filters.page) || filters.page < 1) {
+      return NextResponse.json(
+        { error: "Invalid page number" },
+        { status: 400 }
+      )
+    }
+    if (isNaN(filters.limit) || filters.limit < 1) {
+      return NextResponse.json(
+        { error: "Invalid limit" },
+        { status: 400 }
+      )
     }
 
     const result = await SupplierService.getSuppliers(filters)
@@ -33,28 +35,25 @@ export async function GET(request: Request) {
       data: result
     })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 // POST /api/suppliers - Create new supplier
 export async function POST(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for supplier creation
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const data = await request.json()
-    const supplier = await SupplierService.createSupplier(data)
+    const result = await SupplierService.createSupplier(data)
 
     // Return standardized success response with 201 status
     return NextResponse.json(
       {
         success: true,
-        data: supplier
+        data: result
       },
       { status: 201 }
     )
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

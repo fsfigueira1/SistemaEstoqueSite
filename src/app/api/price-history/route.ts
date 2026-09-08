@@ -1,22 +1,10 @@
 import { NextResponse } from "next/server"
 import { PriceHistoryService } from "@/services/priceHistoryService"
-import { requireAuthAndRole } from "@/lib/authUtils"
-import { handleApiError } from "@/lib/errorHandler"
-import { validatePaginationParams } from "@/lib/pagination"
 
 // GET /api/price-history - List price history with filters and pagination
 export async function GET(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for viewing price history
-    await requireAuthAndRole(["ADMIN", "MANAGER"])
-
     const { searchParams } = new URL(request.url)
-
-    // Validate pagination
-    const { page, limit } = validatePaginationParams(
-      searchParams.get("page"),
-      searchParams.get("limit")
-    )
 
     // Build filters
     const filters: {
@@ -46,6 +34,22 @@ export async function GET(request: Request) {
       filters.changedById = changedById
     }
 
+    // Pagination
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = parseInt(searchParams.get("limit") || "10")
+    if (isNaN(page) || page < 1) {
+      return NextResponse.json(
+        { error: "Invalid page number" },
+        { status: 400 }
+      )
+    }
+    if (isNaN(limit) || limit < 1) {
+      return NextResponse.json(
+        { error: "Invalid limit" },
+        { status: 400 }
+      )
+    }
+
     const result = await PriceHistoryService.getPriceHistory({
       ...filters,
       page,
@@ -57,8 +61,7 @@ export async function GET(request: Request) {
       success: true,
       data: result
     })
-
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
