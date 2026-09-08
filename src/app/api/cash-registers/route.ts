@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Cash registers API error:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     )
   }
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Cash registers API error:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     )
   }

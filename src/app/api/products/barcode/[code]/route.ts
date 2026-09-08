@@ -9,7 +9,12 @@ export async function GET(
 ) {
   try {
     const { code } = await params
-    const product = await ProductService.getProductByBarcode(decodeURIComponent(code).trim())
+    const raw = decodeURIComponent(code).trim()
+    // Tenta pelo código de barras; se não achar, tenta pelo SKU (lojas pequenas
+    // costumam escanear o próprio código interno do produto).
+    const product =
+      (await ProductService.getProductByBarcode(raw)) ??
+      (await ProductService.getProductBySku(raw))
 
     if (!product) {
       return NextResponse.json({
@@ -25,5 +30,5 @@ export async function GET(
       success: true,
       data: product
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
 }

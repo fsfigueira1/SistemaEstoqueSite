@@ -19,7 +19,7 @@ export async function GET(
       success: true,
       data: result
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
 }
 
 // PUT /api/sales/[id] - NOT IMPLEMENTED: SaleService doesn't have update method
@@ -44,7 +44,7 @@ export async function PUT(
       },
       { status: 405 }
     )
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
 }
 
 // DELETE /api/sales/[id] - Cancel sale
@@ -65,5 +65,5 @@ export async function DELETE(
       success: true,
       data: result
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
 }

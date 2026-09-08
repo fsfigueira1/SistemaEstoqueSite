@@ -40,7 +40,7 @@ export async function GET() {
   } catch (error) {
     console.error("Cash session open API error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Cash session open API error:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     )
   }

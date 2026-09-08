@@ -163,3 +163,25 @@
     @apply border-primary ring-2 ring-primary;
   }
 }
+/* --- Impressão de comprovante (Epson TM-T20X, bobina 80mm) --- */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #receipt-print-area,
+  #receipt-print-area * {
+    visibility: visible !important;
+  }
+  #receipt-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 72mm;
+    margin: 0;
+    padding: 0;
+  }
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+}

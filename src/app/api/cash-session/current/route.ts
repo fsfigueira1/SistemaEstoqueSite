@@ -27,7 +27,7 @@ export async function GET() {
   } catch (error) {
     console.error("Cash session current API error:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     )
   }

@@ -31,7 +31,7 @@ export async function GET(
       success: true,
       data: product
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
 }
 
 // PUT /api/products/[id] - Update product
@@ -45,11 +45,15 @@ export async function PUT(
 
     const data = await request.json()
 
-    // Support both Portuguese (nome, codigo, categoriaId, preco, custo, estoque, estoqueMinimo)
-    // and English (name, sku, categoryId, salePrice, costPrice, stockQuantity, minStockLevel) field names
+    // "codigo" do formulário = código de barras escaneável; SKU separado é opcional.
+    const barcode =
+      (data.barcode ?? data.codigoBarras ?? data.codigo ?? '').toString().trim() || null
+    const sku =
+      (data.sku ?? data.codigoInterno ?? data.codigo ?? barcode ?? '').toString().trim() || undefined
+
     const productData = {
       name: data.name || data.nome,
-      sku: data.sku || data.codigo,
+      sku,
       categoryId: data.categoryId || data.categoriaId,
       salePrice: data.salePrice ?? data.preco,
       costPrice: data.costPrice ?? data.custo,
@@ -58,7 +62,7 @@ export async function PUT(
       maxStockLevel: data.maxStockLevel,
       unit: data.unit,
       description: data.description,
-      barcode: data.barcode,
+      barcode,
       supplierId: data.supplierId,
       status: data.status,
       isFeatured: data.isFeatured,
@@ -70,7 +74,7 @@ export async function PUT(
       success: true,
       data: product
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
 }
 
 // DELETE /api/products/[id] - Delete product (deactivate)
@@ -87,5 +91,5 @@ export async function DELETE(
       success: true,
       data: { deactivated: true }
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
 }

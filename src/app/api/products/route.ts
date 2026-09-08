@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       data: result
     })
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
   }
 }
 
@@ -51,11 +51,18 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const data = await request.json()
-    // Support both Portuguese (nome, codigo, categoriaId, preco, custo, estoque, estoqueMinimo)
-    // and English (name, sku, categoryId, salePrice, costPrice, stockQuantity, minStockLevel) field names
+    // Aceita nomes em português (nome, codigo/codigoBarras, categoriaId, preco, custo,
+    // estoque, estoqueMinimo) e inglês (name, sku, barcode, categoryId, ...).
+    // "codigo" no formulário é o código de barras escaneável; se não vier um SKU
+    // separado, o próprio código de barras vira o SKU.
+    const barcode =
+      (data.barcode ?? data.codigoBarras ?? data.codigo ?? '').toString().trim() || null
+    const sku =
+      (data.sku ?? data.codigoInterno ?? data.codigo ?? barcode ?? '').toString().trim()
+
     const productData = {
       name: data.name || data.nome,
-      sku: data.sku || data.codigo,
+      sku,
       categoryId: data.categoryId || data.categoriaId,
       salePrice: data.salePrice ?? data.preco,
       costPrice: data.costPrice ?? data.custo,
@@ -64,7 +71,7 @@ export async function POST(request: Request) {
       maxStockLevel: data.maxStockLevel,
       unit: data.unit,
       description: data.description,
-      barcode: data.barcode,
+      barcode,
       supplierId: data.supplierId,
       status: data.status,
       isFeatured: data.isFeatured,
@@ -81,6 +88,6 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
   }
 }
