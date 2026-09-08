@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { ProductService } from "@/services/services/productService"
-import SaleService from "@/services/services/saleService"
-import StockService from "@/services/services/stockService"
+import { ProductService } from "@/services/productService"
+import SaleService from "@/services/saleService"
+import StockService from "@/services/stockService"
 
 
 // GET /api/dashboard/stats - Get dashboard statistics

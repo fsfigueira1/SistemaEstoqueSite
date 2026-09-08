@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSystemUser } from "@/lib/lib/systemUser"
+import { getSystemUser } from "@/lib/systemUser"
 
 // GET /api/session - Get current system user (for desktop app)
 export async function GET() {

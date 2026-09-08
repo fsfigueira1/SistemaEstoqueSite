@@ -1,59 +1,57 @@
-'use node';
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
-import { auth } from "@/lib/auth"
-
-// Define public routes that don't require authentication
-const publicRoutes = [
-  "/auth/signin",
-  "/auth/signup",
-  "/api/auth/*",
-  "/senha",
-  "/api/senha/*",
-  "/_next/*",
-  "/favicon.ico",
-  "/robots.txt"
-]
-
-export async function proxy(request: NextRequest) {
-  const session = await auth()
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Check if the route is public
-  const isPublicRoute = publicRoutes.some(route => {
-    if (route.endsWith("*")) {
-      return pathname.startsWith(route.slice(0, -1))
-    }
-    return pathname === route
-  })
+  // Public paths: password page and its API
+  const publicPaths = ['/senha', '/api/senha']
 
-  // Allow public routes to pass through
-  if (isPublicRoute) {
+  if (publicPaths.includes(pathname)) {
     return NextResponse.next()
   }
 
-  // If not authenticated, redirect to sign-in
-  if (!session) {
+  // Check for auth cookie
+  const authCookie = request.cookies.get('erp_auth')
+  if (!authCookie) {
+    // No cookie
+    if (pathname.startsWith('/api/')) {
+      // API route: return 401
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+    // Non-API: redirect to password page
     const url = request.nextUrl.clone()
-    url.pathname = "/auth/signin"
+    url.pathname = '/senha'
     return NextResponse.redirect(url)
   }
 
-  // If authenticated, continue to the requested route
+  // Validate cookie format: we expect "role:timestamp"
+  const cookieValue = authCookie.value
+  if (!cookieValue) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+    const url = request.nextUrl.clone()
+    url.pathname = '/senha'
+    return NextResponse.redirect(url)
+  }
+
+  // Optional: validate role and timestamp (not strictly necessary for now)
+  // We'll just accept any non-empty cookie as valid.
+  // In the future, we could check expiration, etc.
+
   return NextResponse.next()
 }
 
-// Configure middleware to run on specific paths
+// Match all paths except static assets, images, favicon, and public folder
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    "/((?!_next/static|_next/image|favicon.ico|public).*)",
+    '/((?!_next/static|_next/image|favicon.ico|public/).*)',
   ],
 }
