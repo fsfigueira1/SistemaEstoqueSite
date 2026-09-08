@@ -278,42 +278,31 @@ export default function PDVPage() {
     try {
       const cashSessionId = await ensureCashSession();
 
-      // 1. cria a venda (PENDING)
-      const createRes = await fetch('/api/sales', {
+      // Uma chamada só: cria + conclui a venda. Se a conclusão falhar, o
+      // servidor cancela a venda pendente — nunca fica venda sem baixa de
+      // estoque nem estoque baixado sem venda.
+      const res = await fetch('/api/sales/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cashSessionId,
           items: carrinho.map((i) => ({ productId: i.id, quantity: i.quantidade, unitPrice: i.preco })),
           surchargeAmount: juros || undefined,
+          payment: {
+            method: METHOD_MAP[metodo],
+            installments: metodo === 'cartao' ? parcelas : 1,
+            changeAmount: 0,
+          },
         }),
       });
-      const createData = await createRes.json();
-      if (!createRes.ok || !createData.success) {
-        throw new Error(createData?.error?.message || createData?.error || 'Falha ao registrar a venda');
-      }
-      const sale = createData.data.sale ?? createData.data;
-      const serverTotal = toNumber(sale.totalAmount);
-
-      // 2. conclui a venda -> baixa estoque + registra pagamento
-      const completeRes = await fetch(`/api/sales/${sale.id}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: serverTotal,
-          method: METHOD_MAP[metodo],
-          installmentCount: metodo === 'cartao' && parcelas > 1 ? parcelas : undefined,
-          changeAmount: 0,
-        }),
-      });
-      const completeData = await completeRes.json();
-      if (!completeRes.ok || !completeData.success) {
+      const data = await res.json();
+      if (!res.ok || !data.success) {
         throw new Error(
-          completeData?.error?.message ||
-            completeData?.error ||
-            'Venda registrada mas não foi possível concluir. Verifique o caixa.',
+          data?.error?.message || data?.error || 'Não foi possível finalizar a venda. Tente de novo.',
         );
       }
+      const sale = data.data;
+      const serverTotal = toNumber(sale.totalAmount);
 
       setFinishedSale({
         saleId: sale.id,
