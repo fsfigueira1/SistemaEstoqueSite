@@ -41,3 +41,39 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# claude code worktrees / agent scratch
+/.claude/worktrees/
+
+# local databases
+*.db
+*.db-journal
+
+# local logs & debug/scratch output
+*.log
+dev.log
+electron.log
+nextjs.log
+errors.txt
+lint-output.txt
+lint-results.txt
+full-lint-output.txt
+test-results.txt
+tsc_output.txt
+vitest_output.log
+
+# one-off fix / debug scripts
+fix_*.cjs
+fix-*.cjs
+fix_*.js
+fix-*.js
+fix_*.py
+fix-params*.ts
+debug_*.js
+debug_*.mjs
+
+# backups
+*.bak
+*.backup
+*.backup2
+*.old

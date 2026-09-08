@@ -1,8 +1,0 @@
-- [Failure Inventory](failure-inventory.md) — Complete inventory of 32 test failures for Phase 8
-- [Failure Inventory](failure-inventory.md) — Complete inventory of 32 test failures for Phase 8
-- [Failure Inventory](failure-inventory.md) — Complete inventory of 32 test failures for Phase 8
-- [Failure Inventory](failure-inventory.md) — Complete inventory of 32 test failures for Phase 8
-- [Failure Inventory](failure-inventory.md) — Complete inventory of 32 test failures for Phase 8
-- [Failure Inventory](failure-inventory.md) — Complete inventory of 32 test failures for Phase 8
-- [Failure Inventory](failure-inventory.md) — Complete inventory of 32 test failures for Phase 8
-- [Failure Inventory](failure-inventory.md) — Complete inventory of 32 test failures for Phase 8
