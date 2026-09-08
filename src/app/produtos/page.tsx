@@ -1,886 +1,609 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ProductStatus } from '@/generated/prisma/enums';
 import Layout from '@/components/Layout';
+import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, XCircle, Loader2 } from 'lucide-react';
 
-// ---------- Helper functions ----------
+// ---------- helpers ----------
 function toNumber(value: unknown): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value === 'string') {
-    const parsed = Number(value.replace(',', '.'));
-    return Number.isFinite(parsed) ? parsed : 0;
+    const n = Number(value.replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
   }
-  if (value && typeof value === 'object' && 'toNumber' in value && typeof (value as { toNumber: () => number }).toNumber === 'function') {
-    const parsed = (value as { toNumber: () => number }).toNumber();
-    return Number.isFinite(parsed) ? parsed : 0;
+  if (value && typeof value === 'object' && 'toNumber' in value) {
+    const n = (value as { toNumber: () => number }).toNumber();
+    return Number.isFinite(n) ? n : 0;
   }
   return 0;
 }
-function formatCurrency(value: unknown): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(toNumber(value));
-}
-
-// Normalise search terms: lowercase, remove accents
-function normalizeSearch(value: unknown): string {
-  return String(value ?? '')
+const brl = (v: unknown) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(toNumber(v));
+const norm = (v: unknown) =>
+  String(v ?? '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .trim();
-}
 
-// Define types for our API responses
-interface ProductResponse {
-  success: boolean;
-  data?: {
-    products?: Product[];
-    categories?: Category[];
-  };
-  error?: {
-    message?: string;
-  };
+// ---------- types ----------
+interface Category {
+  id: string;
+  name: string;
 }
-
-interface CategoryResponse {
-  success: boolean;
-  data?: {
-    categories?: Category[];
-  };
-  error?: {
-    message?: string;
-  };
-}
-
 interface Product {
   id: string;
-  sku?: string;
-  codigo?: string;
-  name?: string;
-  nome?: string;
-  categoryId?: string;
-  categoriaId?: string;
-  salePrice?: number;
-  preco?: number;
-  costPrice?: number;
-  custo?: number;
-  stockQuantity?: number;
-  estoque?: number;
-  minStockLevel?: number;
-  estoqueMinimo?: number;
+  name: string;
+  sku: string;
+  barcode: string | null;
+  categoryId: string;
+  category?: { id: string; name: string } | null;
+  salePrice: number | string;
+  costPrice: number | string;
+  stockQuantity: number;
+  minStockLevel: number | null;
   status: ProductStatus;
 }
 
-interface Category {
-  id: string;
-  name?: string;
-  nome?: string;
-}
+const STATUS_LABEL: Record<ProductStatus, string> = {
+  ACTIVE: 'Ativo',
+  INACTIVE: 'Inativo',
+  DISCONTINUED: 'Descontinuado',
+};
 
-// ---------- Main component ----------
+type FormState = {
+  nome: string;
+  codigoBarras: string;
+  sku: string;
+  categoriaId: string;
+  preco: string;
+  custo: string;
+  estoque: string;
+  estoqueMinimo: string;
+  status: ProductStatus;
+};
+
+const EMPTY_FORM: FormState = {
+  nome: '',
+  codigoBarras: '',
+  sku: '',
+  categoriaId: '',
+  preco: '',
+  custo: '',
+  estoque: '0',
+  estoqueMinimo: '5',
+  status: ProductStatus.ACTIVE,
+};
+
+// ---------- page ----------
 export default function ProdutosPage() {
-  // State
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'discontinued'>('all');
-  const [stockFilter, setStockFilter] = useState<'all' | 'normal' | 'low' | 'out'>('all');
+  const [loading, setLoading] = useState(true);
+
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | ProductStatus>('all');
+  const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'out'>('all');
+
   const [modalOpen, setModalOpen] = useState(false);
-  const [mode, setMode] = useState<'add' | 'edit'>('add');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [formData, setFormData] = useState<{
-    codigo: string;
-    nome: string;
-    categoriaId: string;
-    preco: number;
-    custo: number;
-    estoque: number;
-    estoqueMinimo: number;
-    status: ProductStatus;
-  }>({
-    codigo: '',
-    nome: '',
-    categoriaId: '',
-    preco: 0,
-    custo: 0,
-    estoque: 0,
-    estoqueMinimo: 5,
-    status: ProductStatus.ACTIVE,
-  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'base', string>>>({});
+  const [saving, setSaving] = useState(false);
 
-  // Validation errors state
-  const [formErrors, setFormErrors] = useState<{
-    codigo?: string;
-    nome?: string;
-    categoriaId?: string;
-    preco?: string;
-    estoque?: string;
-    custo?: string;
-    estoqueMinimo?: string;
-    status?: string;
-  }>({});
-  const [scannerStatus, setScannerStatus] = useState<'ready' | 'scanning' | 'added' | 'not-found'>('ready');
-    const [loading, setLoading] = useState(true);
-    const barcodeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+  const reload = useCallback(async () => {
+    const res = await fetch('/api/products?limit=1000');
+    const data = await res.json();
+    if (data.success) setProducts(data.data?.products ?? []);
+  }, []);
 
-    // Load initial data
-    useEffect(() => {
-      const loadData = async () => {
-        try {
-          const [productsRes, categoriesRes] = await Promise.all([
-            fetch('/api/products'),
-            fetch('/api/categories'),
-          ]);
-          const productsData: ProductResponse = await productsRes.json();
-          const categoriesData: CategoryResponse = await categoriesRes.json();
-          if (productsData.success) {
-            setProducts(productsData.data?.products || []);
-          }
-          if (categoriesData.success) {
-            setCategories(categoriesData.data?.categories || []);
-          }
-        } catch (error) {
-          console.error('Error loading products or categories:', error);
-        } finally {
-          setLoading(false);
-        }
-      };
-      loadData();
-    }, []);
-
-    // Focus logic for input after modal open/close
-    useEffect(() => {
-      if (modalOpen) {
-        inputRef.current?.focus();
-      }
-    }, [modalOpen]);
-
-    // Process barcode when complete code is detected
-    const processBarcode = async (code: string) => {
-      const cleanCode = code.trim();
-      if (!cleanCode) return;
-
-      setScannerStatus('scanning');
-
-      try {
-        const response = await fetch(`/api/products/barcode/${encodeURIComponent(cleanCode)}`);
-        const result = await response.json();
-        if (result.success && result.data) {
-          const produto = result.data as Product;
-          setSelectedProduct(produto);
-          setMode('edit');
-          setFormData({
-            codigo: produto.sku || produto.codigo || '',
-            nome: produto.name || produto.nome || '',
-            categoriaId: produto.categoryId || produto.categoriaId || '',
-            preco: produto.salePrice || produto.preco || 0,
-            custo: produto.costPrice || produto.custo || 0,
-            estoque: produto.stockQuantity || produto.estoque || 0,
-            estoqueMinimo: produto.minStockLevel || produto.estoqueMinimo || 5,
-            status: produto.status || ProductStatus.ACTIVE,
-          });
-          setModalOpen(true);
-          setScannerStatus('added');
-        } else {
-          // Product not found → prepare to add new one
-          setSelectedProduct(null);
-          setMode('add');
-          setFormData({
-            codigo: cleanCode,
-            nome: '',
-            categoriaId: '',
-            preco: 0,
-            custo: 0,
-            estoque: 0,
-            estoqueMinimo: 5,
-            status: ProductStatus.ACTIVE,
-          });
-          setSearchTerm(''); // Clear the input after preparing to add
-          setModalOpen(true);
-          setScannerStatus('not-found');
-        }
-      } catch (err) {
-        setScannerStatus('not-found');
-        console.error('Barcode processing error:', err);
-      } finally {
-        // Small delay to show status before resetting
-        setTimeout(() => {
-          setScannerStatus('ready');
-        }, 1500);
-      }
-    };
-
-    // Handle barcode input changes - Smart debounce for USB scanner vs manual typing
-    const handleBarcodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
-      setSearchTerm(value);
-
-      // Clear existing timeout
-      if (barcodeTimeoutRef.current !== null) {
-        clearTimeout(barcodeTimeoutRef.current);
-      }
-
-      // Set new timeout to process barcode after inactivity (debounce)
-      // USB scanners typically send complete codes within 10-50ms
-      // Manual typing has pauses > 300ms between characters
-      barcodeTimeoutRef.current = setTimeout(() => {
-        const code = value.trim();
-        if (code) {
-          void processBarcode(code);
-        }
-      }, 300); // 300ms debounce - waits for input to settle
-    };
-
-    // Handle key presses for barcode input (Enter as fallback)
-    const handleBarcodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (barcodeTimeoutRef.current !== null) {
-          clearTimeout(barcodeTimeoutRef.current);
-          barcodeTimeoutRef.current = null;
-        }
-        const code = e.currentTarget.value.trim();
-        if (code) {
-          void processBarcode(code);
-        }
-      }
-    };
-
-  // Reset scanner status after a short delay
   useEffect(() => {
-    if (scannerStatus !== 'ready') {
-      const reset = setTimeout(() => {
-        setScannerStatus('ready');
-      }, 1500);
-      return () => clearTimeout(reset);
-    }
-  }, [scannerStatus]);
+    (async () => {
+      try {
+        const [p, c] = await Promise.all([
+          fetch('/api/products?limit=1000').then((r) => r.json()),
+          fetch('/api/categories').then((r) => r.json()),
+        ]);
+        if (p.success) setProducts(p.data?.products ?? []);
+        if (c.success) setCategories(c.data?.categories ?? c.data ?? []);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-  // ---------- CRUD handlers ----------
-  const handleSubmit = async () => {
-    // Validate form fields inline
-    const newErrors: {
-      codigo?: string;
-      nome?: string;
-      categoriaId?: string;
-      preco?: string;
-      estoque?: string;
-      custo?: string;
-      estoqueMinimo?: string;
-      status?: string;
-    } = {};
+  // ---------- derived ----------
+  const filtered = useMemo(() => {
+    return products.filter((p) => {
+      if (search && !norm(`${p.name} ${p.sku} ${p.barcode ?? ''}`).includes(norm(search))) return false;
+      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+      if (stockFilter !== 'all') {
+        const stock = toNumber(p.stockQuantity);
+        const min = toNumber(p.minStockLevel ?? 0);
+        if (stockFilter === 'out' && stock !== 0) return false;
+        if (stockFilter === 'low' && !(stock > 0 && stock <= min)) return false;
+      }
+      return true;
+    });
+  }, [products, search, statusFilter, stockFilter]);
 
-    if (!formData.codigo?.trim()) {
-      newErrors.codigo = 'Código/SKU é obrigatório';
+  const stats = useMemo(() => {
+    let low = 0;
+    let out = 0;
+    let value = 0;
+    for (const p of products) {
+      const stock = toNumber(p.stockQuantity);
+      const min = toNumber(p.minStockLevel ?? 0);
+      if (stock === 0) out++;
+      else if (stock <= min) low++;
+      value += stock * toNumber(p.costPrice);
     }
-    if (!formData.nome?.trim()) {
-      newErrors.nome = 'Nome do produto é obrigatório';
-    }
-    if (!formData.categoriaId?.trim()) {
-      newErrors.categoriaId = 'Selecione uma categoria';
-    }
-    if (formData.preco < 0) {
-      newErrors.preco = 'Preço não pode ser negativo';
+    return { total: products.length, low, out, value };
+  }, [products]);
+
+  // ---------- modal ----------
+  const openNew = () => {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setErrors({});
+    setModalOpen(true);
+  };
+  const openEdit = (p: Product) => {
+    setEditingId(p.id);
+    setForm({
+      nome: p.name,
+      codigoBarras: p.barcode ?? '',
+      sku: p.sku,
+      categoriaId: p.categoryId,
+      preco: String(toNumber(p.salePrice)),
+      custo: String(toNumber(p.costPrice)),
+      estoque: String(toNumber(p.stockQuantity)),
+      estoqueMinimo: String(toNumber(p.minStockLevel ?? 0)),
+      status: p.status,
+    });
+    setErrors({});
+    setModalOpen(true);
+  };
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setErrors({});
+  };
+
+  const set = (k: keyof FormState, v: string) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setErrors((e) => ({ ...e, [k]: undefined, base: undefined }));
+  };
+
+  const submit = async () => {
+    const e: typeof errors = {};
+    if (!form.nome.trim()) e.nome = 'Informe o nome do produto';
+    if (!form.codigoBarras.trim() && !form.sku.trim())
+      e.codigoBarras = 'Informe o código de barras (ou um SKU)';
+    if (!form.categoriaId) e.categoriaId = 'Selecione uma categoria';
+    if (form.preco === '' || toNumber(form.preco) < 0) e.preco = 'Preço de venda inválido';
+    if (toNumber(form.custo) < 0) e.custo = 'Custo não pode ser negativo';
+    if (toNumber(form.estoque) < 0) e.estoque = 'Estoque não pode ser negativo';
+    if (toNumber(form.estoqueMinimo) < 0) e.estoqueMinimo = 'Valor não pode ser negativo';
+    if (Object.keys(e).length) {
+      setErrors(e);
       return;
     }
-    if (formData.estoque < 0) {
-      newErrors.estoque = 'Estoque não pode ser negativo';
-      return;
-    }
 
-    if (Object.keys(newErrors).length > 0) {
-      setFormErrors(newErrors);
-      // Focus first invalid field
-      const firstError = Object.keys(newErrors)[0];
-      const input = document.querySelector(`[name="${firstError}"]`) as HTMLElement;
-      input?.focus();
-      return;
-    }
-
-    // Clear errors on valid submit
-    setFormErrors({});
-
+    setSaving(true);
     try {
       const payload = {
-        codigo: formData.codigo,
-        nome: formData.nome,
-        categoriaId: formData.categoriaId,
-        preco: toNumber(formData.preco),
-        custo: toNumber(formData.custo),
-        estoque: toNumber(formData.estoque),
-        estoqueMinimo: toNumber(formData.estoqueMinimo),
-        status: formData.status,
+        nome: form.nome.trim(),
+        codigoBarras: form.codigoBarras.trim() || null,
+        sku: form.sku.trim() || form.codigoBarras.trim(),
+        categoriaId: form.categoriaId,
+        preco: toNumber(form.preco),
+        custo: toNumber(form.custo),
+        estoque: toNumber(form.estoque),
+        estoqueMinimo: toNumber(form.estoqueMinimo),
+        status: form.status,
       };
-
-      const url = mode === 'add' ? '/api/products' : `/api/products/${selectedProduct?.id}`;
-      const method = mode === 'add' ? 'POST' : 'PUT';
-
-      const response = await fetch(url, {
-        method,
+      const res = await fetch(editingId ? `/api/products/${editingId}` : '/api/products', {
+        method: editingId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        // Handle any unexpected backend validation errors
-        if (result.error?.message) {
-          const newErrors: { [key: string]: string } = {};
-          newErrors.base = result.error.message || "Erro de validação";
-          setFormErrors(newErrors);
-          return;
-        }
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setErrors({ base: data?.error?.message || data?.error || 'Não foi possível salvar' });
         return;
       }
-
-      // Refresh product list
-      const freshRes = await fetch('/api/products');
-      const freshData = await freshRes.json();
-      if (freshData.success) {
-        setProducts(freshData.data?.products || []);
-      }
-
-      setModalOpen(false);
-      setFormData({
-        codigo: '',
-        nome: '',
-        categoriaId: '',
-        preco: 0,
-        custo: 0,
-        estoque: 0,
-        estoqueMinimo: 5,
-        status: ProductStatus.ACTIVE,
-      });
-      setFormErrors({});
-    } catch (error) {
-      console.error("Error submitting product form:", error);
-      const newErrors: { [key: string]: string } = {};
-      newErrors.base = "Erro ao salvar produto";
-      setFormErrors(newErrors);
+      await reload();
+      closeModal();
+    } catch {
+      setErrors({ base: 'Erro de rede ao salvar' });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (productId: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este produto?')) return;
-    try {
-      const response = await fetch(`/api/products/${productId}`, { method: 'DELETE' });
-      const result = await response.json();
-      if (result.success) {
-        const freshRes = await fetch('/api/products');
-        const freshData = await freshRes.json();
-        if (freshData.success) {
-          setProducts(freshData.data?.products || []);
-        }
-      }
-    } catch (error) {
-      console.error('Error deleting product:', error);
-    }
+  const remove = async (p: Product) => {
+    if (!window.confirm(`Excluir "${p.name}"? O produto ficará inativo.`)) return;
+    await fetch(`/api/products/${p.id}`, { method: 'DELETE' });
+    await reload();
   };
 
-  const handleCloseModal = () => {
-    setModalOpen(false);
-    setFormData({
-      codigo: '',
-      nome: '',
-      categoriaId: '',
-      preco: 0,
-      custo: 0,
-      estoque: 0,
-      estoqueMinimo: 5,
-      status: ProductStatus.ACTIVE,
-    });
-    setFormErrors({});
-    setSelectedProduct(null);
-  };
-
-  // ---------- Derived lists ----------
-  const filteredProducts = products.filter((p) => {
-    // Text search (partial, case‑insensitive, accent‑insensitive)
-    if (searchTerm && !normalizeSearch(p.name || p.nome || p.codigo || p.sku).includes(normalizeSearch(searchTerm))) {
-      return false;
-    }
-    // Status filter
-    if (statusFilter !== 'all') {
-      const statusOk = p.status === ProductStatus.ACTIVE && statusFilter === 'active' ||
-        p.status === ProductStatus.INACTIVE && statusFilter === 'inactive' ||
-        p.status === ProductStatus.DISCONTINUED && statusFilter === 'discontinued';
-      if (!statusOk) return false;
-    }
-    // Stock filter
-    if (stockFilter !== 'all') {
-      const stock = toNumber(p.stockQuantity ?? p.estoque ?? 0);
-      const min = toNumber(p.minStockLevel ?? p.estoqueMinimo ?? 5);
-      const isLow = stock > 0 && stock <= min;
-      const isOut = stock === 0;
-      if (stockFilter === 'normal' && (!isLow && !isOut)) return false;
-      if (stockFilter === 'low' && !isLow) return false;
-      if (stockFilter === 'out' && !isOut) return false;
-    }
-    return true;
-  });
-
-  // ---------- Render ----------
+  // ---------- render ----------
   return (
     <Layout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Laçolaria - Gestão de Produtos</h1>
-          <p className="text-sm text-gray-600">Controle completo do seu catálogo de produtos</p>
-        </div>
-
-        <div className="flex items-center gap-4 px-4 py-2 bg-gray-50 rounded-lg">
-          <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-md text-sm">
-            <div className={`h-2.5 w-2.5 rounded-full ${scannerStatus === 'ready' ? 'bg-green-500' : scannerStatus === 'scanning' ? 'bg-blue-500' : scannerStatus === 'added' ? 'bg-emerald-500' : scannerStatus === 'not-found' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
-            <span id="scanner-status-text" className={scannerStatus === 'ready' ? 'text-green-700' : scannerStatus === 'scanning' ? 'text-blue-700' : scannerStatus === 'added' ? 'text-emerald-700' : scannerStatus === 'not-found' ? 'text-red-700' : 'text-gray-700'}>
-              {scannerStatus === 'ready' ? 'LEITOR PRONTO' : scannerStatus === 'scanning' ? 'LENDO CÓDIGO...' : scannerStatus === 'added' ? 'PRODUTO ENCONTRADO' : scannerStatus === 'not-found' ? 'PRODUTO NÃO ENCONTRADO' : ''}
-            </span>
+      <div className="space-y-6 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Gestão de Produtos</h1>
+            <p className="text-sm text-gray-500">Catálogo, preços e estoque</p>
           </div>
           <button
-            onClick={() => {
-              setFormData({
-                codigo: '',
-                nome: '',
-                categoriaId: '',
-                preco: 0,
-                custo: 0,
-                estoque: 0,
-                estoqueMinimo: 5,
-                status: ProductStatus.ACTIVE,
-              });
-              setFormErrors({});
-              setMode('add');
-              setSelectedProduct(null);
-              setModalOpen(true);
-            }}
-            disabled={false}
-            className="flex items-center gap-2 px-4 py-3 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+            onClick={openNew}
+            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 font-medium text-white hover:bg-emerald-700"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            Adicionar Produto
+            <Plus className="h-4 w-4" />
+            Novo Produto
           </button>
         </div>
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full border-4 border-t-emerald-600 border-b-transparent w-12 h-12"></div>
-            <p className="mt-4 text-sm text-gray-500">Carregando produtos...</p>
+
+        {/* stats */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard icon={<Package className="h-4 w-4" />} label="Produtos" value={String(stats.total)} />
+          <StatCard
+            icon={<AlertTriangle className="h-4 w-4" />}
+            label="Estoque baixo"
+            value={String(stats.low)}
+            tone={stats.low ? 'warn' : 'muted'}
+          />
+          <StatCard
+            icon={<XCircle className="h-4 w-4" />}
+            label="Sem estoque"
+            value={String(stats.out)}
+            tone={stats.out ? 'danger' : 'muted'}
+          />
+          <StatCard icon={<Package className="h-4 w-4" />} label="Valor em estoque" value={brl(stats.value)} />
+        </div>
+
+        {/* toolbar */}
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-4">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome, SKU ou código de barras"
+              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+            />
           </div>
-        ) : (
-          <div className="space-y-8">
-            {/* Search & Filter Bar */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Busca por nome, código ou código de barras</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={handleBarcodeChange}
-                      onKeyDown={handleBarcodeKeyDown}
-                      placeholder="Digite para buscar produtos..."
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    />
-                    {formErrors.estoque && (
-                      <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                    )}
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4">
-                      <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35M11 15h2m-3 4h2" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            className="rounded-lg border border-gray-300 px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+          >
+            <option value="all">Todos os status</option>
+            <option value={ProductStatus.ACTIVE}>Ativos</option>
+            <option value={ProductStatus.INACTIVE}>Inativos</option>
+            <option value={ProductStatus.DISCONTINUED}>Descontinuados</option>
+          </select>
+          <select
+            value={stockFilter}
+            onChange={(e) => setStockFilter(e.target.value as typeof stockFilter)}
+            className="rounded-lg border border-gray-300 px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+          >
+            <option value="all">Todo o estoque</option>
+            <option value="low">Estoque baixo</option>
+            <option value="out">Sem estoque</option>
+          </select>
+        </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por status</label>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive' | 'discontinued')}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  >
-                    {formErrors.estoque && (
-                      <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                    )}
-                    <option value="all">Todos os status</option>
-                    <option value="active">Ativos</option>
-                    <option value="inactive">Inativos</option>
-                    <option value="discontinued">Descontinuados</option>
-                  </select>
-                  </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estoque</label>
-                  <select
-                    value={stockFilter}
-                    onChange={(e) => setStockFilter(e.target.value as 'all' | 'normal' | 'low' | 'out')}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  >
-                    {formErrors.estoque && (
-                      <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                    )}
-                    <option value="all">Todos os status</option>
-                    <option value="active">Ativos</option>
-                    <option value="inactive">Inativos</option>
-                    <option value="out">Esgotado</option>
-                  </select>
-                  </div>
-
-                <div className="flex items-end">
-                  <button
-                    onClick={() => setModalOpen(true)}
-                    disabled={false}
-                    className="flex items-center gap-2 px-4 py-3 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Adicionar Produto
-                  </button>
-                </div>
-              </div>
+        {/* table */}
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          {loading ? (
+            <div className="py-16 text-center text-sm text-gray-500">
+              <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin" />
+              Carregando produtos…
             </div>
-
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 bg-emerald-500/20 flex items-center justify-center rounded-lg">
-                    <svg className="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2-1.343-2-3-2zm0 10c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2-1.343-2-3-2zm0-6c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2-1.343-2-3-2z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Estoque Baixo</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {products
-                        .filter((p) => {
-                          const stock = toNumber(p.stockQuantity ?? p.estoque ?? 0);
-                          const min = toNumber(p.minStockLevel ?? p.estoqueMinimo ?? 5);
-                          return stock > 0 && stock <= min;
-                        }).length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 bg-emerald-500/20 flex items-center justify-center rounded-lg">
-                    <svg className="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m2 0a2 2 0 100-4 2 2 0 000 4 2 2 0 000 4z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Sem Estoque</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {products.filter((p) => toNumber(p.stockQuantity ?? p.estoque ?? 0) === 0).length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 bg-emerald-500/20 flex items-center justify-center rounded-lg">
-                    <svg className="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 15l2-2m0 0l2-2m-2 2l-2 8l2-2m0 0l2 2m-2-2l-2-2m2 8l-2-2m-2 2l2-2m2 8l-2-2" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Valor do Estoque</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {formatCurrency(
-                        products.reduce((sum: number, p) => sum + (toNumber(p.salePrice ?? p.preco) * toNumber(p.stockQuantity ?? p.estoque)), 0)
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Products Table */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900">Lista de Produtos</h2>
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="h-2.5 w-2.5 bg-pale-gold/20 text-pale-gold rounded-full flex items-center justify-center text-xs font-medium">
-                    {products.length}
-                  </div>
-                  <span className="text-gray-600">produtos</span>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produto</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código de Barras</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Preço</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Estoque</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Estoques Mín.</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+          ) : filtered.length === 0 ? (
+            <div className="py-16 text-center text-sm text-gray-500">Nenhum produto encontrado.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                  <th className="px-4 py-3">Produto</th>
+                  <th className="px-4 py-3">Cód. barras</th>
+                  <th className="px-4 py-3">Categoria</th>
+                  <th className="px-4 py-3 text-right">Venda</th>
+                  <th className="px-4 py-3 text-right">Custo</th>
+                  <th className="px-4 py-3 text-right">Estoque</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((p) => {
+                  const stock = toNumber(p.stockQuantity);
+                  const min = toNumber(p.minStockLevel ?? 0);
+                  return (
+                    <tr key={p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900">{p.name}</div>
+                        <div className="text-xs text-gray-500">SKU {p.sku}</div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{p.barcode || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600">{p.category?.name ?? '—'}</td>
+                      <td className="px-4 py-3 text-right font-medium text-gray-900">{brl(p.salePrice)}</td>
+                      <td className="px-4 py-3 text-right text-gray-500">{brl(p.costPrice)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span
+                          className={
+                            stock === 0
+                              ? 'font-semibold text-red-600'
+                              : stock <= min
+                                ? 'font-semibold text-amber-600'
+                                : 'text-gray-900'
+                          }
+                        >
+                          {stock}
+                        </span>
+                        <span className="text-xs text-gray-400"> / {min}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            p.status === ProductStatus.ACTIVE
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {STATUS_LABEL[p.status]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            onClick={() => openEdit(p)}
+                            className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                            aria-label="Editar"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => remove(p)}
+                            className="rounded p-1.5 text-red-500 hover:bg-red-50"
+                            aria-label="Excluir"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredProducts.map((product) => {
-                      const estoque = toNumber(product.stockQuantity ?? product.estoque ?? 0);
-                      const estoqueMinimo = toNumber(product.minStockLevel ?? product.estoqueMinimo ?? 5);
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
 
-                      return (
-                        <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{product.name || product.nome}</td>
-                          <td className="px-4 py-3 text-sm font-mono text-gray-700">{product.sku || product.codigo}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
-                            {(() => {
-                              const cat = categories.find(
-                                (c) => c.id === (product.categoryId || product.categoriaId)
-                              );
-                              return cat?.name || cat?.nome || 'Sem categoria';
-                            })()}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                            {formatCurrency(product.salePrice ?? product.preco)}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                            {estoque}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900">{estoqueMinimo}</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            <span className={`px-2 py-1 text-xs rounded-full ${product.status === ProductStatus.ACTIVE ? 'bg-green-100 text-green-800' : product.status === ProductStatus.INACTIVE ? 'bg-yellow-100 text-yellow-800' : product.status === ProductStatus.DISCONTINUED ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
-                              {product.status === ProductStatus.ACTIVE ? 'Ativo' : product.status === ProductStatus.INACTIVE ? 'Inativo' : product.status === ProductStatus.DISCONTINUED ? 'Descontinuado' : 'Desconhecido'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm space-x-2">
-                            <button
-                              onClick={() => {
-                                setSelectedProduct(product);
-                                setMode('edit');
-                                setFormData({
-                                  codigo: product.sku || product.codigo || '',
-                                  nome: product.name || product.nome || '',
-                                  categoriaId: product.categoryId || product.categoriaId || '',
-                                  preco: Number(toNumber(product.salePrice || product.preco)),
-                                  custo: Number(toNumber(product.costPrice || product.custo)),
-                                  estoque: Number(toNumber(product.stockQuantity || product.estoque)),
-                                  estoqueMinimo: Number(toNumber(product.minStockLevel || product.estoqueMinimo)) || 5,
-                                  status: product.status || ProductStatus.ACTIVE,
-                                });
-                                setFormErrors({});
-                                setModalOpen(true);
-                              }}
-                              className="px-3 py-1.5 text-sm font-medium bg-pale-gold/20 text-pale-gold rounded hover:bg-pale-gold/30 transition-colors"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              onClick={() => handleDelete(product.id)}
-                              className="px-3 py-1.5 text-sm font-medium bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors"
-                            >
-                              Excluir
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {filteredProducts.length === 0 && (
-                      <tr>
-                        <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
-                          Nenhum produto encontrado
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+      {/* modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingId ? 'Editar produto' : 'Novo produto'}
+              </h2>
+              <button onClick={closeModal} className="rounded p-1 hover:bg-gray-100" aria-label="Fechar">
+                <XCircle className="h-5 w-5 text-gray-500" />
+              </button>
             </div>
 
-            {/* Modal for adding/editing product */}
-            {modalOpen && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                  <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                    <h2 className="text-xl font-bold text-gray-900 mb-6">
-                      {mode === 'add' ? 'Adicionar Novo Produto' : 'Editar Produto'}
-                    </h2>
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                      {/* Código de Barras */}
-                      <div className="space-y-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Código de Barras *</label>
-                        <input
-                          name="codigo"
-                          type="text"
-                          value={formData.codigo}
-                          onChange={(e) => {
-                            setFormData((prev) => ({ ...prev, codigo: e.target.value }));
-                            if (formErrors.codigo) setFormErrors((prev) => ({ ...prev, codigo: undefined }));
-                          }}
-                          placeholder="Código do produto (ex: 7891234567890)"
-                          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
-                            formErrors.codigo ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                        />
-                        {formErrors.codigo && (
-                          <p className="text-sm text-red-600" role="alert">{formErrors.codigo}</p>
-                        )}
-                      </div>
-
-                      {/* Nome do Produto */}
-                      <div className="space-y-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Produto *</label>
-                        <input
-                          name="nome"
-                          type="text"
-                          value={formData.nome}
-                          onChange={(e) => {
-                            setFormData((prev) => ({ ...prev, nome: e.target.value }));
-                            if (formErrors.nome) setFormErrors((prev) => ({ ...prev, nome: undefined }));
-                          }}
-                          placeholder="Descrição completa do produto"
-                          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
-                            formErrors.nome ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                        />
-                        {formErrors.nome && (
-                          <p className="text-sm text-red-600" role="alert">{formErrors.nome}</p>
-                        )}
-                      </div>
-
-                            {/* Categoria */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-3">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Categoria *</label>
-                          <select
-                            name="categoriaId"
-                            value={formData.categoriaId}
-                            onChange={(e) => {
-                              setFormData((prev) => ({ ...prev, categoriaId: e.target.value }));
-                              if (formErrors.categoriaId) setFormErrors((prev) => ({ ...prev, categoriaId: undefined }));
-                            }}
-                            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
-                              formErrors.categoriaId ? 'border-red-500' : 'border-gray-300'
-                            }`}
-                          >
-                            <option value="">Selecionar categoria</option>
-                            {categories.map((cat) => (
-                              <option key={cat.id} value={cat.id}>
-                                {cat.name || cat.nome}
-                              </option>
-                            ))}
-                          </select>
-                          {formErrors.categoriaId && (
-                            <p className="text-sm text-red-600" role="alert">{formErrors.categoriaId}</p>
-                          )}
-                        </div>
-
-                        {/* Preço de Venda */}
-                        <div className="space-y-3">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Preço de Venda (R$)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={formData.preco}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, preco: parseFloat(e.target.value) || 0 }))}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                            placeholder="0.00"
-                          />
-                          {formErrors.preco && (
-                            <p className="text-sm text-red-600" role="alert">{formErrors.preco}</p>
-                          )}
-                        </div>
-
-                        {/* Preço de Custo */}
-                        <div className="space-y-3">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Preço de Custo (R$)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={formData.custo}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, custo: parseFloat(e.target.value) || 0 }))}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Estoque */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-3">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Atual</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={formData.estoque}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, estoque: parseInt(e.target.value) || 0 }))}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                          />
-                        </div>
-
-                        {/* Estoque Mínimo */}
-                        <div className="space-y-3">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Estoque Mínimo</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={formData.estoqueMinimo}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, estoqueMinimo: parseInt(e.target.value) || 0 }))}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                          />
-                          {formErrors.estoque && (
-                            <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Status */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-3">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Status do Produto</label>
-                          <select
-                            value={formData.status}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as ProductStatus }))}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                          >
-                            <option value={ProductStatus.ACTIVE}>Ativo</option>
-                            <option value={ProductStatus.INACTIVE}>Inativo</option>
-                            <option value={ProductStatus.DISCONTINUED}>Descontinuado</option>
-                          </select>
-                          {formErrors.estoque && (
-                            <p className="text-sm text-red-600" role="alert">{formErrors.estoque}</p>
-                          )}
-                        </div>
-                      </div>
-                    </form>
-
-                    <div className="mt-6 flex justify-end space-x-4">
-                      <button
-                        type="button"
-                        onClick={handleCloseModal}
-                        className="px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg hover:text-gray-900 transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="submit"
-                        className={`px-4 py-3 bg-${mode === 'add' ? 'emerald-600' : 'blue-600'} text-white font-medium rounded-lg hover:${mode === 'add' ? 'emerald-700' : 'blue-700'} transition-colors`}
-                      >
-                        {mode === 'add' ? 'Adicionar Produto' : 'Salvar Alterações'}
-                      </button>
-                    </div>
-                  </div>
+            {errors.base && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {errors.base}
               </div>
             )}
 
-            {/* Auto‑focus after modal operations */}
-            <div className="hidden">
-              <span className="sr-only">Focus management for modal</span>
+            <div className="space-y-4">
+              <Field label="Nome do produto" required error={errors.nome}>
+                <input
+                  autoFocus
+                  value={form.nome}
+                  onChange={(e) => set('nome', e.target.value)}
+                  className={inputCls(errors.nome)}
+                  placeholder="Ex.: Caneta esferográfica azul"
+                />
+              </Field>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field
+                  label="Código de barras"
+                  hint="O código escaneável no PDV"
+                  error={errors.codigoBarras}
+                >
+                  <input
+                    value={form.codigoBarras}
+                    onChange={(e) => set('codigoBarras', e.target.value)}
+                    className={inputCls(errors.codigoBarras)}
+                    placeholder="Ex.: 7891234567890"
+                    inputMode="numeric"
+                  />
+                </Field>
+                <Field label="SKU / código interno" hint="Opcional — usa o de barras se vazio">
+                  <input
+                    value={form.sku}
+                    onChange={(e) => set('sku', e.target.value)}
+                    className={inputCls()}
+                    placeholder="Ex.: CAN-AZ-001"
+                  />
+                </Field>
+              </div>
+
+              <Field label="Categoria" required error={errors.categoriaId}>
+                <select
+                  value={form.categoriaId}
+                  onChange={(e) => set('categoriaId', e.target.value)}
+                  className={inputCls(errors.categoriaId)}
+                >
+                  <option value="">Selecione…</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Preço de venda" required error={errors.preco}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.preco}
+                    onChange={(e) => set('preco', e.target.value)}
+                    className={inputCls(errors.preco)}
+                    placeholder="0,00"
+                  />
+                </Field>
+                <Field label="Preço de custo" error={errors.custo}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.custo}
+                    onChange={(e) => set('custo', e.target.value)}
+                    className={inputCls(errors.custo)}
+                    placeholder="0,00"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Estoque atual" error={errors.estoque}>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.estoque}
+                    onChange={(e) => set('estoque', e.target.value)}
+                    className={inputCls(errors.estoque)}
+                    disabled={!!editingId}
+                  />
+                  {editingId && (
+                    <p className="mt-1 text-xs text-gray-400">
+                      Ajuste o estoque por compras/vendas, não aqui.
+                    </p>
+                  )}
+                </Field>
+                <Field label="Estoque mínimo" error={errors.estoqueMinimo}>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.estoqueMinimo}
+                    onChange={(e) => set('estoqueMinimo', e.target.value)}
+                    className={inputCls(errors.estoqueMinimo)}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Status">
+                <select
+                  value={form.status}
+                  onChange={(e) => set('status', e.target.value)}
+                  className={inputCls()}
+                >
+                  <option value={ProductStatus.ACTIVE}>Ativo</option>
+                  <option value={ProductStatus.INACTIVE}>Inativo</option>
+                  <option value={ProductStatus.DISCONTINUED}>Descontinuado</option>
+                </select>
+              </Field>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={closeModal}
+                className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={submit}
+                disabled={saving}
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {editingId ? 'Salvar alterações' : 'Adicionar produto'}
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </Layout>
+  );
+}
+
+// ---------- small components ----------
+function inputCls(error?: string) {
+  return `w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-emerald-500/40 ${
+    error ? 'border-red-400 focus:border-red-400' : 'border-gray-300 focus:border-emerald-500'
+  } disabled:bg-gray-50 disabled:text-gray-500`;
+}
+
+function Field({
+  label,
+  required,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-gray-700">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      {children}
+      {hint && !error && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {error && (
+        <p className="mt-1 text-xs text-red-600" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  tone = 'default',
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone?: 'default' | 'muted' | 'warn' | 'danger';
+}) {
+  const toneCls = {
+    default: 'text-gray-900',
+    muted: 'text-gray-900',
+    warn: 'text-amber-600',
+    danger: 'text-red-600',
+  }[tone];
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+        {icon}
+        {label}
+      </div>
+      <div className={`mt-1 text-xl font-bold ${toneCls}`}>{value}</div>
+    </div>
   );
 }
