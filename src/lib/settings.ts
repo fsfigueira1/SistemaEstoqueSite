@@ -12,6 +12,8 @@ export type StoreSettings = {
   receiptFooter: string;
   receiptShowCompany: boolean;
   receiptWidth: '58mm' | '80mm';
+  cardInterestPercent: number; // juros do cartão parcelado (%)
+  cardInterestFromInstallments: number; // aplica juros a partir de N parcelas
 };
 
 const KEY = 'lacolaria_settings';
@@ -25,6 +27,8 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   receiptFooter: 'Obrigado pela preferencia! Troca em ate 7 dias com este comprovante.',
   receiptShowCompany: true,
   receiptWidth: '80mm',
+  cardInterestPercent: 3.5,
+  cardInterestFromInstallments: 2,
 };
 
 export function getSettings(): StoreSettings {

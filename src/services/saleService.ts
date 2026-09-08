@@ -13,6 +13,7 @@ type CreateSaleInput = {
     discountAmount?: number | Prisma.Decimal
   }>
   discountAmount?: number | Prisma.Decimal
+  surchargeAmount?: number | Prisma.Decimal
   notes?: string | null
 }
 
@@ -123,7 +124,10 @@ export class SaleService {
       // Calculate final amounts - combine item-level and sale-level discounts
       const saleDiscount = Number(input.discountAmount ?? 0)
       const totalDiscount = itemDiscountTotal + saleDiscount
-      const totalAmount = subtotal - totalDiscount
+      // Acréscimo (ex.: juros de cartão parcelado). Fica embutido no totalAmount;
+      // o valor do juro é sempre totalAmount - (subtotal - discountAmount).
+      const surcharge = Math.max(0, Number(input.surchargeAmount ?? 0))
+      const totalAmount = subtotal - totalDiscount + surcharge
 
       // Validate totals
       if (totalAmount < 0) {
@@ -758,7 +762,7 @@ export class SaleService {
           where: { id: item.productId },
           data: {
             stockQuantity: {
-              increment: item.quantity + 1
+              increment: item.quantity
             }
           }
         })

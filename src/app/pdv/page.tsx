@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { ReceiptPrint } from '@/components/pdv/ReceiptPrint';
 import Layout from '@/components/Layout';
+import { getSettings } from '@/lib/settings';
 
 // ----- Helpers -----
 function toNumber(value: unknown): number {
@@ -63,6 +64,7 @@ const METHOD_MAP: Record<PaymentMethodUI, string> = {
 
 // ----- Componente -----
 export default function PDVPage() {
+  const [cfg] = useState(() => getSettings());
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
   const [barcode, setBarcode] = useState('');
   const [scanStatus, setScanStatus] = useState<'ready' | 'scanning' | 'added' | 'not-found'>('ready');
@@ -86,9 +88,11 @@ export default function PDVPage() {
     date: Date;
     items: Array<{ name: string; quantity: number; unitPrice: number; total: number }>;
     subtotal: number;
+    interest: number;
     total: number;
     method: PaymentMethodUI;
     installments: number;
+    installmentValue: number;
     received: number;
     change: number;
   }>(null);
@@ -228,7 +232,12 @@ export default function PDVPage() {
 
   // ---------- Totais ----------
   const subtotal = carrinho.reduce((s, i) => s + i.preco * i.quantidade, 0);
-  const total = subtotal;
+  const juros =
+    metodo === 'cartao' && parcelas >= (cfg.cardInterestFromInstallments || 2)
+      ? Math.round(subtotal * (cfg.cardInterestPercent || 0)) / 100
+      : 0;
+  const total = subtotal + juros;
+  const valorParcela = metodo === 'cartao' && parcelas > 1 ? total / parcelas : 0;
   const recebido = toNumber(valorRecebido);
   const troco = metodo === 'dinheiro' && recebido > total ? recebido - total : 0;
 
@@ -275,6 +284,7 @@ export default function PDVPage() {
         body: JSON.stringify({
           cashSessionId,
           items: carrinho.map((i) => ({ productId: i.id, quantity: i.quantidade, unitPrice: i.preco })),
+          surchargeAmount: juros || undefined,
         }),
       });
       const createData = await createRes.json();
@@ -314,10 +324,12 @@ export default function PDVPage() {
           unitPrice: i.preco,
           total: i.preco * i.quantidade,
         })),
-        subtotal: serverTotal,
+        subtotal: Math.max(0, serverTotal - juros),
+        interest: juros,
         total: serverTotal,
         method: metodo,
         installments: metodo === 'cartao' ? parcelas : 1,
+        installmentValue: metodo === 'cartao' && parcelas > 1 ? serverTotal / parcelas : 0,
         received: metodo === 'dinheiro' ? recebido || serverTotal : serverTotal,
         change: troco,
       });
@@ -582,6 +594,12 @@ export default function PDVPage() {
                     <span>Subtotal</span>
                     <span className="tabular-nums">{formatCurrency(subtotal)}</span>
                   </div>
+                  {juros > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Juros do cartão ({cfg.cardInterestPercent}%)</span>
+                      <span className="tabular-nums">{formatCurrency(juros)}</span>
+                    </div>
+                  )}
                   {troco > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Troco</span>
@@ -597,6 +615,11 @@ export default function PDVPage() {
                     {formatCurrency(total)}
                   </span>
                 </div>
+                {valorParcela > 0 && (
+                  <div className="mt-1 text-right text-xs text-muted-foreground">
+                    {parcelas}× de {formatCurrency(valorParcela)}
+                  </div>
+                )}
               </div>
 
               <button
@@ -670,9 +693,10 @@ export default function PDVPage() {
                       items: finishedSale.items,
                       subtotal: finishedSale.subtotal,
                       paymentMethod: finishedSale.method,
-                      interest: 0,
+                      interest: finishedSale.interest,
                       total: finishedSale.total,
                       installments: finishedSale.installments,
+                      installmentValue: finishedSale.installmentValue,
                       received: finishedSale.received,
                       change: finishedSale.change,
                     }}

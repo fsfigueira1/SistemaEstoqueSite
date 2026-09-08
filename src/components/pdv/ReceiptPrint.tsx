@@ -31,6 +31,7 @@ export interface ReceiptData {
   interest?: number;
   total: number;
   installments?: number;
+  installmentValue?: number;
   received?: number;
   change?: number;
 }
@@ -131,6 +132,12 @@ export function ReceiptPrint({ data, onPrintComplete }: ReceiptPrintProps) {
           <span>Subtotal</span>
           <span>{formatCurrency(data.subtotal)}</span>
         </div>
+        {typeof data.interest === 'number' && data.interest > 0 && (
+          <div className="row small">
+            <span>Juros cartao</span>
+            <span>{formatCurrency(data.interest)}</span>
+          </div>
+        )}
         <div className="row bold big">
           <span>TOTAL</span>
           <span>{formatCurrency(data.total)}</span>
@@ -146,6 +153,17 @@ export function ReceiptPrint({ data, onPrintComplete }: ReceiptPrintProps) {
               : ''}
           </span>
         </div>
+        {data.paymentMethod === 'cartao' &&
+          data.installments &&
+          data.installments > 1 &&
+          data.installmentValue && data.installmentValue > 0 && (
+            <div className="row small">
+              <span>Parcela</span>
+              <span>
+                {data.installments}x {formatCurrency(data.installmentValue)}
+              </span>
+            </div>
+          )}
         {data.paymentMethod === 'dinheiro' && typeof data.received === 'number' && data.received > 0 && (
           <>
             <div className="row small">

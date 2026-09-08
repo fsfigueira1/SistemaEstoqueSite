@@ -110,6 +110,41 @@ export default function ConfiguracoesPage() {
           </div>
         </Section>
 
+        {/* PDV / pagamento */}
+        <Section
+          icon={<CreditCard className="h-5 w-5" />}
+          title="Cartão parcelado"
+          desc="Juros aplicado no PDV às vendas no cartão de crédito"
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Juros (% sobre o subtotal)">
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={form.cardInterestPercent}
+                onChange={(e) => set('cardInterestPercent', Number(e.target.value) || 0)}
+                className={inp}
+              />
+            </Field>
+            <Field label="Aplicar a partir de">
+              <select
+                value={form.cardInterestFromInstallments}
+                onChange={(e) => set('cardInterestFromInstallments', Number(e.target.value) || 2)}
+                className={inp}
+              >
+                <option value={2}>2 parcelas</option>
+                <option value={3}>3 parcelas</option>
+                <option value={4}>4 parcelas</option>
+                <option value={6}>6 parcelas</option>
+              </select>
+            </Field>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Deixe o juros em 0 para não cobrar acréscimo no parcelado.
+          </p>
+        </Section>
+
         <div className="flex items-center gap-3">
           <button onClick={save} className="rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground hover:bg-primary/90">
             Salvar configurações

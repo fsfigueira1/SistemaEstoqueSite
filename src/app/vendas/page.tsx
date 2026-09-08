@@ -254,6 +254,25 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
     }
   };
 
+  const refund = async () => {
+    if (!window.confirm('Estornar esta venda? O estoque será devolvido e o pagamento marcado como estornado.'))
+      return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/sales/${id}/refund`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setErr(data?.error?.message || data?.error || 'Não foi possível estornar');
+        return;
+      }
+      onChanged();
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const st = sale ? STATUS[sale.status] ?? { label: sale.status, cls: 'pill-muted' } : null;
 
   return (
@@ -304,6 +323,11 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
             <div className="space-y-1">
               <Row label="Subtotal" value={brl(sale.subtotal)} />
               {Number(sale.discountAmount) > 0 && <Row label="Desconto" value={`- ${brl(sale.discountAmount)}`} />}
+              {(() => {
+                const juros =
+                  Number(sale.totalAmount) - (Number(sale.subtotal) - Number(sale.discountAmount));
+                return juros > 0.005 ? <Row label="Juros do cartão" value={brl(juros)} /> : null;
+              })()}
               <Row label="Total" value={brl(sale.totalAmount)} bold />
               {sale.changeAmount > 0 && <Row label="Troco" value={brl(sale.changeAmount)} />}
             </div>
@@ -330,6 +354,16 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
                 className="w-full rounded-lg border border-danger/40 px-4 py-2 font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
               >
                 Cancelar venda
+              </button>
+            )}
+            {sale.status === 'COMPLETED' && (
+              <button
+                onClick={refund}
+                disabled={busy}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-danger/40 px-4 py-2 font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+              >
+                {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                Estornar venda
               </button>
             )}
           </div>
