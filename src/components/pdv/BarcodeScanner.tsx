@@ -145,21 +145,21 @@ export function BarcodeScanner({
 
         {/* Status overlay */}
         {scannerStatus.lastScan && (
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-md text-center max-w-xs whitespace-nowrap overflow-hidden text-ellipsis">
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-md text-center max-w-xs whitespace-nowrap overflow-hidden text-ellipsis">
             Último scan: {scannerStatus.lastScan}
           </div>
         )}
 
         {/* Error overlay */}
         {scannerStatus.scanningError && (
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500 bg-opacity-80 text-white px-4 py-2 rounded-md text-center max-w-xs">
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-red-500/80 text-white px-4 py-2 rounded-md text-center max-w-xs">
             Erro: {scannerStatus.scanningError.message}
           </div>
         )}
 
         {/* Success feedback */}
         {scannerStatus.lastScan && !scannerStatus.scanning && !scannerStatus.scanningError && (
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-green-500 bg-opacity-80 text-white px-4 py-2 rounded-md text-center">
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-green-500/80 text-white px-4 py-2 rounded-md text-center">
             Produto encontrado!
           </div>
         )}

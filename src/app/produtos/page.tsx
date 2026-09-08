@@ -699,8 +699,8 @@ export default function ProdutosPage() {
             </div>
 
             {/* Modal for adding/editing product */}
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              {modalOpen && (
+            {modalOpen && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                   <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
                     <h2 className="text-xl font-bold text-gray-900 mb-6">
                       {mode === 'add' ? 'Adicionar Novo Produto' : 'Editar Produto'}
@@ -871,8 +871,8 @@ export default function ProdutosPage() {
                       </button>
                     </div>
                   </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Auto‑focus after modal operations */}
             <div className="hidden">
