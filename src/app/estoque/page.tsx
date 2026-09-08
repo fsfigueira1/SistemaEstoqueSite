@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ProductStatus } from '@/generated/prisma/client';
+import { ProductStatus } from '@/generated/prisma/enums';
 import type { ProductFormData } from '@/app/estoque/form/types';
 import Layout from '@/components/Layout';
 
