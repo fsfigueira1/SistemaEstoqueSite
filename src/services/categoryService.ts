@@ -33,7 +33,7 @@ export class CategoryService {
 
     if (name) {
       where.name = {
-        contains: name
+        contains: name, mode: "insensitive" as const
       }
     }
 

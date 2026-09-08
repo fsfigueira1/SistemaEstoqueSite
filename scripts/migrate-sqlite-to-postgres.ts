@@ -1,3 +1,4 @@
+import "dotenv/config";
 /**
  * Copia todos os dados do dev.db (SQLite) para o banco em DATABASE_URL (Postgres/Supabase).
  *

@@ -56,14 +56,15 @@ export class ProductService {
     } = filters
 
     const skip = (page - 1) * limit
+    type StrFilter = { contains: string; mode?: "insensitive" }
     const where: {
       categoryId?: string
       supplierId?: string
       status?: ProductStatus
       OR?: Array<{
-        name?: { contains: string }
-        sku?: { contains: string }
-        barcode?: { contains: string }
+        name?: StrFilter
+        sku?: StrFilter
+        barcode?: StrFilter
       }>
     } = {}
 
@@ -72,9 +73,9 @@ export class ProductService {
     if (status !== undefined) where.status = status
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { sku: { contains: search } },
-        { barcode: { contains: search } }
+        { name: { contains: search, mode: "insensitive" } },
+        { sku: { contains: search, mode: "insensitive" } },
+        { barcode: { contains: search, mode: "insensitive" } }
       ]
     }
 

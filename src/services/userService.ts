@@ -40,8 +40,8 @@ export class UserService {
       role?: Role
       status?: UserStatus
       OR?: Array<{
-        name?: { contains: string }
-        email?: { contains: string }
+        name?: { contains: string; mode?: "insensitive" }
+        email?: { contains: string; mode?: "insensitive" }
       }>
     } = {}
 
@@ -49,8 +49,8 @@ export class UserService {
     if (status !== undefined) where.status = status
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { email: { contains: search } }
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } }
       ]
     }
 

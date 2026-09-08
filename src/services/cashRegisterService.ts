@@ -153,7 +153,7 @@ export class CashRegisterService {
 
     if (search) {
       where.name = {
-        contains: search
+        contains: search, mode: "insensitive" as const
       } as Prisma.StringFilter<"CashRegister">
     }
 
