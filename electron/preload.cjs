@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld(
 
     // Example: Safe method to close window
     closeWindow: () => ipcRenderer.send('close-window'),
+
+    // Configuração do banco (janela de setup do Electron)
+    setDatabaseUrl: (url) => ipcRenderer.send('set-database-url', url),
   }
 );
 

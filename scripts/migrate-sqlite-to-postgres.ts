@@ -2,13 +2,12 @@ import "dotenv/config";
 /**
  * Copia todos os dados do dev.db (SQLite) para o banco em DATABASE_URL (Postgres/Supabase).
  *
- *   1. rode `npm run db:migrate` no Postgres (cria as tabelas)
- *   2. DATABASE_URL="postgres://..."  npm run db:from-sqlite
+ *   1. npm i -D better-sqlite3          (só para esta migração de dados)
+ *   2. npm run db:migrate               (cria as tabelas no Postgres)
+ *   3. DATABASE_URL="postgres://..."  npm run db:from-sqlite
  *
- * Lê o SQLite direto com better-sqlite3 (o client Prisma já é Postgres-only).
  * Idempotente: createMany com skipDuplicates.
  */
-import Database from "better-sqlite3";
 import { PrismaClient } from "../src/generated/prisma/client.ts";
 import { PrismaPg } from "@prisma/adapter-pg";
 
@@ -20,10 +19,22 @@ if (!PG_URL || !/^postgres(ql)?:\/\//i.test(PG_URL)) {
   process.exit(1);
 }
 
-const sqlite = new Database(SQLITE_PATH, { readonly: true });
+let Database: typeof import("better-sqlite3");
+try {
+  Database = (await import("better-sqlite3")).default as unknown as typeof import("better-sqlite3");
+} catch {
+  console.error(
+    "Este script precisa do pacote better-sqlite3 (só para ler o dev.db).\n" +
+      "Instale temporariamente:  npm i -D better-sqlite3\n" +
+      "Depois rode de novo:      npm run db:from-sqlite",
+  );
+  process.exit(1);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sqlite: any = new (Database as any)(SQLITE_PATH, { readonly: true });
 const dst = new PrismaClient({ adapter: new PrismaPg({ connectionString: PG_URL }) });
 
-// (tabela no SQLite, model no Prisma) — ordem respeita as foreign keys
 const PLAN: [string, string][] = [
   ["User", "user"],
   ["Category", "category"],
@@ -44,7 +55,6 @@ const PLAN: [string, string][] = [
   ["PurchaseOrderItem", "purchaseOrderItem"],
 ];
 
-// campos que no SQLite são texto/número e no Postgres são Date / Json / Boolean
 const DATE_FIELDS = new Set([
   "createdAt", "updatedAt", "openedAt", "closedAt", "changedAt", "refundedAt",
   "orderDate", "receivedDate", "expectedDate",

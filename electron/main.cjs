@@ -1,239 +1,332 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-const { app, BrowserWindow, ipcMain } = require('electron');
-const path = require('node:path');
-const { spawn } = require('node:child_process');
-const http = require('node:http');
-const net = require('node:net');
+// App de balcão da Laçolaria.
+// Objetivo: instalar, abrir sozinho e NUNCA parar sem querer.
+// - instância única (2º atalho só foca a janela)
+// - roda o servidor Next embutido; se ele cair, sobe de novo
+// - fechar o X esconde na bandeja; sair mesmo só pelo menu da bandeja
+// - inicia junto com o Windows
+const {
+  app,
+  BrowserWindow,
+  Tray,
+  Menu,
+  ipcMain,
+  dialog,
+  powerSaveBlocker,
+  nativeImage,
+} = require("electron");
+const path = require("node:path");
+const fs = require("node:fs");
+const http = require("node:http");
+const { spawn } = require("node:child_process");
 
-// Disable GPU acceleration to avoid cache errors on Windows
 app.disableHardwareAcceleration();
-
-// Set Electron running flag for auth bypass
-process.env.ELECTRON_RUNNING = 'true';
-
-let mainWindow = null;
-let nextDevProcess = null;
+process.env.ELECTRON_RUNNING = "true";
 
 const isDev = !app.isPackaged;
-const DEFAULT_PORT = 3000;
+const PORT = Number(process.env.PORT) || 4123;
+const BASE_URL = `http://127.0.0.1:${PORT}`;
 
-function isPortInUse(port) {
-  return new Promise((resolve) => {
-    const server = net.createServer();
-    server.once('error', () => resolve(true));
-    server.once('listening', () => {
-      server.close();
-      resolve(false);
+// ---- instância única ----
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
+let mainWindow = null;
+let tray = null;
+let serverProc = null;
+let serverRestartTimer = null;
+let quitting = false;
+
+// ---------------- configuração (DATABASE_URL etc.) ----------------
+const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
+
+function readConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+  } catch {
+    return {};
+  }
+}
+function writeConfig(cfg) {
+  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+}
+function getEnvForServer() {
+  const cfg = readConfig();
+  return {
+    ...process.env,
+    NODE_ENV: "production",
+    PORT: String(PORT),
+    HOSTNAME: "127.0.0.1",
+    DATABASE_URL: cfg.DATABASE_URL || process.env.DATABASE_URL || "",
+    OWNER_PASSWORD: cfg.OWNER_PASSWORD || process.env.OWNER_PASSWORD || "owner123",
+    EMPLOYEE_PASSWORD: cfg.EMPLOYEE_PASSWORD || process.env.EMPLOYEE_PASSWORD || "emp123",
+  };
+}
+
+// ---------------- servidor Next embutido ----------------
+function serverEntry() {
+  if (isDev) return null;
+  // extraResources: resources/next-server/server.js
+  return path.join(process.resourcesPath, "next-server", "server.js");
+}
+
+function startServer() {
+  if (serverProc) return;
+
+  if (isDev) {
+    const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+    serverProc = spawn(npm, ["run", "dev"], {
+      cwd: path.join(__dirname, ".."),
+      stdio: "inherit",
+      shell: process.platform === "win32",
+      env: { ...process.env, PORT: String(PORT) },
     });
-    server.listen(port);
-  });
-}
-
-function killProcessOnPort(port) {
-  return new Promise((resolve) => {
-    const { spawn: spawnCmd } = require('node:child_process');
-    if (process.platform === 'win32') {
-      // Windows: find and kill process using the port
-      spawnCmd('cmd', ['/c', `for /f "tokens=5" %a in ('netstat -aon ^| findstr :${port}') do taskkill /f /pid %a 2>nul`], { shell: true })
-        .on('close', () => resolve());
-    } else {
-      // Linux/Mac: use lsof and kill
-      spawnCmd('sh', ['-c', `lsof -ti:${port} | xargs kill -9 2>/dev/null || true`], { shell: true })
-        .on('close', () => resolve());
-    }
-  });
-}
-
-function waitForServer(url, retries = 1200, delay = 500) {
-  return new Promise((resolve, reject) => {
-    let attempts = 0;
-
-    const check = () => {
-      const request = http.get(url, (response) => {
-        response.resume();
-
-        if (response.statusCode >= 200 && response.statusCode < 500) {
-          resolve();
-          return;
-        }
-
-        retry();
-      });
-
-      request.on('error', retry);
-
-      request.setTimeout(2000, () => {
-        request.destroy();
-        retry();
-      });
-    };
-
-    const retry = () => {
-      attempts++;
-
-      if (attempts >= retries) {
-        reject(
-          new Error(`Next.js não iniciou em ${url}`)
-        );
-        return;
-      }
-
-      setTimeout(check, delay);
-    };
-
-    check();
-  });
-}
-
-function startNextDevServer() {
-  if (nextDevProcess) {
-    return Promise.resolve();
+  } else {
+    const entry = serverEntry();
+    // roda server.js como node puro usando o próprio Electron
+    serverProc = spawn(process.execPath, [entry], {
+      cwd: path.dirname(entry),
+      stdio: ["ignore", "inherit", "inherit"],
+      env: { ...getEnvForServer(), ELECTRON_RUN_AS_NODE: "1" },
+    });
   }
 
-  console.log('Iniciando Next.js...');
+  serverProc.on("exit", (code) => {
+    console.error(`[servidor] saiu com código ${code}`);
+    serverProc = null;
+    if (quitting) return;
+    // sobe de novo (backoff curto) — o app não pode ficar parado
+    clearTimeout(serverRestartTimer);
+    serverRestartTimer = setTimeout(() => {
+      startServer();
+      if (mainWindow) waitForServer().then(() => mainWindow.reload()).catch(() => {});
+    }, 1500);
+  });
+  serverProc.on("error", (err) => console.error("[servidor] erro:", err));
+}
 
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-
-  nextDevProcess = spawn(
-    npmCommand,
-    ['run', 'dev'],
-    {
-      cwd: process.cwd(),
-      stdio: 'inherit',
-      shell: process.platform === 'win32',
-      env: { ...process.env, PORT: String(DEFAULT_PORT) },
+function stopServer() {
+  quitting = true;
+  clearTimeout(serverRestartTimer);
+  if (serverProc) {
+    try {
+      serverProc.kill();
+    } catch {
+      /* ignore */
     }
-  );
+    serverProc = null;
+  }
+}
 
-  nextDevProcess.on('error', (error) => {
-    console.error('Erro ao iniciar Next.js:', error);
+function waitForServer(timeoutMs = 60000) {
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      const req = http.get(`${BASE_URL}/senha`, (res) => {
+        res.resume();
+        if (res.statusCode && res.statusCode < 500) return resolve();
+        retry();
+      });
+      req.on("error", retry);
+      req.setTimeout(2500, () => {
+        req.destroy();
+        retry();
+      });
+    };
+    const retry = () => {
+      if (Date.now() - started > timeoutMs) return reject(new Error("servidor não respondeu"));
+      setTimeout(tick, 500);
+    };
+    tick();
   });
+}
 
-  nextDevProcess.on('close', (code) => {
-    console.log(`Next.js encerrado com código ${code}`);
-    nextDevProcess = null;
-  });
+// ---------------- janela ----------------
+function trayImage() {
+  const p = path.join(__dirname, "..", "public", "icon.ico");
+  try {
+    const img = nativeImage.createFromPath(p);
+    return img.isEmpty() ? nativeImage.createEmpty() : img;
+  } catch {
+    return nativeImage.createEmpty();
+  }
+}
 
-  return waitForServer(`http://localhost:${DEFAULT_PORT}`);
+function setupErrorPage(message) {
+  const html = `<!doctype html><html><body style="font-family:system-ui;padding:48px;max-width:640px;margin:auto">
+    <h1 style="color:#0aa">Laçolaria</h1>
+    <p>Não consegui iniciar o sistema.</p>
+    <pre style="background:#f4f4f4;padding:12px;border-radius:8px;white-space:pre-wrap">${String(message)}</pre>
+    <p>Verifique a conexão com o banco (Supabase) em <b>Configurar banco</b> no menu da bandeja,
+    e tente <b>Recarregar</b>.</p>
+  </body></html>`;
+  mainWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
 }
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 1000,
-    minHeight: 600,
+    width: 1280,
+    height: 820,
+    minWidth: 1024,
+    minHeight: 640,
+    show: false,
+    autoHideMenuBar: true,
+    icon: path.join(__dirname, "..", "public", "icon.ico"),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
     },
-    show: false, // Don't show until ready
   });
 
-  if (isDev) {
-    try {
-      // Kill any existing process on the default port
-      console.log(`Verificando porta ${DEFAULT_PORT}...`);
-      const portInUse = await isPortInUse(DEFAULT_PORT);
-      if (portInUse) {
-        console.log(`Porta ${DEFAULT_PORT} em uso, tentando liberar...`);
-        await killProcessOnPort(DEFAULT_PORT);
-        // Wait a bit for port to be freed
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+  mainWindow.once("ready-to-show", () => mainWindow.show());
 
-      await startNextDevServer();
+  // renderer travou/morreu -> recarrega
+  mainWindow.webContents.on("render-process-gone", () => {
+    if (!quitting) mainWindow.reload();
+  });
+  mainWindow.webContents.on("unresponsive", () => {
+    if (!quitting) mainWindow.reload();
+  });
 
-      const devUrl = `http://localhost:${DEFAULT_PORT}`;
-      console.log(`Carregando ${devUrl}`);
-      await mainWindow.loadURL(devUrl);
-      mainWindow.show();
-    } catch (error) {
-      console.error('Falha ao iniciar/carregar Next.js:', error);
-
-      await mainWindow.loadURL(
-        'data:text/html;charset=utf-8,' +
-          encodeURIComponent(`
-            <html>
-              <body style="font-family: sans-serif; padding: 40px;">
-                <h1>Erro ao iniciar o sistema</h1>
-                <pre>${String(error)}</pre>
-              </body>
-            </html>
-          `)
-      );
-      mainWindow.show();
+  // fechar o X -> esconde na bandeja (não mata o servidor)
+  mainWindow.on("close", (e) => {
+    if (!quitting) {
+      e.preventDefault();
+      mainWindow.hide();
     }
-  } else {
-    // Production: load from file
-    mainWindow.loadFile(path.join(__dirname, '../out/index.html'));
-    mainWindow.show();
-  }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
   });
 
-  // Open DevTools in development
-  if (isDev) {
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  try {
+    startServer();
+    await waitForServer();
+    await mainWindow.loadURL(BASE_URL);
+  } catch (err) {
+    setupErrorPage(err && err.message ? err.message : err);
   }
+  if (!mainWindow.isVisible()) mainWindow.show();
 }
 
-app.whenReady().then(async () => {
-  await createWindow();
+// ---------------- bandeja ----------------
+function buildTray() {
+  tray = new Tray(trayImage());
+  tray.setToolTip("Laçolaria — Gestão & PDV");
+  const menu = Menu.buildFromTemplate([
+    { label: "Abrir", click: () => showWindow() },
+    { label: "Recarregar", click: () => mainWindow && mainWindow.reload() },
+    { type: "separator" },
+    { label: "Configurar banco de dados…", click: () => promptDatabaseUrl() },
+    {
+      label: "Iniciar com o Windows",
+      type: "checkbox",
+      checked: app.getLoginItemSettings().openAtLogin,
+      click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
+    },
+    { type: "separator" },
+    {
+      label: "Sair",
+      click: () => {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(menu);
+  tray.on("click", () => showWindow());
+}
 
-  app.on('activate', async () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      await createWindow();
-    }
+function showWindow() {
+  if (!mainWindow) return createWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+async function promptDatabaseUrl() {
+  const cfg = readConfig();
+  const { response, checkboxChecked } = await dialog.showMessageBox(mainWindow || null, {
+    type: "question",
+    buttons: ["Colar nova URL", "Cancelar"],
+    defaultId: 0,
+    title: "Banco de dados",
+    message: "Cole a connection string do Postgres (Supabase).",
+    detail:
+      "Supabase → Project Settings → Database → Session pooler (porta 5432).\n" +
+      (cfg.DATABASE_URL ? "Atual: " + cfg.DATABASE_URL.replace(/:[^:@/]+@/, ":***@") : "Nenhuma configurada."),
   });
+  if (response !== 0) return;
+  // entrada de texto via prompt simples (janela dedicada)
+  const input = new BrowserWindow({
+    width: 620,
+    height: 220,
+    parent: mainWindow || undefined,
+    modal: true,
+    autoHideMenuBar: true,
+    webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true },
+  });
+  const page = `<!doctype html><html><body style="font-family:system-ui;padding:20px">
+    <p>DATABASE_URL:</p>
+    <input id="u" style="width:100%;padding:8px" value="${(cfg.DATABASE_URL || "").replace(/"/g, "&quot;")}"/>
+    <div style="margin-top:14px;text-align:right">
+      <button onclick="window.close()">Cancelar</button>
+      <button onclick="save()" style="padding:6px 14px">Salvar e reiniciar</button>
+    </div>
+    <script>
+      function save(){ window.electronAPI.setDatabaseUrl(document.getElementById('u').value.trim()); }
+    </script>
+  </body></html>`;
+  input.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(page));
+  ipcMain.removeAllListeners("set-database-url");
+  ipcMain.once("set-database-url", (_e, url) => {
+    const c = readConfig();
+    c.DATABASE_URL = url;
+    writeConfig(c);
+    input.close();
+    relaunchApp();
+  });
+}
+
+function relaunchApp() {
+  quitting = true;
+  stopServer();
+  app.relaunch();
+  app.exit(0);
+}
+
+// ---------------- ciclo de vida ----------------
+app.on("second-instance", () => showWindow());
+
+app.whenReady().then(() => {
+  powerSaveBlocker.start("prevent-display-sleep");
+  buildTray();
+  createWindow();
 });
 
-app.on('before-quit', () => {
-  if (nextDevProcess) {
-    nextDevProcess.kill();
-    nextDevProcess = null;
-  }
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  else showWindow();
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+// não sai quando fecha a janela — fica na bandeja
+app.on("window-all-closed", () => {});
+
+app.on("before-quit", () => {
+  quitting = true;
+  stopServer();
 });
 
-ipcMain.handle('ping', () => 'pong');
-
-ipcMain.handle('get-app-version', () => {
-  return app.getVersion();
+// ---------------- IPC ----------------
+ipcMain.handle("ping", () => "pong");
+ipcMain.handle("get-app-version", () => app.getVersion());
+ipcMain.on("set-database-url", () => {}); // registrado dinamicamente acima
+ipcMain.on("minimize-window", (e) => BrowserWindow.fromWebContents(e.sender)?.minimize());
+ipcMain.on("toggle-maximize-window", (e) => {
+  const w = BrowserWindow.fromWebContents(e.sender);
+  if (!w) return;
+  w.isMaximized() ? w.unmaximize() : w.maximize();
 });
-
-ipcMain.on('minimize-window', (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender);
-  if (win) {
-    win.minimize();
-  }
-});
-
-ipcMain.on('toggle-maximize-window', (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender);
-
-  if (!win) return;
-
-  if (win.isMaximized()) {
-    win.unmaximize();
-  } else {
-    win.maximize();
-  }
-});
-
-ipcMain.on('close-window', (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender);
-
-  if (win) {
-    win.close();
-  }
-});
+ipcMain.on("close-window", (e) => BrowserWindow.fromWebContents(e.sender)?.close());

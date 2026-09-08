@@ -77,3 +77,8 @@ debug_*.mjs
 *.backup
 *.backup2
 *.old
+/server-bundle/
+
+# electron-builder
+/release/
+/server-bundle/
