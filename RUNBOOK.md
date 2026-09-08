@@ -1,91 +1,108 @@
-# RUNBOOK — Laçolaria em 3 computadores (Supabase)
+# RUNBOOK — Laçolaria em 3 computadores
 
-Arquitetura escolhida (Opção A): **1 computador é o servidor**, os outros 2 abrem
-o navegador nele. Os dados ficam num **Postgres do Supabase**, compartilhado.
+Cada computador roda o **app Laçolaria** instalado. Os três apontam para o
+**mesmo banco Postgres no Supabase** — é assim que os dados (produtos,
+estoque, vendas) ficam compartilhados. Não há "PC servidor"; se um cair, os
+outros continuam.
 
 ```
-  PC-servidor  ──roda o app──►  http://localhost:3000
-       │                              ▲        ▲
-       └── Postgres (Supabase) ◄──────┘        │
-                                    PC-2 e PC-3 (navegador)
-                                    http://<ip-do-servidor>:3000
+  PC-1 (app)  ─┐
+  PC-2 (app)  ─┼──►  Postgres do Supabase  (produtos, estoque, vendas, config)
+  PC-3 (app)  ─┘
 ```
-
-O código já está pronto para Postgres. A `DATABASE_URL` decide o banco:
-`postgres://...` usa Supabase; `file:./dev.db` usa o SQLite local (dev offline).
 
 ---
 
-## 1. Migrar para o Supabase (fazer uma vez)
+## 1. Preparar o banco no Supabase (uma vez só)
 
-No **PC-servidor**, na pasta do projeto:
+Você precisa da connection string. No Supabase:
+**Project Settings → Database → Connection string → "Session pooler"** (porta 5432).
+Fica assim:
+
+```
+postgres://postgres.<ref>:<senha>@aws-0-<regiao>.pooler.supabase.com:5432/postgres
+```
+
+Num computador com o projeto (o de desenvolvimento):
 
 ```bash
-# a) coloque a connection string do Supabase no .env
-#    Supabase → Project Settings → Database → "Session pooler" (porta 5432)
-#    .env:
-#    DATABASE_URL="postgres://postgres.<ref>:<senha>@aws-0-<regiao>.pooler.supabase.com:5432/postgres"
+# põe a URL no .env
+#   DATABASE_URL="postgres://postgres.<ref>:...:5432/postgres"
 
-# b) cria as tabelas no Supabase
-npm run db:migrate            # = prisma migrate deploy
-npm run seed                  # cria usuário de sistema, caixa padrão e config
+npm run db:migrate        # cria as tabelas no Supabase
+npm run seed              # usuário de sistema, caixa e linha de config
 
-# c) (opcional) levar os dados que já existem no dev.db para o Supabase
+# (opcional) leva o que já existe no dev.db para o Supabase:
+npm i -D better-sqlite3
 npm run db:from-sqlite
 
-# d) (opcional) catálogo de demonstração, se o banco estiver vazio
+# (opcional) catálogo de exemplo, se o banco estiver vazio:
 npm run seed:demo
 ```
 
-Confira no painel do Supabase (Table editor) se as tabelas apareceram.
+Confira no Supabase → **Table editor** se as tabelas apareceram.
 
-## 2. Rodar o servidor
+## 2. Gerar o instalador (uma vez)
 
-No **PC-servidor**:
+No computador de desenvolvimento:
 
 ```bash
-npm run build
-npm start                     # sobe em http://localhost:3000
+npm run electron:build
 ```
 
-Descubra o IP da máquina na rede local (`ipconfig` no Windows → "Endereço IPv4",
-algo como `192.168.0.10`). Deixe esse terminal aberto (ou configure como serviço
-/ tarefa que inicia com o Windows).
+Sai em `release/Laçolaria Setup 0.1.0.exe`. Copie esse arquivo para os 3 PCs
+(pendrive, rede, etc.).
 
-> Firewall: na primeira vez o Windows pode perguntar se libera o Node na rede —
-> aceite **redes privadas**.
+## 3. Instalar em cada PC (1, 2 e 3)
 
-## 3. PC-2 e PC-3
+1. Rode `Laçolaria Setup 0.1.0.exe` → escolhe a pasta, cria atalho, abre no fim.
+2. Abra o **Laçolaria**. No ícone da **bandeja** (ao lado do relógio):
+   **Configurar banco de dados…** → cole a `DATABASE_URL` do Supabase → salvar.
+   O app reinicia já conectado.
+3. Ainda na bandeja, marque **Iniciar com o Windows**.
+4. Primeiro acesso pede o PIN:
+   - tela **/senha**: `owner123` (dono) ou `emp123` (funcionário) — trocáveis
+     no `.env` do build
+   - **cadeado da tela**: `1234` (fica só naquele PC; troca em Configurações)
 
-Abrir o navegador em `http://192.168.0.10:3000` (troque pelo IP do servidor).
-Criar um atalho na área de trabalho.
+Pronto. Os três já compartilham tudo. Configure **dados da empresa, rodapé
+do comprovante e juros do cartão** em **Configurações** uma vez — vale para os
+três (fica no banco).
 
-- Cada máquina pede o **PIN** na primeira vez:
-  - tela `/senha`: `owner123` (dono) ou `emp123` (funcionário) — vêm do `.env`
-  - cadeado da tela: `1234` (fica salvo só naquele navegador; troque em Configurações)
-- Dados da empresa, rodapé do comprovante e juros do cartão agora ficam no banco —
-  configure **uma vez** em Configurações e vale para as 3 máquinas.
+## 4. O que o app garante
 
-## 4. Impressora (Epson TM-T20X)
+- **Fica na bandeja** mesmo se fechar a janela (o X não para o sistema).
+  Sair de verdade: bandeja → **Sair**.
+- Se o servidor interno cair, **sobe de novo sozinho**.
+- Se a tela travar, **recarrega sozinha**.
+- **Estoque nunca fica pela metade**: cada venda é uma transação — ou grava
+  tudo (venda + baixa de estoque + pagamento) ou não grava nada. Queda de
+  luz, internet ou crash no meio da venda = nada foi gravado, é só refazer.
+- Sem internet, o app abre mas as telas de dados dão erro até reconectar
+  (nada é perdido).
 
-A impressora fica ligada no PC onde o caixa imprime (via USB). O comprovante usa
-`window.print()` — escolha a Epson como impressora e marque "sem margens".
-Largura da bobina (58/80 mm) em Configurações.
+## 5. Impressora (Epson TM-T20X)
+
+Fica no USB do PC onde o caixa imprime. Ao finalizar a venda, o app pergunta
+"Imprimir comprovante?". Escolha a Epson e marque "sem margens". Largura da
+bobina (58/80 mm) em Configurações.
 
 ---
 
 ## Manutenção
 
-| Tarefa | Comando |
+| Tarefa | Como |
 |---|---|
-| Voltar pro SQLite local | `DATABASE_URL="file:./dev.db"` no `.env` |
-| Nova migração após mudar o schema | `npx prisma migrate dev --name <nome>` |
+| Trocar a URL do banco num PC | bandeja → Configurar banco de dados… |
+| Nova migração após mudar o schema | `npx prisma migrate dev --name <nome>` (dev) |
 | Aplicar migrações no Supabase | `npm run db:migrate` |
-| Backup | Supabase faz backup automático; ou `pg_dump` da connection string |
+| Novo instalador após mudar o código | `npm run electron:build` e reinstalar |
+| Backup | Supabase faz automático; ou `pg_dump` da connection string |
 | Ver/editar dados | Supabase → Table editor, ou `npx prisma studio` |
 
 ## Observações
 
-- As migrações antigas de SQLite ficaram em `prisma/migrations-sqlite-backup/`.
-- `saleNumber` passou a ser `V<AAAAMMDD>-<aleatório>` — sem colisão entre máquinas.
-- Auth por usuário continua desligada; o acesso é só pelo PIN.
+- Migrações antigas de SQLite: `prisma/migrations-sqlite-backup/`.
+- `saleNumber` = `V<AAAAMMDD>-<aleatório>` — sem colisão entre máquinas.
+- Auth por usuário está desligada; o acesso é só pelo PIN.
+- Para voltar ao SQLite local: `git revert` do commit da migração Postgres.
