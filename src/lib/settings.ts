@@ -1,22 +1,23 @@
 'use client';
 
-// Configurações locais da loja (this device). O app é de gestão em uma
-// máquina só, então persistimos no localStorage. Usado no comprovante do PDV.
+// Configurações da loja. A fonte de verdade é o banco (tabela Settings),
+// compartilhada entre as máquinas. Mantemos um cache no localStorage para o
+// componente de comprovante poder ler de forma síncrona na hora de imprimir.
 
 export type StoreSettings = {
   companyName: string;
   companyTagline: string;
-  companyDoc: string; // CNPJ/CPF
+  companyDoc: string;
   companyAddress: string;
   companyPhone: string;
   receiptFooter: string;
   receiptShowCompany: boolean;
   receiptWidth: '58mm' | '80mm';
-  cardInterestPercent: number; // juros do cartão parcelado (%)
-  cardInterestFromInstallments: number; // aplica juros a partir de N parcelas
+  cardInterestPercent: number;
+  cardInterestFromInstallments: number;
 };
 
-const KEY = 'lacolaria_settings';
+const CACHE_KEY = 'lacolaria_settings';
 
 export const DEFAULT_SETTINGS: StoreSettings = {
   companyName: 'LAÇOLARIA',
@@ -31,28 +32,62 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   cardInterestFromInstallments: 2,
 };
 
-export function getSettings(): StoreSettings {
+function readCache(): StoreSettings {
   if (typeof window === 'undefined') return DEFAULT_SETTINGS;
   try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const raw = window.localStorage.getItem(CACHE_KEY);
+    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
   } catch {
     return DEFAULT_SETTINGS;
   }
 }
 
-export function saveSettings(s: Partial<StoreSettings>): StoreSettings {
-  const merged = { ...getSettings(), ...s };
+function writeCache(s: StoreSettings) {
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(merged));
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify(s));
   } catch {
     /* ignore */
   }
-  return merged;
 }
 
-// PIN local do PinLock
+/** Leitura síncrona do cache local (usada pelo comprovante). */
+export function getSettings(): StoreSettings {
+  return readCache();
+}
+
+/** Busca do banco e atualiza o cache. Chamar no mount das telas. */
+export async function loadSettings(): Promise<StoreSettings> {
+  try {
+    const res = await fetch('/api/settings');
+    const data = await res.json();
+    if (data?.success && data.data) {
+      const merged = { ...DEFAULT_SETTINGS, ...data.data } as StoreSettings;
+      writeCache(merged);
+      return merged;
+    }
+  } catch {
+    /* offline: usa o cache */
+  }
+  return readCache();
+}
+
+/** Grava no banco e no cache. */
+export async function saveSettings(patch: Partial<StoreSettings>): Promise<StoreSettings> {
+  const next = { ...readCache(), ...patch };
+  writeCache(next);
+  try {
+    await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(next),
+    });
+  } catch {
+    /* offline: mantém só no cache até reconectar */
+  }
+  return next;
+}
+
+// ---- PIN local do PinLock (permanece por dispositivo) ----
 export function getLocalPin(): string | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -61,7 +96,6 @@ export function getLocalPin(): string | null {
     return null;
   }
 }
-
 export function setLocalPin(pin: string) {
   try {
     window.localStorage.setItem('app_pin', pin);

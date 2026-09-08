@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model User {
@@ -366,4 +366,19 @@ enum PaymentMethod {
   PIX
   CREDIT_CARD
   DEBIT_CARD
+}
+/// Configurações da loja compartilhadas entre as máquinas (linha única id = "app").
+model Settings {
+  id                           String   @id @default("app")
+  companyName                  String   @default("LAÇOLARIA")
+  companyTagline               String   @default("Papelaria e Presentes")
+  companyDoc                   String   @default("")
+  companyAddress               String   @default("")
+  companyPhone                 String   @default("")
+  receiptFooter                String   @default("Obrigado pela preferencia! Troca em ate 7 dias com este comprovante.")
+  receiptShowCompany           Boolean  @default(true)
+  receiptWidth                 String   @default("80mm")
+  cardInterestPercent          Float    @default(3.5)
+  cardInterestFromInstallments Int      @default(2)
+  updatedAt                    DateTime @updatedAt
 }

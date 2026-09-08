@@ -5,7 +5,7 @@ import Layout from '@/components/Layout';
 import { Settings, Store, Printer, KeyRound, CheckCircle, CreditCard, Users, Database } from 'lucide-react';
 import {
   DEFAULT_SETTINGS,
-  getSettings,
+  loadSettings,
   saveSettings,
   getLocalPin,
   setLocalPin,
@@ -23,8 +23,10 @@ export default function ConfiguracoesPage() {
   const [pinMsg, setPinMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    setForm(getSettings());
-    setLoaded(true);
+    loadSettings().then((s) => {
+      setForm(s);
+      setLoaded(true);
+    });
   }, []);
 
   const set = <K extends keyof StoreSettings>(k: K, v: StoreSettings[K]) => {
@@ -32,8 +34,8 @@ export default function ConfiguracoesPage() {
     setSaved(false);
   };
 
-  const save = () => {
-    saveSettings(form);
+  const save = async () => {
+    await saveSettings(form);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };

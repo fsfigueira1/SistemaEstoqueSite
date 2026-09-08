@@ -1,13 +1,12 @@
-import { PrismaClient } from "../generated/prisma/client.ts"
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3"
 import { hash } from "bcryptjs"
-
-const adapter = new PrismaBetterSqlite3({ url: "file:./dev.db" })
-const prisma = new PrismaClient({ adapter })
+import { prisma } from "../lib/prisma.ts"
 
 async function main() {
   console.log("Starting database seed...")
-  
+
+  // Linha única de configurações da loja
+  await prisma.settings.upsert({ where: { id: "app" }, update: {}, create: { id: "app" } })
+
   // Create default categories
   const categories = await prisma.category.createManyAndReturn({
     data: [

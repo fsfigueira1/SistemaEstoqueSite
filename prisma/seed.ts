@@ -1,7 +1,11 @@
-import { prisma } from "@/lib/prisma"
+import { prisma } from "../src/lib/prisma.ts"
 
 async function main() {
   console.log("\u{1F331} Starting database seed...")
+
+  // Linha única de configurações da loja (compartilhada entre as máquinas)
+  await prisma.settings.upsert({ where: { id: "app" }, update: {}, create: { id: "app" } })
+  console.log("✅ Settings row ready")
 
   // Create the default system user for the desktop app
   // This user is used for all operations requiring a user ID (openedById, createdById, processedById)

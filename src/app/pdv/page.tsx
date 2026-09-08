@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { ReceiptPrint } from '@/components/pdv/ReceiptPrint';
 import Layout from '@/components/Layout';
-import { getSettings } from '@/lib/settings';
+import { getSettings, loadSettings, type StoreSettings } from '@/lib/settings';
 
 // ----- Helpers -----
 function toNumber(value: unknown): number {
@@ -64,7 +64,7 @@ const METHOD_MAP: Record<PaymentMethodUI, string> = {
 
 // ----- Componente -----
 export default function PDVPage() {
-  const [cfg] = useState(() => getSettings());
+  const [cfg, setCfg] = useState<StoreSettings>(() => getSettings());
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
   const [barcode, setBarcode] = useState('');
   const [scanStatus, setScanStatus] = useState<'ready' | 'scanning' | 'added' | 'not-found'>('ready');
@@ -104,6 +104,7 @@ export default function PDVPage() {
 
   useEffect(() => {
     barcodeRef.current?.focus();
+    loadSettings().then(setCfg);
   }, []);
 
   // ---------- Carrinho ----------

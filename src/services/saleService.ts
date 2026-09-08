@@ -134,8 +134,12 @@ export class SaleService {
         throw new Error('Total amount cannot be negative')
       }
 
-      // Generate sale number (simple approach - in production might want something more sophisticated)
-      const saleNumber = `SALE-${Date.now().toString().slice(-6)}`
+      // Número da venda — legível e sem colisão entre máquinas:
+      // data + timestamp em base36 + 3 chars aleatórios.
+      const now = new Date()
+      const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+      const rand = Math.random().toString(36).slice(2, 5).toUpperCase()
+      const saleNumber = `V${ymd}-${Date.now().toString(36).slice(-5).toUpperCase()}${rand}`
 
       // Create the sale
       const sale = await tx.sale.create({
