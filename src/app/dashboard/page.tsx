@@ -43,10 +43,10 @@ const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 const STATUS_PT: Record<string, { label: string; cls: string }> = {
-  COMPLETED: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-800' },
-  PENDING: { label: 'Pendente', cls: 'bg-amber-100 text-amber-800' },
-  CANCELLED: { label: 'Cancelada', cls: 'bg-gray-100 text-gray-600' },
-  REFUNDED: { label: 'Estornada', cls: 'bg-red-100 text-red-700' },
+  COMPLETED: { label: 'Concluída', cls: 'pill-ok' },
+  PENDING: { label: 'Pendente', cls: 'pill-warn' },
+  CANCELLED: { label: 'Cancelada', cls: 'pill-muted' },
+  REFUNDED: { label: 'Estornada', cls: 'pill-danger' },
 };
 
 export default function DashboardPage() {
@@ -73,35 +73,66 @@ export default function DashboardPage() {
     <Layout>
       <div className="space-y-6 p-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Painel</h1>
-          <p className="text-sm text-gray-500">Visão geral da loja</p>
+          <h1 className="font-heading text-2xl font-bold text-foreground">Painel</h1>
+          <span className="mt-1.5 block h-1 w-14 rounded-full bg-primary" />
         </div>
 
         {loading ? (
-          <div className="py-20 text-center text-sm text-gray-500">
+          <div className="py-20 text-center text-sm text-muted-foreground">
             <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin" />
             Carregando…
           </div>
         ) : error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+          <div className="rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger">{error}</div>
         ) : stats ? (
           <>
-            {/* linha 1 — vendas */}
+            {/* faixa do dia */}
+            <div className="overflow-hidden rounded-2xl border-2 border-primary/25 bg-accent-soft/50 shadow-sm">
+              <div className="grid divide-y divide-primary/15 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                <div className="p-5">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-accent-soft-foreground">
+                    <DollarSign className="h-4 w-4" />
+                    Faturamento hoje
+                  </div>
+                  <div className="mt-1 font-heading text-3xl font-bold tabular-nums text-primary">
+                    {brl(stats.todayRevenue)}
+                  </div>
+                </div>
+                <div className="p-5">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <ShoppingCart className="h-4 w-4" />
+                    Vendas hoje
+                  </div>
+                  <div className="mt-1 font-heading text-3xl font-bold tabular-nums text-foreground">
+                    {stats.todaySalesCount}
+                  </div>
+                </div>
+                <div className="p-5">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Receipt className="h-4 w-4" />
+                    Ticket médio
+                  </div>
+                  <div className="mt-1 font-heading text-3xl font-bold tabular-nums text-foreground">
+                    {brl(stats.todayAvgTicket)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* estoque + mês */}
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <Kpi icon={<DollarSign />} label="Faturamento hoje" value={brl(stats.todayRevenue)} accent />
-              <Kpi icon={<ShoppingCart />} label="Vendas hoje" value={String(stats.todaySalesCount)} />
-              <Kpi icon={<Receipt />} label="Ticket médio hoje" value={brl(stats.todayAvgTicket)} />
               <Kpi
                 icon={<TrendingUp />}
                 label="Faturamento do mês"
                 value={brl(stats.monthRevenue)}
                 sub={`${stats.monthSalesCount} venda(s)`}
               />
-            </div>
-
-            {/* linha 2 — estoque */}
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <Kpi icon={<Package />} label="Produtos ativos" value={String(stats.activeProducts)} sub={`${stats.totalProducts} no total`} />
+              <Kpi
+                icon={<Package />}
+                label="Produtos ativos"
+                value={String(stats.activeProducts)}
+                sub={`${stats.totalProducts} no total`}
+              />
               <Kpi
                 icon={<AlertTriangle />}
                 label="Estoque baixo"
@@ -114,32 +145,31 @@ export default function DashboardPage() {
                 value={String(stats.outOfStockCount)}
                 tone={stats.outOfStockCount ? 'danger' : undefined}
               />
-              <Kpi icon={<Boxes />} label="Valor em estoque" value={brl(stats.stockValue)} sub="a preço de custo" />
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               {/* vendas recentes */}
-              <div className="rounded-xl border border-gray-200 bg-white lg:col-span-2">
-                <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-                  <h2 className="font-semibold text-gray-900">Vendas recentes</h2>
-                  <Link href="/vendas" className="flex items-center gap-1 text-sm text-emerald-700 hover:underline">
+              <div className="rounded-xl border border-border bg-card shadow-sm lg:col-span-2">
+                <div className="flex items-center justify-between border-b border-border px-5 py-3">
+                  <h2 className="font-semibold text-foreground">Vendas recentes</h2>
+                  <Link href="/vendas" className="flex items-center gap-1 text-sm text-primary hover:underline">
                     Ver todas <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
                 {stats.recentSales.length === 0 ? (
-                  <p className="px-5 py-8 text-center text-sm text-gray-500">Nenhuma venda ainda.</p>
+                  <p className="px-5 py-8 text-center text-sm text-muted-foreground">Nenhuma venda ainda.</p>
                 ) : (
-                  <ul className="divide-y divide-gray-100">
+                  <ul className="divide-y divide-border">
                     {stats.recentSales.map((s) => {
-                      const st = STATUS_PT[s.status] ?? { label: s.status, cls: 'bg-gray-100 text-gray-600' };
+                      const st = STATUS_PT[s.status] ?? { label: s.status, cls: 'pill-muted' };
                       return (
                         <li key={s.id} className="flex items-center justify-between px-5 py-3 text-sm">
                           <div>
-                            <span className="font-medium text-gray-900">#{s.numero}</span>
-                            <span className="ml-2 text-gray-500">
+                            <span className="font-medium text-foreground">#{s.numero}</span>
+                            <span className="ml-2 text-muted-foreground">
                               {s.itens} item(s) · {s.cliente}
                             </span>
-                            <span className="ml-2 text-xs text-gray-400">
+                            <span className="ml-2 text-xs text-muted-foreground">
                               {new Date(s.data).toLocaleString('pt-BR')}
                             </span>
                           </div>
@@ -147,7 +177,7 @@ export default function DashboardPage() {
                             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${st.cls}`}>
                               {st.label}
                             </span>
-                            <span className="font-semibold text-gray-900">{brl(s.total)}</span>
+                            <span className="font-semibold text-foreground">{brl(s.total)}</span>
                           </div>
                         </li>
                       );
@@ -157,27 +187,27 @@ export default function DashboardPage() {
               </div>
 
               {/* alerta de estoque */}
-              <div className="rounded-xl border border-gray-200 bg-white">
-                <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-                  <h2 className="font-semibold text-gray-900">Repor estoque</h2>
-                  <Link href="/estoque" className="flex items-center gap-1 text-sm text-emerald-700 hover:underline">
+              <div className="rounded-xl border border-border bg-card shadow-sm">
+                <div className="flex items-center justify-between border-b border-border px-5 py-3">
+                  <h2 className="font-semibold text-foreground">Repor estoque</h2>
+                  <Link href="/estoque" className="flex items-center gap-1 text-sm text-primary hover:underline">
                     Estoque <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
                 {stats.lowStockList.length === 0 ? (
-                  <p className="px-5 py-8 text-center text-sm text-gray-500">Nada para repor. 👍</p>
+                  <p className="px-5 py-8 text-center text-sm text-muted-foreground">Nada para repor. 👍</p>
                 ) : (
-                  <ul className="divide-y divide-gray-100">
+                  <ul className="divide-y divide-border">
                     {stats.lowStockList.map((p) => (
                       <li key={p.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                        <span className="truncate pr-2 text-gray-800">{p.nome}</span>
+                        <span className="truncate pr-2 text-foreground">{p.nome}</span>
                         <span
                           className={`shrink-0 font-semibold ${
-                            p.estoque === 0 ? 'text-red-600' : 'text-amber-600'
+                            p.estoque === 0 ? 'text-danger' : 'text-amber-600'
                           }`}
                         >
                           {p.estoque}
-                          <span className="text-xs font-normal text-gray-400"> / {p.minimo}</span>
+                          <span className="text-xs font-normal text-muted-foreground"> / {p.minimo}</span>
                         </span>
                       </li>
                     ))}
@@ -214,15 +244,15 @@ function Kpi({
   accent?: boolean;
   tone?: 'warn' | 'danger';
 }) {
-  const valueCls = tone === 'danger' ? 'text-red-600' : tone === 'warn' ? 'text-amber-600' : 'text-gray-900';
+  const valueCls = tone === 'danger' ? 'text-danger' : tone === 'warn' ? 'text-amber-600' : 'text-foreground';
   return (
-    <div className={`rounded-xl border p-4 ${accent ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+    <div className={`rounded-xl border p-4 ${accent ? 'border-primary/30 bg-accent-soft' : 'border-border bg-card'}`}>
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <span className="[&>svg]:h-4 [&>svg]:w-4">{icon}</span>
         {label}
       </div>
       <div className={`mt-1 text-2xl font-bold ${valueCls}`}>{value}</div>
-      {sub && <div className="text-xs text-gray-400">{sub}</div>}
+      {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
     </div>
   );
 }
@@ -241,12 +271,12 @@ function QuickLink({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-emerald-300 hover:bg-emerald-50"
+      className="flex items-center gap-3 rounded-xl border border-border bg-card shadow-sm p-4 transition-colors hover:border-primary/40 hover:bg-accent-soft"
     >
-      <span className="rounded-lg bg-emerald-100 p-2 text-emerald-700 [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
+      <span className="rounded-lg bg-accent-soft p-2 text-primary [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
       <span>
-        <span className="block font-medium text-gray-900">{label}</span>
-        <span className="block text-xs text-gray-500">{desc}</span>
+        <span className="block font-medium text-foreground">{label}</span>
+        <span className="block text-xs text-muted-foreground">{desc}</span>
       </span>
     </Link>
   );

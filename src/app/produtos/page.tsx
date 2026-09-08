@@ -236,12 +236,12 @@ export default function ProdutosPage() {
       <div className="space-y-6 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Gestão de Produtos</h1>
-            <p className="text-sm text-gray-500">Catálogo, preços e estoque</p>
+            <h1 className="text-2xl font-bold text-foreground">Gestão de Produtos</h1>
+            <p className="text-sm text-muted-foreground">Catálogo, preços e estoque</p>
           </div>
           <button
             onClick={openNew}
-            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 font-medium text-white hover:bg-emerald-700"
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
             Novo Produto
@@ -267,20 +267,20 @@ export default function ProdutosPage() {
         </div>
 
         {/* toolbar */}
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-4">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card shadow-sm p-4">
           <div className="relative min-w-[220px] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nome, SKU ou código de barras"
-              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+              className="w-full rounded-lg border border-border py-2 pl-9 pr-3 focus:border-ring focus:ring-2 focus:ring-ring/40"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="rounded-lg border border-gray-300 px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+            className="rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
           >
             <option value="all">Todos os status</option>
             <option value={ProductStatus.ACTIVE}>Ativos</option>
@@ -290,7 +290,7 @@ export default function ProdutosPage() {
           <select
             value={stockFilter}
             onChange={(e) => setStockFilter(e.target.value as typeof stockFilter)}
-            className="rounded-lg border border-gray-300 px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+            className="rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
           >
             <option value="all">Todo o estoque</option>
             <option value="low">Estoque baixo</option>
@@ -299,18 +299,18 @@ export default function ProdutosPage() {
         </div>
 
         {/* table */}
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
           {loading ? (
-            <div className="py-16 text-center text-sm text-gray-500">
+            <div className="py-16 text-center text-sm text-muted-foreground">
               <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin" />
               Carregando produtos…
             </div>
           ) : filtered.length === 0 ? (
-            <div className="py-16 text-center text-sm text-gray-500">Nenhum produto encontrado.</div>
+            <div className="py-16 text-center text-sm text-muted-foreground">Nenhum produto encontrado.</div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-3">Produto</th>
                   <th className="px-4 py-3">Cód. barras</th>
                   <th className="px-4 py-3">Categoria</th>
@@ -326,35 +326,33 @@ export default function ProdutosPage() {
                   const stock = toNumber(p.stockQuantity);
                   const min = toNumber(p.minStockLevel ?? 0);
                   return (
-                    <tr key={p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                    <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted">
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">{p.name}</div>
-                        <div className="text-xs text-gray-500">SKU {p.sku}</div>
+                        <div className="font-medium text-foreground">{p.name}</div>
+                        <div className="text-xs text-muted-foreground">SKU {p.sku}</div>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{p.barcode || '—'}</td>
-                      <td className="px-4 py-3 text-gray-600">{p.category?.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-900">{brl(p.salePrice)}</td>
-                      <td className="px-4 py-3 text-right text-gray-500">{brl(p.costPrice)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{p.barcode || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{p.category?.name ?? '—'}</td>
+                      <td className="px-4 py-3 text-right font-medium text-foreground">{brl(p.salePrice)}</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">{brl(p.costPrice)}</td>
                       <td className="px-4 py-3 text-right">
                         <span
                           className={
                             stock === 0
-                              ? 'font-semibold text-red-600'
+                              ? 'font-semibold text-danger'
                               : stock <= min
                                 ? 'font-semibold text-amber-600'
-                                : 'text-gray-900'
+                                : 'text-foreground'
                           }
                         >
                           {stock}
                         </span>
-                        <span className="text-xs text-gray-400"> / {min}</span>
+                        <span className="text-xs text-muted-foreground"> / {min}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            p.status === ProductStatus.ACTIVE
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-gray-100 text-gray-600'
+                          className={`pill ${
+                            p.status === ProductStatus.ACTIVE ? 'pill-ok' : 'pill-muted'
                           }`}
                         >
                           {STATUS_LABEL[p.status]}
@@ -364,14 +362,14 @@ export default function ProdutosPage() {
                         <div className="flex justify-end gap-1">
                           <button
                             onClick={() => openEdit(p)}
-                            className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                            className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                             aria-label="Editar"
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => remove(p)}
-                            className="rounded p-1.5 text-red-500 hover:bg-red-50"
+                            className="rounded p-1.5 text-danger hover:bg-danger/10"
                             aria-label="Excluir"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -390,18 +388,18 @@ export default function ProdutosPage() {
       {/* modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl bg-card p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900">
+              <h2 className="text-xl font-bold text-foreground">
                 {editingId ? 'Editar produto' : 'Novo produto'}
               </h2>
-              <button onClick={closeModal} className="rounded p-1 hover:bg-gray-100" aria-label="Fechar">
-                <XCircle className="h-5 w-5 text-gray-500" />
+              <button onClick={closeModal} className="rounded p-1 hover:bg-muted" aria-label="Fechar">
+                <XCircle className="h-5 w-5 text-muted-foreground" />
               </button>
             </div>
 
             {errors.base && (
-              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
                 {errors.base}
               </div>
             )}
@@ -492,7 +490,7 @@ export default function ProdutosPage() {
                     disabled={!!editingId}
                   />
                   {editingId && (
-                    <p className="mt-1 text-xs text-gray-400">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Ajuste o estoque por compras/vendas, não aqui.
                     </p>
                   )}
@@ -524,14 +522,14 @@ export default function ProdutosPage() {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={closeModal}
-                className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-lg border border-border px-4 py-2 font-medium text-foreground/90 hover:bg-muted"
               >
                 Cancelar
               </button>
               <button
                 onClick={submit}
                 disabled={saving}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {editingId ? 'Salvar alterações' : 'Adicionar produto'}
@@ -546,9 +544,9 @@ export default function ProdutosPage() {
 
 // ---------- small components ----------
 function inputCls(error?: string) {
-  return `w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-emerald-500/40 ${
-    error ? 'border-red-400 focus:border-red-400' : 'border-gray-300 focus:border-emerald-500'
-  } disabled:bg-gray-50 disabled:text-gray-500`;
+  return `w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-ring/40 ${
+    error ? 'border-red-400 focus:border-red-400' : 'border-border focus:border-ring'
+  } disabled:bg-muted disabled:text-muted-foreground`;
 }
 
 function Field({
@@ -566,13 +564,13 @@ function Field({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">
-        {label} {required && <span className="text-red-500">*</span>}
+      <label className="mb-1 block text-sm font-medium text-foreground/90">
+        {label} {required && <span className="text-danger">*</span>}
       </label>
       {children}
-      {hint && !error && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && !error && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
       {error && (
-        <p className="mt-1 text-xs text-red-600" role="alert">
+        <p className="mt-1 text-xs text-danger" role="alert">
           {error}
         </p>
       )}
@@ -592,14 +590,14 @@ function StatCard({
   tone?: 'default' | 'muted' | 'warn' | 'danger';
 }) {
   const toneCls = {
-    default: 'text-gray-900',
-    muted: 'text-gray-900',
+    default: 'text-foreground',
+    muted: 'text-foreground',
     warn: 'text-amber-600',
-    danger: 'text-red-600',
+    danger: 'text-danger',
   }[tone];
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+    <div className="rounded-xl border border-border bg-card shadow-sm p-4">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {icon}
         {label}
       </div>

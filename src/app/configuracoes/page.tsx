@@ -55,16 +55,16 @@ export default function ConfiguracoesPage() {
     setPinMsg({ ok: true, text: 'PIN atualizado neste dispositivo.' });
   };
 
-  if (!loaded) return <Layout><div className="p-6 text-sm text-gray-500">Carregando…</div></Layout>;
+  if (!loaded) return <Layout><div className="p-6 text-sm text-muted-foreground">Carregando…</div></Layout>;
 
   return (
     <Layout>
       <div className="mx-auto max-w-3xl space-y-6 p-6">
         <div className="flex items-center gap-2">
-          <Settings className="h-6 w-6 text-emerald-600" />
+          <Settings className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
-            <p className="text-sm text-gray-500">Preferências da loja neste dispositivo</p>
+            <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
+            <p className="text-sm text-muted-foreground">Preferências da loja neste dispositivo</p>
           </div>
         </div>
 
@@ -103,19 +103,19 @@ export default function ConfiguracoesPage() {
             <Field label="Rodapé do comprovante">
               <textarea value={form.receiptFooter} onChange={(e) => set('receiptFooter', e.target.value)} rows={2} className={inp} />
             </Field>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={form.receiptShowCompany} onChange={(e) => set('receiptShowCompany', e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+            <label className="flex items-center gap-2 text-sm text-foreground/90">
+              <input type="checkbox" checked={form.receiptShowCompany} onChange={(e) => set('receiptShowCompany', e.target.checked)} className="h-4 w-4 rounded border-border" />
               Mostrar dados da empresa no comprovante
             </label>
           </div>
         </Section>
 
         <div className="flex items-center gap-3">
-          <button onClick={save} className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white hover:bg-emerald-700">
+          <button onClick={save} className="rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground hover:bg-primary/90">
             Salvar configurações
           </button>
           {saved && (
-            <span className="flex items-center gap-1 text-sm text-emerald-700">
+            <span className="flex items-center gap-1 text-sm text-primary">
               <CheckCircle className="h-4 w-4" /> Salvo
             </span>
           )}
@@ -132,32 +132,32 @@ export default function ConfiguracoesPage() {
             </Field>
           </div>
           <div className="mt-3 flex items-center gap-3">
-            <button onClick={changePin} className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50">
+            <button onClick={changePin} className="rounded-lg border border-border px-4 py-2 font-medium text-foreground/90 hover:bg-muted">
               Alterar PIN
             </button>
             {pinMsg && (
-              <span className={`text-sm ${pinMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}>{pinMsg.text}</span>
+              <span className={`text-sm ${pinMsg.ok ? 'text-primary' : 'text-danger'}`}>{pinMsg.text}</span>
             )}
           </div>
         </Section>
 
         {/* Em breve */}
         <Section icon={<CreditCard className="h-5 w-5" />} title="Integração com meios de pagamento" desc="Em breve">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             Conciliação automática de cartão/PIX e TEF ainda não estão disponíveis. Hoje a forma de
             pagamento é registrada manualmente no PDV.
           </p>
         </Section>
 
         <Section icon={<Users className="h-5 w-5" />} title="Usuários e permissões" desc="Desativado">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             O sistema opera sem login por usuário — o acesso é protegido apenas pelo PIN do dispositivo.
           </p>
         </Section>
 
         <Section icon={<Database className="h-5 w-5" />} title="Backup e restauração" desc="Manual">
-          <p className="text-sm text-gray-500">
-            Os dados ficam no arquivo <code className="rounded bg-gray-100 px-1">dev.db</code> na pasta do
+          <p className="text-sm text-muted-foreground">
+            Os dados ficam no arquivo <code className="rounded bg-muted px-1">dev.db</code> na pasta do
             sistema. Faça backup copiando esse arquivo. Restauração automática pela interface ainda não
             está disponível.
           </p>
@@ -168,7 +168,7 @@ export default function ConfiguracoesPage() {
 }
 
 const inp =
-  'w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40';
+  'w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40';
 
 function Section({
   icon,
@@ -182,12 +182,12 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-5">
+    <section className="rounded-xl border border-border bg-card shadow-sm p-5">
       <div className="mb-4 flex items-start gap-3">
-        <span className="rounded-lg bg-emerald-100 p-2 text-emerald-700">{icon}</span>
+        <span className="rounded-lg bg-accent-soft p-2 text-primary">{icon}</span>
         <div>
-          <h2 className="font-semibold text-gray-900">{title}</h2>
-          {desc && <p className="text-xs text-gray-500">{desc}</p>}
+          <h2 className="font-semibold text-foreground">{title}</h2>
+          {desc && <p className="text-xs text-muted-foreground">{desc}</p>}
         </div>
       </div>
       {children}
@@ -198,7 +198,7 @@ function Section({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
+      <label className="mb-1 block text-sm font-medium text-foreground/90">{label}</label>
       {children}
     </div>
   );

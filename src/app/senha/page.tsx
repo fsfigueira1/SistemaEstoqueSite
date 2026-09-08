@@ -44,17 +44,17 @@ export default function SenhaPage() {
         <title>PIN de Acesso - Laçolaria ERP</title>
         <meta name="description" content="Digite o PIN para acessar o sistema" />
       </Head>
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-full max-w-md space-y-6 p-8 bg-white rounded-lg shadow-md">
-          <h2 className="text-2xl font-bold text-center text-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-full max-w-md space-y-6 p-8 bg-card rounded-lg shadow-md">
+          <h2 className="text-2xl font-bold text-center text-foreground">
             Acesso ao Sistema
           </h2>
-          <p className="text-center text-gray-600">
+          <p className="text-center text-muted-foreground">
             Digite o PIN para acessar o ERP Laçolaria
           </p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-foreground/90 mb-2">
                 PIN
               </label>
               <input
@@ -62,13 +62,13 @@ export default function SenhaPage() {
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-ring"
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center px-4 py-3 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-center px-4 py-3 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               {loading ? (
                 <>
@@ -83,10 +83,10 @@ export default function SenhaPage() {
               )}
             </button>
             {error && (
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-danger">{error}</p>
             )}
           </form>
-          <p className="text-xs text-gray-500 text-center">
+          <p className="text-xs text-muted-foreground text-center">
             Versão 1.0.0
           </p>
         </div>

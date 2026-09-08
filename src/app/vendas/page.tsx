@@ -15,10 +15,10 @@ const brl = (v: unknown) => {
 };
 
 const STATUS: Record<string, { label: string; cls: string }> = {
-  COMPLETED: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-800' },
-  PENDING: { label: 'Pendente', cls: 'bg-amber-100 text-amber-800' },
-  CANCELLED: { label: 'Cancelada', cls: 'bg-gray-100 text-gray-600' },
-  REFUNDED: { label: 'Estornada', cls: 'bg-red-100 text-red-700' },
+  COMPLETED: { label: 'Concluída', cls: 'pill-ok' },
+  PENDING: { label: 'Pendente', cls: 'pill-warn' },
+  CANCELLED: { label: 'Cancelada', cls: 'pill-muted' },
+  REFUNDED: { label: 'Estornada', cls: 'pill-danger' },
 };
 
 const METHOD_PT: Record<string, string> = {
@@ -96,16 +96,16 @@ export default function VendasPage() {
     <Layout>
       <div className="space-y-6 p-6">
         <div className="flex items-center gap-2">
-          <Receipt className="h-6 w-6 text-emerald-600" />
+          <Receipt className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Gestão de Vendas</h1>
-            <p className="text-sm text-gray-500">Histórico e desempenho das vendas realizadas</p>
+            <h1 className="text-2xl font-bold text-foreground">Gestão de Vendas</h1>
+            <p className="text-sm text-muted-foreground">Histórico e desempenho das vendas realizadas</p>
           </div>
         </div>
 
         {/* filtros */}
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card shadow-sm p-4">
+          <div className="flex gap-1 rounded-lg bg-muted p-1">
             {(
               [
                 ['today', 'Hoje'],
@@ -119,7 +119,7 @@ export default function VendasPage() {
                 key={v}
                 onClick={() => setPeriod(v)}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  period === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                  period === v ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {label}
@@ -129,7 +129,7 @@ export default function VendasPage() {
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as typeof status)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+            className="rounded-lg border border-border px-3 py-2 text-sm focus:border-ring focus:ring-2 focus:ring-ring/40"
           >
             <option value="all">Todos os status</option>
             <option value="COMPLETED">Concluídas</option>
@@ -148,21 +148,21 @@ export default function VendasPage() {
         </div>
 
         {/* tabela */}
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
           {loading ? (
-            <div className="py-16 text-center text-sm text-gray-500">
+            <div className="py-16 text-center text-sm text-muted-foreground">
               <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin" />
               Carregando…
             </div>
           ) : rows.length === 0 ? (
-            <div className="py-16 text-center text-sm text-gray-500">
-              <Search className="mx-auto mb-3 h-6 w-6 text-gray-300" />
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              <Search className="mx-auto mb-3 h-6 w-6 text-muted-foreground/60" />
               Nenhuma venda nesse período.
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-3">Venda</th>
                   <th className="px-4 py-3">Data</th>
                   <th className="px-4 py-3 text-center">Itens</th>
@@ -174,26 +174,26 @@ export default function VendasPage() {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const st = STATUS[r.status] ?? { label: r.status, cls: 'bg-gray-100 text-gray-600' };
+                  const st = STATUS[r.status] ?? { label: r.status, cls: 'pill-muted' };
                   return (
                     <tr
                       key={r.id}
                       onClick={() => setSelected(r.id)}
-                      className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50"
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-muted"
                     >
-                      <td className="px-4 py-3 font-medium text-gray-900">#{r.saleNumber}</td>
-                      <td className="px-4 py-3 text-gray-600">
+                      <td className="px-4 py-3 font-medium text-foreground">#{r.saleNumber}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
                         {new Date(r.createdAt).toLocaleString('pt-BR')}
                       </td>
-                      <td className="px-4 py-3 text-center text-gray-600">{r._count?.items ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-600">
+                      <td className="px-4 py-3 text-center text-muted-foreground">{r._count?.items ?? '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
                         {r.payments?.[0] ? METHOD_PT[r.payments[0].method] ?? r.payments[0].method : '—'}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{r.createdBy?.name ?? '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{r.createdBy?.name ?? '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${st.cls}`}>{st.label}</span>
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-900">{brl(r.totalAmount)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-foreground">{brl(r.totalAmount)}</td>
                     </tr>
                   );
                 })}
@@ -210,9 +210,9 @@ export default function VendasPage() {
 
 function Card({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 ${accent ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
-      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="mt-1 text-xl font-bold text-gray-900">{value}</div>
+    <div className={`rounded-xl border p-4 ${accent ? 'border-primary/30 bg-accent-soft' : 'border-border bg-card'}`}>
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-xl font-bold text-foreground">{value}</div>
     </div>
   );
 }
@@ -254,48 +254,48 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
     }
   };
 
-  const st = sale ? STATUS[sale.status] ?? { label: sale.status, cls: 'bg-gray-100 text-gray-600' } : null;
+  const st = sale ? STATUS[sale.status] ?? { label: sale.status, cls: 'pill-muted' } : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-card p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">
+          <h2 className="text-lg font-bold text-foreground">
             {loading ? 'Venda' : `Venda #${sale?.saleNumber ?? ''}`}
           </h2>
-          <button onClick={onClose} className="rounded p-1 hover:bg-gray-100" aria-label="Fechar">
-            <XCircle className="h-5 w-5 text-gray-500" />
+          <button onClick={onClose} className="rounded p-1 hover:bg-muted" aria-label="Fechar">
+            <XCircle className="h-5 w-5 text-muted-foreground" />
           </button>
         </div>
 
         {err && (
-          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{err}</div>
+          <div className="mb-3 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{err}</div>
         )}
 
         {loading ? (
           <div className="py-10 text-center">
-            <Loader2 className="mx-auto h-6 w-6 animate-spin text-gray-400" />
+            <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : sale ? (
           <div className="space-y-4 text-sm">
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-gray-600">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
               <span>{new Date(sale.createdAt).toLocaleString('pt-BR')}</span>
               {st && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${st.cls}`}>{st.label}</span>}
               <span>Operador: {sale.createdBy?.name ?? '—'}</span>
               <span>Cliente: {sale.customer?.name ?? 'Consumidor'}</span>
             </div>
 
-            <div className="rounded-lg border border-gray-200">
-              <div className="border-b border-gray-100 px-3 py-2 text-xs font-semibold uppercase text-gray-500">
+            <div className="rounded-lg border border-border">
+              <div className="border-b border-border px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
                 Itens
               </div>
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-border">
                 {sale.items?.map((it: any) => (
                   <li key={it.id} className="flex justify-between gap-3 px-3 py-2">
-                    <span className="text-gray-800">
+                    <span className="text-foreground">
                       {it.quantity}× {it.product?.name ?? 'Produto'}
                     </span>
-                    <span className="font-medium text-gray-900">{brl(it.totalAmount)}</span>
+                    <span className="font-medium text-foreground">{brl(it.totalAmount)}</span>
                   </li>
                 ))}
               </ul>
@@ -309,10 +309,10 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
             </div>
 
             {sale.payments?.length > 0 && (
-              <div className="rounded-lg border border-gray-200 px-3 py-2">
-                <div className="mb-1 text-xs font-semibold uppercase text-gray-500">Pagamento</div>
+              <div className="rounded-lg border border-border px-3 py-2">
+                <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Pagamento</div>
                 {sale.payments.map((pm: any) => (
-                  <div key={pm.id} className="flex justify-between text-gray-700">
+                  <div key={pm.id} className="flex justify-between text-foreground/90">
                     <span>
                       {METHOD_PT[pm.method] ?? pm.method}
                       {pm.installmentCount > 1 ? ` ${pm.installmentCount}x` : ''}
@@ -327,7 +327,7 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
               <button
                 onClick={cancel}
                 disabled={busy}
-                className="w-full rounded-lg border border-red-300 px-4 py-2 font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                className="w-full rounded-lg border border-danger/40 px-4 py-2 font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
               >
                 Cancelar venda
               </button>
@@ -341,7 +341,7 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
 
 function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
-    <div className={`flex justify-between ${bold ? 'text-base font-bold text-gray-900' : 'text-gray-600'}`}>
+    <div className={`flex justify-between ${bold ? 'text-base font-bold text-foreground' : 'text-muted-foreground'}`}>
       <span>{label}</span>
       <span>{value}</span>
     </div>

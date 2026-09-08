@@ -360,7 +360,7 @@ export default function EstoquePage() {
         </div>
 
       {/* Barcode Scanner Input */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-card rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold mb-4">Leitor de Código de Barras (USB)</h2>
         <div className="flex items-center gap-4">
           <input
@@ -376,7 +376,7 @@ export default function EstoquePage() {
             scannerStatus === 'scanning' ? 'bg-blue-100 text-blue-800' :
             scannerStatus === 'added' ? 'bg-green-100 text-green-800' :
             scannerStatus === 'not-found' ? 'bg-yellow-100 text-yellow-800' :
-            'bg-gray-100 text-gray-800'
+            'bg-muted text-foreground'
           }`}>
             {scannerStatus === 'scanning' ? 'Lendo...' :
             scannerStatus === 'added' ? 'Produto encontrado!' :
@@ -387,43 +387,43 @@ export default function EstoquePage() {
       </div>
 
       {/* Products Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-card rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-muted">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preço</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Custo</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estoque</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Est. Mín.</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Código</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Nome</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Categoria</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Preço</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Custo</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Estoque</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Est. Mín.</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-border">
               {products.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-4 text-sm text-gray-900">{product.sku || product.codigo}</td>
-                  <td className="px-4 py-4 text-sm text-gray-900">{product.name || product.nome}</td>
-                  <td className="px-4 py-4 text-sm text-gray-500">
+                <tr key={product.id} className="hover:bg-muted">
+                  <td className="px-4 py-4 text-sm text-foreground">{product.sku || product.codigo}</td>
+                  <td className="px-4 py-4 text-sm text-foreground">{product.name || product.nome}</td>
+                  <td className="px-4 py-4 text-sm text-muted-foreground">
                     {categories.find((c: Category) => c.id === (product.categoryId || product.categoriaId))?.nome || 'Sem categoria'}
                   </td>
-                  <td className="px-4 py-4 text-sm text-gray-900">{formatCurrency(product.salePrice ?? product.preco)}</td>
-                  <td className="px-4 py-4 text-sm text-gray-500">{formatCurrency(product.costPrice ?? product.custo)}</td>
-                  <td className="px-4 py-4 text-sm text-gray-900 font-medium">
+                  <td className="px-4 py-4 text-sm text-foreground">{formatCurrency(product.salePrice ?? product.preco)}</td>
+                  <td className="px-4 py-4 text-sm text-muted-foreground">{formatCurrency(product.costPrice ?? product.custo)}</td>
+                  <td className="px-4 py-4 text-sm text-foreground font-medium">
                     {product.stockQuantity !== undefined && product.stockQuantity !== null ? product.stockQuantity : (product.estoque || 0)}
                   </td>
-                  <td className="px-4 py-4 text-sm text-gray-500">
+                  <td className="px-4 py-4 text-sm text-muted-foreground">
                     {product.minStockLevel !== undefined && product.minStockLevel !== null ? product.minStockLevel : (product.estoqueMinimo || 0)}
                   </td>
                   <td className="px-4 py-4">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                       product.status === ProductStatus.ACTIVE ? 'bg-green-100 text-green-800' :
                       product.status === ProductStatus.INACTIVE ? 'bg-yellow-100 text-yellow-800' :
-                      product.status === ProductStatus.DISCONTINUED ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                      product.status === ProductStatus.DISCONTINUED ? 'bg-red-100 text-red-800' : 'bg-muted text-foreground'
                     }`}>
                       {product.status === ProductStatus.ACTIVE ? 'Ativo' :
                        product.status === ProductStatus.INACTIVE ? 'Inativo' :
@@ -454,7 +454,7 @@ export default function EstoquePage() {
                       </button>
                       <button
                         onClick={() => handleDelete(product)}
-                        className="text-red-600 hover:text-red-900 text-sm"
+                        className="text-danger hover:text-red-900 text-sm"
                       >
                         Excluir
                       </button>
@@ -466,7 +466,7 @@ export default function EstoquePage() {
           </table>
         </div>
         {products.length === 0 && (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-muted-foreground">
             Nenhum produto cadastrado. Clique no botão Novo Produto para começar.
           </div>
         )}
@@ -475,7 +475,7 @@ export default function EstoquePage() {
       {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b">
               <h2 className="text-xl font-semibold">
                 {mode === 'add' ? 'Novo Produto' : 'Editar Produto'}
@@ -484,7 +484,7 @@ export default function EstoquePage() {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Código / SKU</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Código / SKU</label>
                   <input
                     type="text"
                     value={formData.codigo}
@@ -494,7 +494,7 @@ export default function EstoquePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Nome</label>
                   <input
                     type="text"
                     value={formData.nome}
@@ -504,7 +504,7 @@ export default function EstoquePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Categoria</label>
                   <select
                     value={formData.categoriaId ?? ''}
                     onChange={(e) => setFormData(prev => ({ ...prev, categoriaId: e.target.value === '' ? null : e.target.value }))}
@@ -517,7 +517,7 @@ export default function EstoquePage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Preço de Venda</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Preço de Venda</label>
                   <input
                     type="number"
                     step="0.01"
@@ -529,7 +529,7 @@ export default function EstoquePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Preço de Custo</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Preço de Custo</label>
                   <input
                     type="number"
                     step="0.01"
@@ -540,7 +540,7 @@ export default function EstoquePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Estoque Atual</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Estoque Atual</label>
                   <input
                     type="number"
                     step="1"
@@ -552,7 +552,7 @@ export default function EstoquePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Estoque Mínimo</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Estoque Mínimo</label>
                   <input
                     type="number"
                     step="1"
@@ -564,7 +564,7 @@ export default function EstoquePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Status</label>
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as ProductStatus }))}
@@ -581,7 +581,7 @@ export default function EstoquePage() {
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2 border rounded-lg text-foreground/90 hover:bg-muted"
                 >
                   Cancelar
                 </button>

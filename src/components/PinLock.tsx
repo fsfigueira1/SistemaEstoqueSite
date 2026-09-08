@@ -49,9 +49,9 @@ export default function PinLock({ children }: { children: React.ReactNode }) {
   if (!ready) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="p-4 bg-white rounded-lg shadow-xl">
+        <div className="p-4 bg-card rounded-lg shadow-xl">
           <h2 className="text-xl font-bold text-center mb-4">Iniciando...</h2>
-          <p className="text-sm text-gray-600 text-center">
+          <p className="text-sm text-muted-foreground text-center">
             Verificando suas configurações...
           </p>
         </div>
@@ -64,13 +64,13 @@ export default function PinLock({ children }: { children: React.ReactNode }) {
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="w-full max-w-sm p-6 bg-white rounded-lg shadow-xl">
+        <div className="w-full max-w-sm p-6 bg-card rounded-lg shadow-xl">
           <h2 className="text-2xl font-bold text-center mb-6">
             {isFirstTime ? 'Defina seu PIN' : 'Digite seu PIN'}
           </h2>
           <form onSubmit={isFirstTime ? handleChangePin : handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-foreground/90 mb-2">
                 {isFirstTime ? 'Novo PIN' : 'PIN'}
               </label>
               <input
@@ -78,23 +78,23 @@ export default function PinLock({ children }: { children: React.ReactNode }) {
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 placeholder="Digite o PIN"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary text-lg letter-spacing-wide"
+                className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-ring/40 focus:border-ring text-lg letter-spacing-wide"
                 maxLength={6}
                 autoComplete="off"
                 required
               />
             </div>
             {error && (
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-danger">{error}</p>
             )}
             <button
               type="submit"
-              className="w-full px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              className="w-full px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               {isFirstTime ? 'Definir PIN' : 'Desbloquear'}
             </button>
           </form>
-          <p className="mt-4 text-xs text-gray-500 text-center">
+          <p className="mt-4 text-xs text-muted-foreground text-center">
             Seu PIN é armazenado localmente neste dispositivo.
           </p>
         </div>

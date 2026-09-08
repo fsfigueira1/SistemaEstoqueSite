@@ -341,25 +341,31 @@ export default function PDVPage() {
   };
 
   const statusPill = {
-    ready: ['bg-emerald-100 text-emerald-800', 'Pronto para ler'],
-    scanning: ['bg-amber-100 text-amber-800', 'Lendo…'],
-    added: ['bg-emerald-100 text-emerald-800', 'Produto adicionado'],
-    'not-found': ['bg-red-100 text-red-800', 'Não encontrado'],
+    ready: ['pill-muted', 'Pronto para ler'],
+    scanning: ['pill-warn', 'Lendo…'],
+    added: ['pill-ok', 'Produto adicionado'],
+    'not-found': ['pill-danger', 'Não encontrado'],
   }[scanStatus];
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">PDV — Ponto de Venda</h1>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            Sistema online
+      <div className="min-h-screen bg-background p-6">
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div>
+            <h1 className="font-heading text-2xl font-bold text-foreground">Ponto de Venda</h1>
+            <span className="mt-1.5 block h-1 w-14 rounded-full bg-primary" />
+          </div>
+          <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
+            </span>
+            <span className="hidden sm:inline">Sistema online</span>
           </div>
         </div>
 
         {error && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -369,13 +375,13 @@ export default function PDVPage() {
           {/* Coluna esquerda */}
           <div className="space-y-6 lg:col-span-2">
             {/* Leitor */}
-            <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <section className="rounded-xl border border-border bg-card shadow-sm p-6 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
-                <Barcode className="h-5 w-5 text-emerald-600" />
-                <h2 className="text-lg font-bold text-gray-900">Leitor de Código de Barras</h2>
+                <Barcode className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-bold text-foreground">Leitor de Código de Barras</h2>
               </div>
               <div className="relative">
-                <Barcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Barcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   ref={barcodeRef}
                   type="text"
@@ -392,7 +398,7 @@ export default function PDVPage() {
                   }}
                   placeholder="Aproxime o leitor ou digite o código e pressione Enter"
                   autoComplete="off"
-                  className="w-full rounded-lg border border-gray-300 py-3 pl-10 pr-4 text-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+                  className="w-full rounded-lg border border-border py-3 pl-10 pr-4 text-lg focus:border-ring focus:ring-2 focus:ring-ring/40"
                 />
               </div>
               <div className="mt-3">
@@ -401,13 +407,13 @@ export default function PDVPage() {
             </section>
 
             {/* Busca */}
-            <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <section className="rounded-xl border border-border bg-card shadow-sm p-6 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
-                <Search className="h-5 w-5 text-emerald-600" />
-                <h2 className="text-lg font-bold text-gray-900">Buscar Produto por Nome</h2>
+                <Search className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-bold text-foreground">Buscar Produto por Nome</h2>
               </div>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   ref={searchRef}
                   type="text"
@@ -415,38 +421,38 @@ export default function PDVPage() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onKeyDown={onSearchKey}
                   placeholder="Digite pelo menos 2 letras do nome ou SKU…"
-                  className="w-full rounded-lg border border-gray-300 py-3 pl-10 pr-10 text-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+                  className="w-full rounded-lg border border-border py-3 pl-10 pr-10 text-lg focus:border-ring focus:ring-2 focus:ring-ring/40"
                 />
                 {searching && (
-                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
                 )}
               </div>
 
               {searchTerm.trim().length >= 2 && !searching && searchResults.length === 0 && (
-                <p className="mt-3 text-sm text-gray-500">Nenhum produto encontrado.</p>
+                <p className="mt-3 text-sm text-muted-foreground">Nenhum produto encontrado.</p>
               )}
 
               {searchResults.length > 0 && (
-                <ul className="mt-3 max-h-72 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200">
+                <ul className="mt-3 max-h-72 divide-y divide-border overflow-y-auto rounded-lg border border-border">
                   {searchResults.map((p, idx) => (
                     <li
                       key={p.id}
                       onMouseEnter={() => setHighlight(idx)}
                       onClick={() => pickResult(p)}
                       className={`flex cursor-pointer items-center justify-between gap-3 p-3 ${
-                        idx === highlight ? 'bg-emerald-50' : 'hover:bg-gray-50'
+                        idx === highlight ? 'bg-accent-soft' : 'hover:bg-muted'
                       }`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-gray-900">{p.name}</p>
-                        <p className="truncate text-xs text-gray-500">
+                        <p className="truncate font-medium text-foreground">{p.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
                           SKU {p.sku}
                           {p.barcode ? ` · ${p.barcode}` : ''}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="font-semibold text-gray-900">{formatCurrency(p.salePrice)}</p>
-                        <p className="text-xs text-gray-500">estoque {toNumber(p.stockQuantity)}</p>
+                        <p className="font-semibold text-foreground">{formatCurrency(p.salePrice)}</p>
+                        <p className="text-xs text-muted-foreground">estoque {toNumber(p.stockQuantity)}</p>
                       </div>
                     </li>
                   ))}
@@ -458,29 +464,32 @@ export default function PDVPage() {
           {/* Coluna direita */}
           <div className="space-y-6">
             {/* Carrinho */}
-            <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <section className="rounded-xl border border-border bg-card shadow-sm p-6 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5 text-emerald-600" />
-                <h2 className="text-lg font-bold text-gray-900">Carrinho ({carrinho.length})</h2>
+                <ShoppingCart className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-bold text-foreground">Carrinho ({carrinho.length})</h2>
               </div>
 
               {carrinho.length === 0 ? (
-                <div className="py-8 text-center">
-                  <ShoppingCart className="mx-auto mb-3 h-8 w-8 text-gray-300" />
-                  <p className="text-sm text-gray-500">Carrinho vazio</p>
+                <div className="rounded-xl border border-dashed border-border py-10 text-center">
+                  <ShoppingCart className="mx-auto mb-2 h-7 w-7 text-muted-foreground/50" />
+                  <p className="text-sm font-medium text-muted-foreground">Carrinho vazio</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground/70">
+                    Leia um código ou busque um produto
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {carrinho.map((i) => (
-                    <div key={i.id} className="rounded-lg border border-gray-200 p-3">
+                    <div key={i.id} className="rounded-lg border border-border p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900">{i.nome}</p>
-                          <p className="text-xs text-gray-500">{i.codigo}</p>
+                          <p className="truncate text-sm font-medium text-foreground">{i.nome}</p>
+                          <p className="text-xs text-muted-foreground">{i.codigo}</p>
                         </div>
                         <button
                           onClick={() => removeItem(i.id)}
-                          className="rounded p-1 text-red-500 hover:bg-red-50"
+                          className="rounded p-1 text-danger hover:bg-danger/10"
                           aria-label="Remover"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -490,7 +499,7 @@ export default function PDVPage() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => setQty(i.id, -1)}
-                            className="h-7 w-7 rounded bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            className="h-7 w-7 rounded bg-muted text-foreground/90 hover:bg-muted"
                           >
                             −
                           </button>
@@ -498,12 +507,12 @@ export default function PDVPage() {
                           <button
                             onClick={() => setQty(i.id, 1)}
                             disabled={i.quantidade >= i.estoque}
-                            className="h-7 w-7 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40"
+                            className="h-7 w-7 rounded bg-muted text-foreground/90 hover:bg-muted disabled:opacity-40"
                           >
                             +
                           </button>
                         </div>
-                        <span className="text-sm font-semibold text-gray-900">
+                        <span className="text-sm font-semibold text-foreground">
                           {formatCurrency(i.preco * i.quantidade)}
                         </span>
                       </div>
@@ -514,12 +523,12 @@ export default function PDVPage() {
             </section>
 
             {/* Pagamento */}
-            <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <section className="rounded-xl border border-border bg-card shadow-sm p-6 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-emerald-600" />
-                <h2 className="text-lg font-bold text-gray-900">Pagamento</h2>
+                <CreditCard className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-bold text-foreground">Pagamento</h2>
               </div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Forma de pagamento</label>
+              <label className="mb-1 block text-sm font-medium text-foreground/90">Forma de pagamento</label>
               <select
                 value={metodo}
                 onChange={(e) => {
@@ -528,7 +537,7 @@ export default function PDVPage() {
                   if (v !== 'cartao') setParcelas(1);
                   if (v !== 'dinheiro') setValorRecebido('');
                 }}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
               >
                 <option value="dinheiro">Dinheiro</option>
                 <option value="pix">PIX</option>
@@ -537,11 +546,11 @@ export default function PDVPage() {
 
               {metodo === 'cartao' && (
                 <div className="mt-3">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Parcelas</label>
+                  <label className="mb-1 block text-sm font-medium text-foreground/90">Parcelas</label>
                   <select
                     value={parcelas}
                     onChange={(e) => setParcelas(parseInt(e.target.value, 10) || 1)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+                    className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
                   >
                     {[1, 2, 3, 4, 5, 6, 10, 12].map((n) => (
                       <option key={n} value={n}>
@@ -554,7 +563,7 @@ export default function PDVPage() {
 
               {metodo === 'dinheiro' && (
                 <div className="mt-3">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Valor recebido (opcional)</label>
+                  <label className="mb-1 block text-sm font-medium text-foreground/90">Valor recebido (opcional)</label>
                   <input
                     type="number"
                     min="0"
@@ -562,32 +571,38 @@ export default function PDVPage() {
                     value={valorRecebido}
                     onChange={(e) => setValorRecebido(e.target.value)}
                     placeholder="0,00"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40"
+                    className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
                   />
                 </div>
               )}
 
-              <div className="mt-4 space-y-1 border-t border-gray-200 pt-4 text-sm">
-                <div className="flex justify-between text-gray-600">
-                  <span>Subtotal</span>
-                  <span>{formatCurrency(subtotal)}</span>
-                </div>
-                {troco > 0 && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Troco</span>
-                    <span>{formatCurrency(troco)}</span>
+              <div className="mt-4 rounded-xl border-2 border-primary/30 bg-accent-soft/50 p-4">
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums">{formatCurrency(subtotal)}</span>
                   </div>
-                )}
-                <div className="flex justify-between pt-1 text-lg font-bold text-gray-900">
-                  <span>Total</span>
-                  <span className="text-emerald-600">{formatCurrency(total)}</span>
+                  {troco > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Troco</span>
+                      <span className="tabular-nums">{formatCurrency(troco)}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 flex items-end justify-between border-t border-primary/20 pt-2">
+                  <span className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    Total
+                  </span>
+                  <span className="font-heading text-2xl font-bold tabular-nums text-primary">
+                    {formatCurrency(total)}
+                  </span>
                 </div>
               </div>
 
               <button
                 onClick={finalizarVenda}
                 disabled={isProcessing || carrinho.length === 0}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-heading text-base font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
               >
                 {isProcessing ? (
                   <>
@@ -606,34 +621,34 @@ export default function PDVPage() {
       {/* Pós-venda: imprimir comprovante ou não */}
       {finishedSale && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl">
             {!printing ? (
               <>
                 <div className="mb-2 flex items-center gap-2">
-                  <CheckCircle className="h-6 w-6 text-emerald-600" />
-                  <h2 className="text-xl font-bold text-gray-900">Venda finalizada</h2>
+                  <CheckCircle className="h-6 w-6 text-primary" />
+                  <h2 className="text-xl font-bold text-foreground">Venda finalizada</h2>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Venda <span className="font-medium">{finishedSale.saleNumber}</span> concluída.
                   O estoque dos produtos já foi atualizado.
                 </p>
-                <p className="mt-1 text-sm text-gray-600">
+                <p className="mt-1 text-sm text-muted-foreground">
                   Total: <span className="font-semibold">{formatCurrency(finishedSale.total)}</span>
                   {finishedSale.change > 0 && <> · Troco: {formatCurrency(finishedSale.change)}</>}
                 </p>
 
-                <p className="mt-4 text-sm font-medium text-gray-800">Imprimir comprovante de compra?</p>
+                <p className="mt-4 text-sm font-medium text-foreground">Imprimir comprovante de compra?</p>
                 <div className="mt-3 flex gap-3">
                   <button
                     onClick={() => setPrinting(true)}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 font-medium text-white hover:bg-emerald-700"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90"
                   >
                     <Printer className="h-4 w-4" />
                     Imprimir
                   </button>
                   <button
                     onClick={closePostSale}
-                    className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 font-medium text-gray-700 hover:bg-gray-50"
+                    className="flex-1 rounded-lg border border-border px-4 py-2.5 font-medium text-foreground/90 hover:bg-muted"
                   >
                     Concluir sem imprimir
                   </button>
@@ -642,12 +657,12 @@ export default function PDVPage() {
             ) : (
               <>
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-gray-900">Comprovante</h2>
-                  <button onClick={closePostSale} className="rounded p-1 hover:bg-gray-100" aria-label="Fechar">
-                    <XCircle className="h-5 w-5 text-gray-500" />
+                  <h2 className="text-lg font-bold text-foreground">Comprovante</h2>
+                  <button onClick={closePostSale} className="rounded p-1 hover:bg-muted" aria-label="Fechar">
+                    <XCircle className="h-5 w-5 text-muted-foreground" />
                   </button>
                 </div>
-                <div className="max-h-[60vh] overflow-y-auto rounded border border-gray-200 bg-gray-50 p-3">
+                <div className="max-h-[60vh] overflow-y-auto rounded border border-border bg-muted p-3">
                   <ReceiptPrint
                     data={{
                       saleId: finishedSale.saleNumber,
@@ -666,7 +681,7 @@ export default function PDVPage() {
                 </div>
                 <button
                   onClick={closePostSale}
-                  className="mt-3 w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="mt-3 w-full rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-muted"
                 >
                   Fechar
                 </button>

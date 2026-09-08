@@ -1,13 +1,16 @@
 'use client';
 
-import { TooltipProvider } from "@/components/ui/tooltip";
-import PinLock from "@/components/PinLock";
-import { ReactNode } from "react";
+import { ThemeProvider } from 'next-themes';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import PinLock from '@/components/PinLock';
+import { ReactNode } from 'react';
 
 export default function AppWrapper({ children }: { children: ReactNode }) {
   return (
-    <PinLock>
-      <TooltipProvider>{children}</TooltipProvider>
-    </PinLock>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+      <PinLock>
+        <TooltipProvider>{children}</TooltipProvider>
+      </PinLock>
+    </ThemeProvider>
   );
 }
