@@ -13,7 +13,15 @@ function create(): PrismaClient {
       "DATABASE_URL não definida. Configure a connection string do Postgres (Supabase) no .env.",
     );
   }
-  const client = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  // pool pequeno: o Session pooler do Supabase limita a 15 conexões no total,
+  // e são 3 máquinas. max 3 por máquina = 9, com folga.
+  const adapter = new PrismaPg({
+    connectionString: url,
+    max: Number(process.env.DB_POOL_MAX) || 3,
+    idleTimeoutMillis: 20_000,
+    connectionTimeoutMillis: 15_000,
+  });
+  const client = new PrismaClient({ adapter });
   if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;
   return client;
 }
