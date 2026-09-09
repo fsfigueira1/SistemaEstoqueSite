@@ -79,8 +79,28 @@ três (fica no banco).
 - **Estoque nunca fica pela metade**: cada venda é uma transação — ou grava
   tudo (venda + baixa de estoque + pagamento) ou não grava nada. Queda de
   luz, internet ou crash no meio da venda = nada foi gravado, é só refazer.
-- Sem internet, o app abre mas as telas de dados dão erro até reconectar
-  (nada é perdido).
+
+## 4a. Sem internet — o PDV continua vendendo (a partir do 0.1.5)
+
+Só o **PDV** funciona offline. Cadastro, caixa, relatórios e painel precisam de
+internet (mostram "sem conexão" até voltar).
+
+- O PDV baixa e guarda o **catálogo em cache** quando tem internet. Sem
+  conexão, a busca por nome/código lê desse cache ("catálogo de X min atrás").
+  Produto criado depois do último cache não aparece até reconectar.
+- Venda finalizada sem internet entra numa **fila local** (no navegador daquele
+  PC). O comprovante imprime normal (os dados são locais). O estoque é abatido
+  no cache do balcão.
+- O topo mostra **"Sem conexão · N venda(s) na fila"**.
+- Quando a internet volta, a fila **sobe sozinha** pro Supabase (a cada ~45 s ou
+  no momento que reconecta). Cada venda leva um `clientId` único, então repetir
+  o envio nunca duplica.
+- **Defasagem aceitável:** o estoque no Supabase fica alguns minutos atrás do
+  balcão. Se um gerente mexer no estoque de um produto enquanto o balcão estava
+  offline, o estoque pode ir a negativo no flush — a venda é registrada mesmo
+  assim; ajuste o estoque na mão depois.
+- Fila e cache ficam no IndexedDB do app e **sobrevivem a fechar o app e a
+  atualizações**. Só somem se limpar os dados do site.
 
 ## 5. Impressora (Epson TM-T20X)
 
@@ -95,8 +115,8 @@ bobina (58/80 mm) em Configurações.
 | Tarefa | Como |
 |---|---|
 | Trocar a URL do banco num PC | bandeja → Configurar banco de dados… |
-| Nova migração após mudar o schema | `npx prisma migrate dev --name <nome>` (dev) |
-| Aplicar migrações no Supabase | `npm run db:migrate` |
+| Nova migração após mudar o schema | `npx prisma migrate dev --name <nome>` (dev, com banco local) |
+| Aplicar mudança de schema no Supabase | Rode o SQL do `migration.sql` no **Supabase → SQL Editor**. O `npm run db:migrate` (Prisma Migrate) **trava pelo Transaction pooler** — só funciona com conexão direta (porta 5432). |
 | Novo instalador após mudar o código | `npm run electron:build` e reinstalar |
 | Backup | Supabase faz automático; ou `pg_dump` da connection string |
 | Ver/editar dados | Supabase → Table editor, ou `npx prisma studio` |
