@@ -84,7 +84,7 @@
     "appId": "com.lacolaria.gestao",
     "productName": "Laçolaria",
     "directories": {
-      "output": "release"
+      "output": "C:\\Users\\silva\\lacolaria-dist\\release"
     },
     "asar": true,
     "files": [

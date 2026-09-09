@@ -7,7 +7,8 @@ const path = require("node:path");
 
 const root = path.join(__dirname, "..");
 const standalone = path.join(root, ".next", "standalone");
-const out = path.join(root, "server-bundle");
+// fora do OneDrive: artefatos grandes somem/deshidratam dentro dele
+const out = process.env.LACOLARIA_BUNDLE_DIR || require("node:path").join(require("node:os").homedir(), "lacolaria-dist", "server-bundle");
 
 if (!fs.existsSync(path.join(standalone, "server.js"))) {
   console.error("Rode `next build` antes (output: 'standalone').");

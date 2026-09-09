@@ -5,8 +5,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 exports.default = async function afterPack(context) {
-  const root = context.packager.projectDir;
-  const src = path.join(root, "server-bundle");
+  const src =
+    process.env.LACOLARIA_BUNDLE_DIR || require("node:path").join(require("node:os").homedir(), "lacolaria-dist", "server-bundle");
   const dst = path.join(context.appOutDir, "resources", "next-server");
 
   if (!fs.existsSync(path.join(src, "server.js"))) {
