@@ -17,6 +17,34 @@ import {
 import { ReceiptPrint } from '@/components/pdv/ReceiptPrint';
 import Layout from '@/components/Layout';
 import { getSettings, loadSettings, type StoreSettings } from '@/lib/settings';
+import {
+  findByBarcode,
+  searchProducts,
+  refreshProductCache,
+  applyLocalStockDelta,
+  type CachedProduct,
+} from '@/lib/offline/productCache';
+import { enqueueSale } from '@/lib/offline/saleQueue';
+import { useOfflineStatus } from '@/components/OfflineSync';
+
+const CASH_KEY = 'lacolaria:lastCashSessionId';
+
+async function fetchWithTimeout(url: string, opts: RequestInit = {}, ms = 3000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function isNetworkError(err: unknown): boolean {
+  return (
+    err instanceof TypeError ||
+    (typeof DOMException !== 'undefined' && err instanceof DOMException && err.name === 'AbortError')
+  );
+}
 
 // ----- Helpers -----
 function toNumber(value: unknown): number {
@@ -63,6 +91,17 @@ const METHOD_MAP: Record<PaymentMethodUI, string> = {
   cartao: 'CREDIT_CARD',
 };
 
+function cachedToApi(p: CachedProduct): ApiProduct {
+  return {
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    barcode: p.barcode,
+    salePrice: p.salePrice,
+    stockQuantity: p.stockQuantity,
+  };
+}
+
 // ----- Componente -----
 export default function PDVPage() {
   const [cfg, setCfg] = useState<StoreSettings>(() => getSettings());
@@ -82,7 +121,8 @@ export default function PDVPage() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [online, setOnline] = useState(true);
+  const [savedOffline, setSavedOffline] = useState(false);
+  const { online, pending } = useOfflineStatus();
 
   // Pós-venda
   const [finishedSale, setFinishedSale] = useState<null | {
@@ -105,22 +145,14 @@ export default function PDVPage() {
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
+  // após uma falha de rede, assume offline por 60s (não espera o timeout de novo)
+  const offlineUntilRef = useRef(0);
 
   useEffect(() => {
     barcodeRef.current?.focus();
     loadSettings().then(setCfg);
-  }, []);
-
-  // Reflete a conexão real em vez de afirmar "online" fixo.
-  useEffect(() => {
-    const sync = () => setOnline(navigator.onLine);
-    sync();
-    window.addEventListener('online', sync);
-    window.addEventListener('offline', sync);
-    return () => {
-      window.removeEventListener('online', sync);
-      window.removeEventListener('offline', sync);
-    };
+    // garante o catálogo em cache pro PDV funcionar se a internet cair
+    refreshProductCache().catch(() => {});
   }, []);
 
   // Diálogo pós-venda: foco no botão principal e Esc para fechar.
@@ -192,19 +224,31 @@ export default function PDVPage() {
     setScanStatus('scanning');
     setError(null);
     try {
-      const res = await fetch(`/api/products/barcode/${encodeURIComponent(code)}`);
-      const data = await res.json();
-      if (res.ok && data.success && data.data) {
-        addToCart(data.data);
+      let product: ApiProduct | null = null;
+      let serverAnswered = false;
+      try {
+        const res = await fetchWithTimeout(`/api/products/barcode/${encodeURIComponent(code)}`, {}, 2500);
+        if (res.status >= 500) throw new Error('server');
+        const data = await res.json();
+        serverAnswered = true;
+        if (res.ok && data.success && data.data) product = data.data as ApiProduct;
+      } catch {
+        // servidor fora / sem internet: cai no cache local
+        const c = await findByBarcode(code);
+        product = c ? cachedToApi(c) : null;
+      }
+      if (product) {
+        addToCart(product);
         setScanStatus('added');
         setBarcode('');
       } else {
         setScanStatus('not-found');
-        setError(data?.error?.message || data?.error || 'Produto não encontrado para esse código');
+        setError(
+          serverAnswered
+            ? 'Produto não encontrado para esse código'
+            : 'Produto não encontrado (sem internet, buscando no catálogo em cache)',
+        );
       }
-    } catch {
-      setScanStatus('not-found');
-      setError('Erro ao consultar o produto');
     } finally {
       barcodeRef.current?.focus();
     }
@@ -224,14 +268,23 @@ export default function PDVPage() {
     setSearchError(false);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=8&status=ACTIVE`);
+        const res = await fetchWithTimeout(
+          `/api/products?search=${encodeURIComponent(term)}&limit=8&status=ACTIVE`,
+          {},
+          2500,
+        );
+        if (!res.ok) throw new Error('server');
         const data = await res.json();
         const list: ApiProduct[] = data?.data?.products ?? [];
         setSearchResults(list);
         setHighlight(list.length > 0 ? 0 : -1);
+        setSearchError(false);
       } catch {
-        setSearchResults([]);
-        setSearchError(true);
+        // sem internet: busca no catálogo em cache
+        const cached = await searchProducts(term, 8);
+        setSearchResults(cached.map(cachedToApi));
+        setHighlight(cached.length > 0 ? 0 : -1);
+        setSearchError(cached.length === 0);
       } finally {
         setSearching(false);
       }
@@ -277,25 +330,55 @@ export default function PDVPage() {
   const troco = metodo === 'dinheiro' && recebido > total ? recebido - total : 0;
 
   // ---------- Sessão de caixa ----------
-  async function ensureCashSession(): Promise<string> {
-    const cur = await fetch('/api/cash-session/current').then((r) => r.json());
-    if (cur?.success && cur.data?.id) return cur.data.id;
+  // Online: resolve/abre a sessão e guarda o id. Offline: devolve o último id
+  // conhecido (ou null) — o servidor reaponta pra sessão aberta no flush.
+  async function ensureCashSession(): Promise<string | null> {
+    const remember = (id: string) => {
+      try {
+        localStorage.setItem(CASH_KEY, id);
+      } catch {
+        /* ignora */
+      }
+      return id;
+    };
+    try {
+      const cur = await fetchWithTimeout('/api/cash-session/current', {}, 3000).then((r) => r.json());
+      if (cur?.success && cur.data?.id) return remember(cur.data.id);
 
-    const regsRes = await fetch('/api/cash-session/open').then((r) => r.json());
-    const registers: Array<{ id: string }> = regsRes?.data ?? [];
-    if (registers.length === 0) throw new Error('Nenhum caixa cadastrado no sistema');
+      const regsRes = await fetchWithTimeout('/api/cash-session/open', {}, 3000).then((r) => r.json());
+      const registers: Array<{ id: string }> = regsRes?.data ?? [];
+      if (registers.length === 0) throw new Error('Nenhum caixa cadastrado no sistema');
 
-    const openRes = await fetch('/api/cash-session/open', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cashRegisterId: registers[0].id, openingAmount: 0 }),
-    }).then((r) => r.json());
+      const openRes = await fetchWithTimeout('/api/cash-session/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cashRegisterId: registers[0].id, openingAmount: 0 }),
+      }).then((r) => r.json());
 
-    if (!openRes?.success || !openRes.data?.id) {
-      throw new Error(openRes?.error?.message || openRes?.error || 'Falha ao abrir a sessão de caixa');
+      if (!openRes?.success || !openRes.data?.id) {
+        throw new Error(openRes?.error?.message || openRes?.error || 'Falha ao abrir a sessão de caixa');
+      }
+      return remember(openRes.data.id);
+    } catch (err) {
+      if (isNetworkError(err)) {
+        try {
+          return localStorage.getItem(CASH_KEY);
+        } catch {
+          return null;
+        }
+      }
+      throw err;
     }
-    return openRes.data.id;
   }
+
+  const resetAfterSale = () => {
+    setCarrinho([]);
+    setBarcode('');
+    setValorRecebido('');
+    setMetodo('dinheiro');
+    setParcelas(1);
+    setScanStatus('ready');
+  };
 
   // ---------- Finalizar venda ----------
   const finalizarVenda = async () => {
@@ -309,32 +392,106 @@ export default function PDVPage() {
     }
     setIsProcessing(true);
     setError(null);
-    try {
-      const cashSessionId = await ensureCashSession();
+    setSavedOffline(false);
 
-      // Uma chamada só: cria + conclui a venda. Se a conclusão falhar, o
-      // servidor cancela a venda pendente — nunca fica venda sem baixa de
-      // estoque nem estoque baixado sem venda.
-      const res = await fetch('/api/sales/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cashSessionId,
-          items: carrinho.map((i) => ({ productId: i.id, quantity: i.quantidade, unitPrice: i.preco })),
-          surchargeAmount: juros || undefined,
-          payment: {
-            method: METHOD_MAP[metodo],
-            installments: metodo === 'cartao' ? parcelas : 1,
-            changeAmount: 0,
-          },
-        }),
+    const items = carrinho.map((i) => ({ productId: i.id, quantity: i.quantidade, unitPrice: i.preco }));
+    const receiptItems = carrinho.map((i) => ({
+      name: i.nome,
+      quantity: i.quantidade,
+      unitPrice: i.preco,
+      total: i.preco * i.quantidade,
+    }));
+    const clientId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const occurredAt = new Date().toISOString();
+    const payment = {
+      method: METHOD_MAP[metodo],
+      installments: metodo === 'cartao' ? parcelas : 1,
+      changeAmount: 0,
+    };
+
+    // Salva na fila local e mostra o comprovante (dados 100% locais).
+    const queueIt = async (cashSessionId: string | null) => {
+      await enqueueSale({
+        clientId,
+        occurredAt,
+        payload: { cashSessionId, items, surchargeAmount: juros || undefined, payment },
       });
-      const data = await res.json();
+      await applyLocalStockDelta(items);
+      const now = new Date();
+      const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      setFinishedSale({
+        saleId: clientId.slice(0, 8),
+        saleNumber: `V${ymd}-${clientId.replace(/-/g, '').slice(0, 5).toUpperCase()}`,
+        date: now,
+        items: receiptItems,
+        subtotal,
+        interest: juros,
+        total,
+        method: metodo,
+        installments: metodo === 'cartao' ? parcelas : 1,
+        installmentValue: metodo === 'cartao' && parcelas > 1 ? total / parcelas : 0,
+        received: metodo === 'dinheiro' ? recebido || total : total,
+        change: troco,
+      });
+      setSavedOffline(true);
+      resetAfterSale();
+    };
+
+    try {
+      let cashSessionId: string | null = null;
+      try {
+        cashSessionId = await ensureCashSession();
+      } catch (err) {
+        if (!isNetworkError(err)) throw err;
+      }
+
+      // Já sem internet (ou falhou há pouco): vai direto pra fila, sem esperar.
+      const assumeOffline =
+        (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+        Date.now() < offlineUntilRef.current;
+      if (assumeOffline) {
+        await queueIt(cashSessionId);
+        return;
+      }
+
+      let res: Response;
+      try {
+        res = await fetchWithTimeout(
+          '/api/sales/checkout',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              clientId,
+              occurredAt,
+              cashSessionId,
+              items,
+              surchargeAmount: juros || undefined,
+              payment,
+            }),
+          },
+          12000,
+        );
+      } catch (err) {
+        // timeout / sem rede no meio: guarda na fila e assume offline por 60s
+        if (isNetworkError(err)) {
+          offlineUntilRef.current = Date.now() + 60_000;
+          await queueIt(cashSessionId);
+          return;
+        }
+        throw err;
+      }
+
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         throw new Error(
           data?.error?.message || data?.error || 'Não foi possível finalizar a venda. Tente de novo.',
         );
       }
+      offlineUntilRef.current = 0; // deu certo — voltou a ter internet
       const sale = data.data;
       const serverTotal = toNumber(sale.totalAmount);
 
@@ -342,12 +499,7 @@ export default function PDVPage() {
         saleId: sale.id,
         saleNumber: sale.saleNumber ?? sale.id.slice(0, 8),
         date: new Date(),
-        items: carrinho.map((i) => ({
-          name: i.nome,
-          quantity: i.quantidade,
-          unitPrice: i.preco,
-          total: i.preco * i.quantidade,
-        })),
+        items: receiptItems,
         subtotal: Math.max(0, serverTotal - juros),
         interest: juros,
         total: serverTotal,
@@ -357,12 +509,7 @@ export default function PDVPage() {
         received: metodo === 'dinheiro' ? recebido || serverTotal : serverTotal,
         change: troco,
       });
-      setCarrinho([]);
-      setBarcode('');
-      setValorRecebido('');
-      setMetodo('dinheiro');
-      setParcelas(1);
-      setScanStatus('ready');
+      resetAfterSale();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao finalizar a venda');
     } finally {
@@ -373,6 +520,7 @@ export default function PDVPage() {
   const closePostSale = () => {
     setFinishedSale(null);
     setPrinting(false);
+    setSavedOffline(false);
     barcodeRef.current?.focus();
   };
 
@@ -404,8 +552,14 @@ export default function PDVPage() {
             ) : (
               <WifiOff className="h-4 w-4 shrink-0" />
             )}
-            <span className={online ? 'hidden sm:inline' : ''}>
+            <span className={online && pending === 0 ? 'hidden sm:inline' : ''}>
               {online ? 'Sistema online' : 'Sem conexão'}
+              {pending > 0 && (
+                <span className={online ? 'text-warning-foreground' : ''}>
+                  {' · '}
+                  {pending} venda{pending > 1 ? 's' : ''} na fila
+                </span>
+              )}
             </span>
           </div>
         </div>
@@ -708,7 +862,7 @@ export default function PDVPage() {
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-6 w-6 text-primary" />
                     <h2 id="postsale-title" className="text-xl font-bold text-foreground">
-                      Venda finalizada
+                      {savedOffline ? 'Venda salva (sem internet)' : 'Venda finalizada'}
                     </h2>
                   </div>
                   <button
@@ -720,10 +874,18 @@ export default function PDVPage() {
                     <XCircle className="h-5 w-5" />
                   </button>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Venda <span className="font-medium">{finishedSale.saleNumber}</span> concluída.
-                  O estoque dos produtos já foi atualizado.
-                </p>
+                {savedOffline ? (
+                  <p className="text-sm text-muted-foreground">
+                    Sem internet agora. A venda entrou na <span className="font-medium">fila local</span> e
+                    sobe pro sistema sozinha quando a conexão voltar. O estoque foi ajustado aqui no
+                    balcão. Pode imprimir o comprovante normalmente.
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Venda <span className="font-medium">{finishedSale.saleNumber}</span> concluída.
+                    O estoque dos produtos já foi atualizado.
+                  </p>
+                )}
                 <p className="mt-1 text-sm text-muted-foreground">
                   Total: <span className="font-semibold">{formatCurrency(finishedSale.total)}</span>
                   {finishedSale.change > 0 && <> · Troco: {formatCurrency(finishedSale.change)}</>}

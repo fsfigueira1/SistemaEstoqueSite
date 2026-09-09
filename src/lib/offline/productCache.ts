@@ -2,6 +2,8 @@
 // offline e também para responder mais rápido quando online.
 import { getDB, norm, type CachedProduct } from './db';
 
+export type { CachedProduct } from './db';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toCached(p: any): CachedProduct {
   return {
