@@ -19,7 +19,7 @@
     "electron": "electron .",
     "electron:dev": "electron .",
     "electron:build": "next build && node scripts/prepare-standalone.cjs && electron-builder --win nsis",
-    "electron:publish": "next build && node scripts/prepare-standalone.cjs && electron-builder --win nsis --publish always",
+    "electron:publish": "next build && node scripts/prepare-standalone.cjs && node scripts/publish-electron.mjs",
     "electron:release": "electron-builder --publish=always",
     "electron:pack": "electron-builder --win nsis --dir"
   },
