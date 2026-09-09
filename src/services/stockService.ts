@@ -1,8 +1,5 @@
-import { PrismaClient, Prisma, StockMovementType  } from "../generated/prisma/client"
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3"
-
-
-// Import the shared PrismaClient instance to prevent SQLite_BUSY errors with multiple connections
+import { Prisma, StockMovementType } from "../generated/prisma/client"
+// Instância compartilhada do PrismaClient (Postgres) — evita abrir conexões extras
 import { prisma } from "../lib/prisma"
 
 // Define input types

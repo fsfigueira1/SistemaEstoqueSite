@@ -19,6 +19,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
 const { spawn } = require("node:child_process");
+const { autoUpdater } = require("electron-updater");
 
 app.disableHardwareAcceleration();
 process.env.ELECTRON_RUNNING = "true";
@@ -41,6 +42,8 @@ let tray = null;
 let serverProc = null;
 let serverRestartTimer = null;
 let quitting = false;
+let updateReady = null; // { version } quando um update já foi baixado
+let manualUpdateCheck = false;
 
 // ---------------- configuração (DATABASE_URL etc.) ----------------
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
@@ -234,7 +237,13 @@ async function createWindow() {
 function buildTray() {
   tray = new Tray(trayImage());
   tray.setToolTip("Laçolaria — Gestão & PDV");
-  const menu = Menu.buildFromTemplate([
+  buildTrayMenu();
+  tray.on("click", () => showWindow());
+}
+
+function buildTrayMenu() {
+  if (!tray) return;
+  const items = [
     { label: "Abrir", click: () => showWindow() },
     { label: "Recarregar", click: () => mainWindow && mainWindow.reload() },
     { type: "separator" },
@@ -246,16 +255,124 @@ function buildTray() {
       click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
     },
     { type: "separator" },
-    {
-      label: "Sair",
+  ];
+
+  if (updateReady) {
+    items.push({
+      label: `Reiniciar e instalar a versão ${updateReady.version}`,
       click: () => {
         quitting = true;
-        app.quit();
+        autoUpdater.quitAndInstall(true, true);
       },
+    });
+  } else {
+    items.push({ label: "Verificar atualizações", click: () => checkForUpdates(true) });
+  }
+
+  items.push({ type: "separator" });
+  items.push({ label: `Versão ${app.getVersion()}`, enabled: false });
+  items.push({
+    label: "Sair",
+    click: () => {
+      quitting = true;
+      app.quit();
     },
-  ]);
-  tray.setContextMenu(menu);
-  tray.on("click", () => showWindow());
+  });
+
+  tray.setContextMenu(Menu.buildFromTemplate(items));
+}
+
+// ---------------- atualização automática (GitHub Releases) ----------------
+function checkForUpdates(manual = false) {
+  if (isDev) {
+    if (manual) {
+      dialog.showMessageBox(mainWindow || null, {
+        type: "info",
+        message: "Atualização automática só funciona no app instalado.",
+        buttons: ["OK"],
+      });
+    }
+    return;
+  }
+  manualUpdateCheck = manual;
+  autoUpdater.checkForUpdates().catch((err) => {
+    console.error("[update] falha ao verificar:", err && err.message);
+    if (manual) {
+      dialog.showMessageBox(mainWindow || null, {
+        type: "error",
+        title: "Atualização",
+        message: "Não consegui verificar agora.",
+        detail: String((err && err.message) || err),
+        buttons: ["OK"],
+      });
+    }
+    manualUpdateCheck = false;
+  });
+}
+
+function setupAutoUpdate() {
+  if (isDev) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true; // aplica sozinho no próximo "Sair"
+
+  autoUpdater.on("update-available", (info) => {
+    console.log("[update] versão nova:", info && info.version, "— baixando…");
+    if (manualUpdateCheck) {
+      manualUpdateCheck = false;
+      dialog.showMessageBox(mainWindow || null, {
+        type: "info",
+        title: "Atualização",
+        message: `Versão ${info && info.version} encontrada. Baixando em segundo plano.`,
+        detail: "Você será avisado quando estiver pronta para instalar.",
+        buttons: ["OK"],
+      });
+    }
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    if (manualUpdateCheck) {
+      manualUpdateCheck = false;
+      dialog.showMessageBox(mainWindow || null, {
+        type: "info",
+        title: "Atualização",
+        message: "Você já está na última versão.",
+        buttons: ["OK"],
+      });
+    }
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("[update] erro:", err && err.message);
+    manualUpdateCheck = false;
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    updateReady = { version: info && info.version };
+    buildTrayMenu();
+    if (tray) tray.setToolTip(`Laçolaria — versão ${updateReady.version} pronta (reinicie para aplicar)`);
+    dialog
+      .showMessageBox(mainWindow || null, {
+        type: "info",
+        buttons: ["Reiniciar agora", "Depois"],
+        defaultId: 1,
+        cancelId: 1,
+        title: "Atualização pronta",
+        message: `A versão ${updateReady.version} foi baixada.`,
+        detail:
+          "Ela é aplicada ao reiniciar o Laçolaria. Reinicie agora, ou continue usando — " +
+          "será instalada automaticamente da próxima vez que o app for fechado pela bandeja.",
+      })
+      .then(({ response }) => {
+        if (response === 0) {
+          quitting = true;
+          autoUpdater.quitAndInstall(true, true);
+        }
+      })
+      .catch(() => {});
+  });
+
+  checkForUpdates(false); // ao abrir
+  setInterval(() => checkForUpdates(false), 6 * 60 * 60 * 1000); // e a cada 6h
 }
 
 function showWindow() {
@@ -274,7 +391,8 @@ async function promptDatabaseUrl() {
     title: "Banco de dados",
     message: "Cole a connection string do Postgres (Supabase).",
     detail:
-      "Supabase → Project Settings → Database → Session pooler (porta 5432).\n" +
+      "Supabase → botão Connect → Transaction pooler (porta 6543). " +
+      "Termine a URL com ?pgbouncer=true e não deixe colchetes na senha.\n" +
       (cfg.DATABASE_URL ? "Atual: " + cfg.DATABASE_URL.replace(/:[^:@/]+@/, ":***@") : "Nenhuma configurada."),
   });
   if (response !== 0) return;
@@ -323,6 +441,7 @@ app.whenReady().then(() => {
   powerSaveBlocker.start("prevent-display-sleep");
   buildTray();
   createWindow();
+  setupAutoUpdate();
 });
 
 app.on("activate", () => {

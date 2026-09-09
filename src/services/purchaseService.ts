@@ -1,15 +1,5 @@
-import { PrismaClient, Prisma, ProductStatus  } from "../generated/prisma/client.ts"
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3"
-
-
-// Initialize PrismaClient with SQLite adapter
-// Use test database when in test environment
-const databaseUrl = process.env.NODE_ENV === 'test'
-  ? "file:./test.db"
-  : "file:./dev.db";
-const adapter = new PrismaBetterSqlite3({ url: databaseUrl });
+import { Prisma, ProductStatus } from "../generated/prisma/client.ts"
 import { prisma } from "../lib/prisma"
-// const prisma = new PrismaClient({ adapter }) - REMOVED to use shared instance;
 
 // Define input types
 type CreatePurchaseOrderInput = {

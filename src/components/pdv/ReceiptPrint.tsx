@@ -70,7 +70,18 @@ export function ReceiptPrint({ data, onPrintComplete }: ReceiptPrintProps) {
 
   const handlePrint = () => {
     printingRef.current = true;
-    window.print();
+    try {
+      // window.print() é bloqueante no Chromium/Electron: só retorna quando o
+      // diálogo de impressão fecha.
+      window.print();
+    } catch {
+      // ignora — cai no finally e libera a tela do mesmo jeito
+    } finally {
+      // NÃO depender só do evento 'afterprint': no Electron ele às vezes não
+      // dispara, e aí o modal de pós-venda ficava travado por cima do PDV.
+      printingRef.current = false;
+      onPrintComplete?.();
+    }
   };
 
   const d = new Date(data.date);

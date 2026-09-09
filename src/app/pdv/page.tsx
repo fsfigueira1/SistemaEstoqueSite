@@ -696,16 +696,29 @@ export default function PDVPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="postsale-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closePostSale();
+          }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         >
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
             {!printing ? (
               <>
-                <div className="mb-2 flex items-center gap-2">
-                  <CheckCircle className="h-6 w-6 text-primary" />
-                  <h2 id="postsale-title" className="text-xl font-bold text-foreground">
-                    Venda finalizada
-                  </h2>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-6 w-6 text-primary" />
+                    <h2 id="postsale-title" className="text-xl font-bold text-foreground">
+                      Venda finalizada
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closePostSale}
+                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label="Fechar"
+                  >
+                    <XCircle className="h-5 w-5" />
+                  </button>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Venda <span className="font-medium">{finishedSale.saleNumber}</span> concluída.
