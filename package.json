@@ -96,6 +96,7 @@
         "releaseType": "release"
       }
     ],
+    "artifactName": "lacolaria-setup-${version}.${ext}",
     "asar": true,
     "files": [
       "electron/**",
