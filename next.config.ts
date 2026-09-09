@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   images: { unoptimized: true },
   // servidor auto-contido para empacotar no Electron
   output: "standalone",
+  // o Electron carrega http://localhost:4123 — libera as origens locais no dev
+  allowedDevOrigins: ["localhost", "127.0.0.1"],
   // Prisma + driver pg ficam como require() de verdade (não bundlados),
   // e o cliente gerado é copiado inteiro para o standalone.
   serverExternalPackages: ["@prisma/adapter-pg", "@prisma/client", "pg"],

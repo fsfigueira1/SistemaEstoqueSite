@@ -25,7 +25,10 @@ process.env.ELECTRON_RUNNING = "true";
 
 const isDev = !app.isPackaged;
 const PORT = Number(process.env.PORT) || 4123;
-const BASE_URL = `http://127.0.0.1:${PORT}`;
+// "localhost" (não 127.0.0.1): o next dev trata as duas como origens
+// diferentes e bloquearia o JS/CSS.
+const HOST = "localhost";
+const BASE_URL = `http://${HOST}:${PORT}`;
 
 // ---- instância única ----
 if (!app.requestSingleInstanceLock()) {
@@ -59,7 +62,7 @@ function getEnvForServer() {
     ...process.env,
     NODE_ENV: "production",
     PORT: String(PORT),
-    HOSTNAME: "127.0.0.1",
+    HOSTNAME: HOST,
     DATABASE_URL: cfg.DATABASE_URL || process.env.DATABASE_URL || "",
     OWNER_PASSWORD: cfg.OWNER_PASSWORD || process.env.OWNER_PASSWORD || "owner123",
     EMPLOYEE_PASSWORD: cfg.EMPLOYEE_PASSWORD || process.env.EMPLOYEE_PASSWORD || "emp123",
@@ -121,24 +124,32 @@ function stopServer() {
   }
 }
 
-function waitForServer(timeoutMs = 60000) {
+function waitForServer(timeoutMs = 90000) {
   const started = Date.now();
+  let done = false;
   return new Promise((resolve, reject) => {
+    const finish = (fn, arg) => {
+      if (done) return;
+      done = true;
+      fn(arg);
+    };
     const tick = () => {
+      if (done) return;
       const req = http.get(`${BASE_URL}/senha`, (res) => {
         res.resume();
-        if (res.statusCode && res.statusCode < 500) return resolve();
-        retry();
+        if (res.statusCode && res.statusCode < 500) finish(resolve);
+        else retry();
       });
       req.on("error", retry);
-      req.setTimeout(2500, () => {
+      req.setTimeout(4000, () => {
         req.destroy();
         retry();
       });
     };
     const retry = () => {
-      if (Date.now() - started > timeoutMs) return reject(new Error("servidor não respondeu"));
-      setTimeout(tick, 500);
+      if (done) return;
+      if (Date.now() - started > timeoutMs) return finish(reject, new Error("servidor não respondeu"));
+      setTimeout(tick, 700);
     };
     tick();
   });
@@ -185,13 +196,21 @@ async function createWindow() {
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
 
-  // renderer travou/morreu -> recarrega
-  mainWindow.webContents.on("render-process-gone", () => {
-    if (!quitting) mainWindow.reload();
-  });
-  mainWindow.webContents.on("unresponsive", () => {
-    if (!quitting) mainWindow.reload();
-  });
+  // renderer travou/morreu -> recarrega, com trava anti-loop
+  let reloads = [];
+  const guardedReload = () => {
+    if (quitting) return;
+    const now = Date.now();
+    reloads = reloads.filter((t) => now - t < 30000);
+    if (reloads.length >= 3) {
+      setupErrorPage("A tela reiniciou várias vezes seguidas. Verifique a conexão com o banco e use Recarregar na bandeja.");
+      return;
+    }
+    reloads.push(now);
+    mainWindow.reload();
+  };
+  mainWindow.webContents.on("render-process-gone", guardedReload);
+  mainWindow.webContents.on("unresponsive", guardedReload);
 
   // fechar o X -> esconde na bandeja (não mata o servidor)
   mainWindow.on("close", (e) => {
