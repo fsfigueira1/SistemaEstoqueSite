@@ -108,6 +108,7 @@ export default function EstoquePage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [deleteBlocked, setDeleteBlocked] = useState(false);
+  const [deleteForce, setDeleteForce] = useState(false);
 
   const reload = useCallback(async () => {
     const r = await fetch('/api/products?limit=1000').then((x) => x.json());
@@ -259,11 +260,13 @@ export default function EstoquePage() {
     setDeleteTarget(p);
     setDeleteErr(null);
     setDeleteBlocked(false);
+    setDeleteForce(false);
   };
   const closeDelete = () => {
     setDeleteTarget(null);
     setDeleteErr(null);
     setDeleteBlocked(false);
+    setDeleteForce(false);
     setDeleting(false);
   };
 
@@ -272,7 +275,8 @@ export default function EstoquePage() {
     setDeleting(true);
     setDeleteErr(null);
     try {
-      const res = await fetch(`/api/products/${deleteTarget.id}`, { method: 'DELETE' });
+      const qs = deleteForce ? '?force=1' : '';
+      const res = await fetch(`/api/products/${deleteTarget.id}${qs}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         await reload();
@@ -661,6 +665,22 @@ export default function EstoquePage() {
               definitivo? Esta ação não pode ser desfeita.
             </p>
 
+            <label className="mt-3 flex items-start gap-2 rounded-lg border border-border p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={deleteForce}
+                onChange={(e) => setDeleteForce(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-foreground">
+                Apagar também de vendas e movimentações antigas
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Deixa o histórico menos poluído. Os totais de vendas antigas com este produto
+                  podem ficar desatualizados.
+                </span>
+              </span>
+            </label>
+
             {deleteErr && (
               <div
                 role="alert"
@@ -670,7 +690,7 @@ export default function EstoquePage() {
               </div>
             )}
 
-            <div className="mt-5 flex justify-end gap-3">
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
               <button
                 type="button"
                 onClick={closeDelete}
@@ -679,27 +699,25 @@ export default function EstoquePage() {
               >
                 Cancelar
               </button>
-              {deleteBlocked ? (
+              {deleteBlocked && !deleteForce && (
                 <button
                   type="button"
                   onClick={discontinue}
                   disabled={deleting}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
                 >
-                  {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Descontinuar
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={confirmDelete}
-                  disabled={deleting}
-                  className="inline-flex items-center gap-2 rounded-lg bg-danger px-4 py-2 font-medium text-danger-foreground transition-colors hover:bg-danger/90 disabled:opacity-50"
-                >
-                  {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Excluir de vez
+                  Só descontinuar
                 </button>
               )}
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="inline-flex items-center gap-2 rounded-lg bg-danger px-4 py-2 font-medium text-danger-foreground transition-colors hover:bg-danger/90 disabled:opacity-50"
+              >
+                {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {deleteForce ? 'Excluir com histórico' : 'Excluir de vez'}
+              </button>
             </div>
           </div>
         </div>

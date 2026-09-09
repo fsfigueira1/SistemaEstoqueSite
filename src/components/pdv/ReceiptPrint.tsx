@@ -39,7 +39,15 @@ export interface ReceiptData {
 interface ReceiptPrintProps {
   data: ReceiptData;
   onPrintComplete?: () => void;
+  /** false: não renderiza o botão "Imprimir" (o PDV controla a impressão) */
+  showButton?: boolean;
+  /** true: dispara a impressão sozinho assim que monta */
+  autoPrint?: boolean;
 }
+
+type ElectronReceiptAPI = {
+  printReceipt?: () => Promise<{ ok?: boolean; reason?: string }>;
+};
 
 const METHOD_LABEL: Record<string, string> = {
   dinheiro: 'DINHEIRO',
@@ -49,14 +57,21 @@ const METHOD_LABEL: Record<string, string> = {
 
 /**
  * Comprovante de compra (NÃO fiscal) formatado para impressora térmica
- * Epson TM-T20X — bobina de 80mm, área de impressão ~72mm.
- * Não imprime sozinho: o operador decide pelo botão.
+ * Epson TM-T20X — bobina de 80mm.
+ * No app instalado imprime direto na impressora salva (sem diálogo);
+ * no navegador cai no window.print() normal.
  */
-export function ReceiptPrint({ data, onPrintComplete }: ReceiptPrintProps) {
+export function ReceiptPrint({
+  data,
+  onPrintComplete,
+  showButton = true,
+  autoPrint = false,
+}: ReceiptPrintProps) {
   const [cfg] = React.useState(() => getSettings());
   const storeName = cfg.companyName || 'LAÇOLARIA';
   const storeInfo = cfg.companyTagline;
   const printingRef = React.useRef(false);
+  const autoStarted = React.useRef(false);
 
   React.useEffect(() => {
     const after = () => {
@@ -68,21 +83,35 @@ export function ReceiptPrint({ data, onPrintComplete }: ReceiptPrintProps) {
     return () => window.removeEventListener('afterprint', after);
   }, [onPrintComplete]);
 
-  const handlePrint = () => {
+  const handlePrint = React.useCallback(async () => {
     printingRef.current = true;
     try {
-      // window.print() é bloqueante no Chromium/Electron: só retorna quando o
-      // diálogo de impressão fecha.
-      window.print();
+      const api = (typeof window !== 'undefined'
+        ? (window as unknown as { electronAPI?: ElectronReceiptAPI }).electronAPI
+        : undefined);
+      if (api && typeof api.printReceipt === 'function') {
+        // App instalado: impressão silenciosa na impressora configurada.
+        await api.printReceipt();
+      } else {
+        // Navegador: diálogo padrão. window.print() é bloqueante no Chromium.
+        window.print();
+      }
     } catch {
-      // ignora — cai no finally e libera a tela do mesmo jeito
+      // ignora — o finally libera a tela do mesmo jeito
     } finally {
-      // NÃO depender só do evento 'afterprint': no Electron ele às vezes não
-      // dispara, e aí o modal de pós-venda ficava travado por cima do PDV.
+      // Não depender só do evento 'afterprint' (no Electron às vezes não dispara).
       printingRef.current = false;
       onPrintComplete?.();
     }
-  };
+  }, [onPrintComplete]);
+
+  React.useEffect(() => {
+    if (!autoPrint || autoStarted.current) return;
+    autoStarted.current = true;
+    // dois frames para o layout do comprovante ser aplicado antes de imprimir
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => handlePrint()));
+    return () => cancelAnimationFrame(id);
+  }, [autoPrint, handlePrint]);
 
   const d = new Date(data.date);
   const dateStr = d.toLocaleString('pt-BR', {
@@ -95,9 +124,9 @@ export function ReceiptPrint({ data, onPrintComplete }: ReceiptPrintProps) {
 
   return (
     <div>
+      <div id="receipt-print-area" data-w={cfg.receiptWidth}>
       <div
         className="receipt"
-        id="receipt-print-area"
         style={{ width: cfg.receiptWidth === '58mm' ? '48mm' : '72mm' }}
       >
         <div className="center bold big">{storeName}</div>
@@ -198,10 +227,13 @@ export function ReceiptPrint({ data, onPrintComplete }: ReceiptPrintProps) {
           ))}
         <div className="feed" />
       </div>
+      </div>
 
-      <button type="button" onClick={handlePrint} className="no-print print-btn">
-        Imprimir na Epson TM-T20X
-      </button>
+      {showButton && (
+        <button type="button" onClick={handlePrint} className="no-print print-btn">
+          Imprimir comprovante
+        </button>
+      )}
 
       <style jsx>{`
         .receipt {

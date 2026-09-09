@@ -364,6 +364,33 @@ export class SaleService {
     }
   }
 
+  // Hard delete — apaga a venda e todo o rastro dela (itens, pagamentos,
+  // movimentações de estoque). Use para limpar vendas de teste / poluição.
+  // restock=true devolve as quantidades ao estoque (reverte a venda).
+  static async deleteSale(id: string, opts: { restock?: boolean } = {}) {
+    return prisma.$transaction(async (tx: any) => {
+      const sale = await tx.sale.findUnique({ where: { id }, include: { items: true } })
+      if (!sale) throw new Error('Venda não encontrada')
+
+      if (opts.restock && sale.status === SaleStatus.COMPLETED) {
+        for (const it of sale.items) {
+          await tx.product.update({
+            where: { id: it.productId },
+            data: { stockQuantity: { increment: it.quantity } },
+          })
+        }
+      }
+
+      // movimentações de estoque desta venda (reference = sale.id)
+      await tx.stockMovement.deleteMany({ where: { reference: id } })
+      await tx.salePayment.deleteMany({ where: { saleId: id } })
+      await tx.saleItem.deleteMany({ where: { saleId: id } })
+      await tx.sale.delete({ where: { id } })
+
+      return { deleted: true, restocked: Boolean(opts.restock && sale.status === SaleStatus.COMPLETED) }
+    })
+  }
+
   // Cancel sale (only if PENDING)
   static async cancelSale(id: string) {
     // Use transaction to ensure consistency

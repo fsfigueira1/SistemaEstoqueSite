@@ -249,6 +249,12 @@ function buildTrayMenu() {
     { type: "separator" },
     { label: "Configurar banco de dados…", click: () => promptDatabaseUrl() },
     {
+      label: readConfig().PRINTER_NAME
+        ? `Impressora do comprovante: ${readConfig().PRINTER_NAME}`
+        : "Escolher impressora do comprovante…",
+      click: () => promptReceiptPrinter(),
+    },
+    {
       label: "Iniciar com o Windows",
       type: "checkbox",
       checked: app.getLoginItemSettings().openAtLogin,
@@ -427,6 +433,60 @@ async function promptDatabaseUrl() {
   });
 }
 
+async function promptReceiptPrinter() {
+  let printers = [];
+  try {
+    printers = (await (mainWindow && mainWindow.webContents.getPrintersAsync())) || [];
+  } catch {
+    printers = [];
+  }
+  if (printers.length === 0) {
+    dialog.showMessageBox(mainWindow || null, {
+      type: "warning",
+      title: "Impressora",
+      message: "Nenhuma impressora encontrada no Windows.",
+      detail: "Instale/ligue a Epson TM-T20X e tente de novo.",
+      buttons: ["OK"],
+    });
+    return;
+  }
+
+  const current = readConfig().PRINTER_NAME || "";
+  const win = new BrowserWindow({
+    width: 480,
+    height: 260,
+    parent: mainWindow || undefined,
+    modal: true,
+    autoHideMenuBar: true,
+    webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true },
+  });
+  const options = printers
+    .map(
+      (p) =>
+        `<option value="${p.name.replace(/"/g, "&quot;")}"${p.name === current ? " selected" : ""}>` +
+        `${(p.displayName || p.name).replace(/</g, "&lt;")}${p.isDefault ? " (padrão)" : ""}</option>`,
+    )
+    .join("");
+  const page = `<!doctype html><html><body style="font-family:system-ui;padding:20px">
+    <p style="margin:0 0 8px">Impressora do comprovante (impressão direta, sem diálogo):</p>
+    <select id="p" style="width:100%;padding:8px">${options}</select>
+    <label style="display:block;margin-top:10px;font-size:13px;color:#555">
+      <input type="checkbox" id="none"/> Sempre perguntar (mostrar o diálogo)
+    </label>
+    <div style="margin-top:16px;text-align:right">
+      <button onclick="window.close()">Cancelar</button>
+      <button onclick="save()" style="padding:6px 14px">Salvar</button>
+    </div>
+    <script>
+      function save(){
+        var v = document.getElementById('none').checked ? '' : document.getElementById('p').value;
+        window.electronAPI.setReceiptPrinter(v).then(function(){ window.close(); });
+      }
+    </script>
+  </body></html>`;
+  win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(page));
+}
+
 function relaunchApp() {
   quitting = true;
   stopServer();
@@ -468,3 +528,41 @@ ipcMain.on("toggle-maximize-window", (e) => {
   w.isMaximized() ? w.unmaximize() : w.maximize();
 });
 ipcMain.on("close-window", (e) => BrowserWindow.fromWebContents(e.sender)?.close());
+
+// ---------------- impressão do comprovante ----------------
+ipcMain.handle("list-printers", async () => {
+  if (!mainWindow) return [];
+  try {
+    const list = await mainWindow.webContents.getPrintersAsync();
+    return list.map((p) => ({ name: p.name, displayName: p.displayName, isDefault: p.isDefault }));
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle("get-receipt-printer", () => readConfig().PRINTER_NAME || "");
+
+ipcMain.handle("set-receipt-printer", (_e, name) => {
+  const c = readConfig();
+  c.PRINTER_NAME = String(name || "");
+  writeConfig(c);
+  buildTrayMenu();
+  return c.PRINTER_NAME;
+});
+
+ipcMain.handle("print-receipt", async () => {
+  if (!mainWindow) return { ok: false, reason: "sem janela" };
+  const deviceName = readConfig().PRINTER_NAME || "";
+  return new Promise((resolve) => {
+    mainWindow.webContents.print(
+      {
+        // silencioso só se já escolheram a impressora; senão mostra o diálogo
+        silent: Boolean(deviceName),
+        deviceName: deviceName || undefined,
+        margins: { marginType: "none" },
+        printBackground: false,
+      },
+      (ok, reason) => resolve({ ok, reason }),
+    );
+  });
+});

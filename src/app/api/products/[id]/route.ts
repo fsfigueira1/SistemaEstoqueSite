@@ -84,7 +84,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const result = await ProductService.deleteProduct((await params).id)
+    const force = new URL(request.url).searchParams.get("force") === "1"
+    const result = await ProductService.deleteProduct((await params).id, { force })
     return NextResponse.json({ success: true, data: result })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao excluir produto"

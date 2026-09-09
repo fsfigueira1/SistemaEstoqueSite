@@ -263,31 +263,39 @@ export class ProductService {
     })
   }
 
-  // Hard delete — apaga o produto de vez. Só permitido se NÃO houver histórico
-  // (vendas, movimentações de estoque, itens de compra). Se houver, orienta a
-  // descontinuar em vez de apagar, para não destruir o histórico.
-  static async deleteProduct(id: string) {
+  // Hard delete — apaga o produto de vez. Sem `force`, só é permitido se NÃO
+  // houver histórico (vendas, movimentações, itens de compra) — caso contrário
+  // devolve HAS_HISTORY e a tela oferece "Descontinuar".
+  // Com `force: true`, apaga tudo junto (itens de vendas antigas, movimentações,
+  // itens de compra, histórico de preço) — os totais dessas vendas podem ficar
+  // desatualizados. Use só para limpar produtos de teste.
+  static async deleteProduct(id: string, opts: { force?: boolean } = {}) {
     const existing = await prisma.product.findUnique({ where: { id } })
     if (!existing) {
       throw new Error('Produto não encontrado')
     }
 
-    const [sales, movements, purchases] = await Promise.all([
-      prisma.saleItem.count({ where: { productId: id } }),
-      prisma.stockMovement.count({ where: { productId: id } }),
-      prisma.purchaseOrderItem.count({ where: { productId: id } }),
-    ])
+    if (!opts.force) {
+      const [sales, movements, purchases] = await Promise.all([
+        prisma.saleItem.count({ where: { productId: id } }),
+        prisma.stockMovement.count({ where: { productId: id } }),
+        prisma.purchaseOrderItem.count({ where: { productId: id } }),
+      ])
 
-    if (sales + movements + purchases > 0) {
-      const err = new Error(
-        'Este produto tem histórico de vendas ou movimentações e não pode ser excluído em definitivo. ' +
-          'Mude o status para "Descontinuado" para tirá-lo do catálogo sem apagar o histórico.',
-      )
-      ;(err as Error & { code?: string }).code = 'HAS_HISTORY'
-      throw err
+      if (sales + movements + purchases > 0) {
+        const err = new Error(
+          'Este produto tem histórico de vendas ou movimentações. Marque "apagar também do histórico" ' +
+            'para excluir mesmo assim, ou mude o status para "Descontinuado".',
+        )
+        ;(err as Error & { code?: string }).code = 'HAS_HISTORY'
+        throw err
+      }
     }
 
     await prisma.$transaction([
+      prisma.saleItem.deleteMany({ where: { productId: id } }),
+      prisma.stockMovement.deleteMany({ where: { productId: id } }),
+      prisma.purchaseOrderItem.deleteMany({ where: { productId: id } }),
       prisma.priceHistory.deleteMany({ where: { productId: id } }),
       prisma.product.delete({ where: { id } }),
     ])

@@ -238,9 +238,19 @@
     position: absolute;
     left: 0;
     top: 0;
+    width: 80mm;
     margin: 0;
-    padding: 0;
+    /* A Epson TM-T20X tem uma zona não-imprimível de ~4mm na esquerda.
+       Sem esse recuo, "TOTAL" saía "TAL" e "Pagamento" saía "gamento". */
+    padding: 0 2mm 0 5mm;
+    box-sizing: border-box;
     background: #fff;
+  }
+  #receipt-print-area .receipt {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   @page {
     size: 80mm auto;

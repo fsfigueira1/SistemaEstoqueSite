@@ -2,7 +2,42 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Layout from '@/components/Layout';
-import { Receipt, Loader2, XCircle, Search } from 'lucide-react';
+import { Receipt, Loader2, XCircle, Search, Printer, Trash2 } from 'lucide-react';
+import { ReceiptPrint, type ReceiptData } from '@/components/pdv/ReceiptPrint';
+
+// método do banco -> forma usada no comprovante
+const METHOD_TO_RECEIPT: Record<string, ReceiptData['paymentMethod']> = {
+  CASH: 'dinheiro',
+  PIX: 'pix',
+  CREDIT_CARD: 'cartao',
+  DEBIT_CARD: 'cartao',
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function saleToReceipt(sale: any): ReceiptData {
+  const pay = sale.payments?.[0];
+  const subtotal = Number(sale.subtotal) - Number(sale.discountAmount || 0);
+  const total = Number(sale.totalAmount);
+  return {
+    saleId: sale.saleNumber,
+    date: sale.createdAt,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    items: (sale.items ?? []).map((it: any) => ({
+      name: it.product?.name ?? 'Produto',
+      quantity: it.quantity,
+      unitPrice: Number(it.unitPrice),
+      total: Number(it.totalAmount),
+    })),
+    subtotal,
+    paymentMethod: METHOD_TO_RECEIPT[pay?.method] ?? 'dinheiro',
+    interest: Math.max(0, total - subtotal),
+    total,
+    installments: pay?.installmentCount ?? 1,
+    installmentValue: pay?.installmentCount > 1 ? total / pay.installmentCount : 0,
+    received: Number(sale.paidAmount) || total,
+    change: Number(sale.changeAmount) || 0,
+  };
+}
 
 const brl = (v: unknown) => {
   const n =
@@ -222,6 +257,8 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [askHardDelete, setAskHardDelete] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -264,6 +301,25 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
       const data = await res.json();
       if (!res.ok || !data.success) {
         setErr(data?.error?.message || data?.error || 'Não foi possível estornar');
+        return;
+      }
+      onChanged();
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const hardDelete = async (restock: boolean) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/sales/${id}?hard=1${restock ? '&restock=1' : ''}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setErr(data?.error?.message || data?.error || 'Não foi possível excluir a venda');
         return;
       }
       onChanged();
@@ -347,24 +403,91 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
               </div>
             )}
 
-            {sale.status === 'PENDING' && (
+            <div className="space-y-2 border-t border-border pt-3">
               <button
-                onClick={cancel}
-                disabled={busy}
-                className="w-full rounded-lg border border-danger/40 px-4 py-2 font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+                onClick={() => setPrinting(true)}
+                disabled={busy || printing}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
-                Cancelar venda
+                <Printer className="h-4 w-4" />
+                {printing ? 'Imprimindo…' : 'Reimprimir comprovante'}
               </button>
-            )}
-            {sale.status === 'COMPLETED' && (
-              <button
-                onClick={refund}
-                disabled={busy}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-danger/40 px-4 py-2 font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
-              >
-                {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-                Estornar venda
-              </button>
+
+              {sale.status === 'PENDING' && (
+                <button
+                  onClick={cancel}
+                  disabled={busy}
+                  className="w-full rounded-lg border border-border px-4 py-2 font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  Cancelar venda
+                </button>
+              )}
+              {sale.status === 'COMPLETED' && (
+                <button
+                  onClick={refund}
+                  disabled={busy}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Estornar venda (devolve o estoque)
+                </button>
+              )}
+
+              {!askHardDelete ? (
+                <button
+                  onClick={() => setAskHardDelete(true)}
+                  disabled={busy}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-danger/40 px-4 py-2 font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Excluir venda do histórico
+                </button>
+              ) : (
+                <div className="rounded-lg border border-danger/40 bg-danger/5 p-3">
+                  <p className="text-sm font-medium text-foreground">Apagar esta venda de vez?</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Remove a venda, os itens e os pagamentos. Não dá pra desfazer.
+                  </p>
+                  <div className="mt-3 grid gap-2">
+                    {sale.status === 'COMPLETED' && (
+                      <button
+                        onClick={() => hardDelete(true)}
+                        disabled={busy}
+                        className="flex items-center justify-center gap-2 rounded-lg bg-danger px-3 py-2 text-sm font-medium text-danger-foreground transition-colors hover:bg-danger/90 disabled:opacity-50"
+                      >
+                        {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Apagar e devolver ao estoque
+                      </button>
+                    )}
+                    <button
+                      onClick={() => hardDelete(false)}
+                      disabled={busy}
+                      className="flex items-center justify-center gap-2 rounded-lg border border-danger/50 px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
+                    >
+                      {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Apagar sem mexer no estoque
+                    </button>
+                    <button
+                      onClick={() => setAskHardDelete(false)}
+                      disabled={busy}
+                      className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
+                    >
+                      Voltar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {printing && (
+              <div className="h-0 overflow-hidden">
+                <ReceiptPrint
+                  autoPrint
+                  showButton={false}
+                  data={saleToReceipt(sale)}
+                  onPrintComplete={() => setPrinting(false)}
+                />
+              </div>
             )}
           </div>
         ) : null}

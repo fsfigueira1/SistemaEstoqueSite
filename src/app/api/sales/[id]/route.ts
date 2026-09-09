@@ -47,23 +47,29 @@ export async function PUT(
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
 }
 
-// DELETE /api/sales/[id] - Cancel sale
+// DELETE /api/sales/[id]
+//   ?hard=1            -> apaga a venda de vez (itens, pagamentos, movimentações)
+//   ?hard=1&restock=1  -> e devolve as quantidades ao estoque
+//   (sem ?hard)        -> comportamento antigo: cancela (só venda PENDENTE)
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for sale cancellation
-
-
-    // Note: SaleService.cancelSale only takes the sale ID, not who cancelled it
-    // Following the exact service contract - no invented parameters
-    const result = await SaleService.cancelSale((await params).id)
-
-    // Return standardized success response
-    return NextResponse.json({
-      success: true,
-      data: result
-    })
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
+    const { id } = await params
+    const url = new URL(request.url)
+    if (url.searchParams.get("hard") === "1") {
+      const result = await SaleService.deleteSale(id, {
+        restock: url.searchParams.get("restock") === "1",
+      })
+      return NextResponse.json({ success: true, data: result })
+    }
+    const result = await SaleService.cancelSale(id)
+    return NextResponse.json({ success: true, data: result })
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: { message: error instanceof Error ? error.message : "Erro ao excluir a venda" } },
+      { status: 500 },
+    )
+  }
 }

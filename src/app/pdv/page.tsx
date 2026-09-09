@@ -751,21 +751,21 @@ export default function PDVPage() {
               </>
             ) : (
               <>
-                <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Printer className="h-5 w-5 text-primary" />
                   <h2 id="postsale-title" className="text-lg font-semibold text-foreground">
-                    Comprovante
+                    Imprimindo comprovante…
                   </h2>
-                  <button
-                    type="button"
-                    onClick={closePostSale}
-                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    aria-label="Fechar"
-                  >
-                    <XCircle className="h-5 w-5" />
-                  </button>
                 </div>
-                <div className="max-h-[60vh] overflow-y-auto rounded border border-border bg-muted p-3">
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Se não sair nada, escolha a impressora na bandeja do Windows →
+                  “Escolher impressora do comprovante…”.
+                </p>
+                {/* markup do comprovante para o CSS de impressão; some sozinho ao fechar */}
+                <div className="h-0 overflow-hidden">
                   <ReceiptPrint
+                    autoPrint
+                    showButton={false}
                     data={{
                       saleId: finishedSale.saleNumber,
                       date: finishedSale.date,
@@ -785,7 +785,7 @@ export default function PDVPage() {
                 <button
                   type="button"
                   onClick={closePostSale}
-                  className="mt-3 w-full rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                  className="mt-4 w-full rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                 >
                   Fechar
                 </button>

@@ -30,6 +30,12 @@ contextBridge.exposeInMainWorld(
 
     // Configuração do banco (janela de setup do Electron)
     setDatabaseUrl: (url) => ipcRenderer.send('set-database-url', url),
+
+    // Impressão do comprovante direto na impressora salva (sem diálogo)
+    printReceipt: () => ipcRenderer.invoke('print-receipt'),
+    listPrinters: () => ipcRenderer.invoke('list-printers'),
+    getReceiptPrinter: () => ipcRenderer.invoke('get-receipt-printer'),
+    setReceiptPrinter: (name) => ipcRenderer.invoke('set-receipt-printer', name),
   }
 );
 
