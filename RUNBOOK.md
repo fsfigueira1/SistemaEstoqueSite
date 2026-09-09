@@ -16,18 +16,19 @@ outros continuam.
 ## 1. Preparar o banco no Supabase (uma vez só)
 
 Você precisa da connection string. No Supabase:
-**Project Settings → Database → Connection string → "Session pooler"** (porta 5432).
-Fica assim:
+**Project Settings → Database → Connection string → "Transaction pooler"** (porta 6543).
+Ela multiplexa as conexões — no plano free o "Session pooler" (5432) só tem 15 e
+o próprio Supabase já usa boa parte. Fica assim:
 
 ```
-postgres://postgres.<ref>:<senha>@aws-0-<regiao>.pooler.supabase.com:5432/postgres
+postgresql://postgres.<ref>:<senha>@aws-0-<regiao>.pooler.supabase.com:6543/postgres?pgbouncer=true
 ```
 
 Num computador com o projeto (o de desenvolvimento):
 
 ```bash
 # põe a URL no .env
-#   DATABASE_URL="postgres://postgres.<ref>:...:5432/postgres"
+#   DATABASE_URL="postgresql://postgres.<ref>:<senha>@...pooler.supabase.com:6543/postgres?pgbouncer=true"
 
 npm run db:migrate        # cria as tabelas no Supabase
 npm run seed              # usuário de sistema, caixa e linha de config
