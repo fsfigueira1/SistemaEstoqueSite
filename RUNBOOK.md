@@ -99,6 +99,7 @@ bobina (58/80 mm) em Configurações.
 | Novo instalador após mudar o código | `npm run electron:build` e reinstalar |
 | Backup | Supabase faz automático; ou `pg_dump` da connection string |
 | Ver/editar dados | Supabase → Table editor, ou `npx prisma studio` |
+| Erro "max clients reached / EMAXCONNSESSION" | Supabase → Database → Connection Pooling → aumente o **Pool Size**; ou baixe `DB_POOL_MAX` (env) pra 1 em cada PC |
 
 ## Observações
 
