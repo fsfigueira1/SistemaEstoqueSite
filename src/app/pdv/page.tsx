@@ -12,6 +12,7 @@ import {
   Loader2,
   Printer,
   Trash2,
+  WifiOff,
 } from 'lucide-react';
 import { ReceiptPrint } from '@/components/pdv/ReceiptPrint';
 import Layout from '@/components/Layout';
@@ -72,6 +73,7 @@ export default function PDVPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<ApiProduct[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const [highlight, setHighlight] = useState(-1);
 
   const [metodo, setMetodo] = useState<PaymentMethodUI>('dinheiro');
@@ -80,6 +82,7 @@ export default function PDVPage() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [online, setOnline] = useState(true);
 
   // Pós-venda
   const [finishedSale, setFinishedSale] = useState<null | {
@@ -101,11 +104,39 @@ export default function PDVPage() {
   const barcodeRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     barcodeRef.current?.focus();
     loadSettings().then(setCfg);
   }, []);
+
+  // Reflete a conexão real em vez de afirmar "online" fixo.
+  useEffect(() => {
+    const sync = () => setOnline(navigator.onLine);
+    sync();
+    window.addEventListener('online', sync);
+    window.addEventListener('offline', sync);
+    return () => {
+      window.removeEventListener('online', sync);
+      window.removeEventListener('offline', sync);
+    };
+  }, []);
+
+  // Diálogo pós-venda: foco no botão principal e Esc para fechar.
+  useEffect(() => {
+    if (!finishedSale) return;
+    confirmBtnRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setFinishedSale(null);
+        setPrinting(false);
+        barcodeRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [finishedSale]);
 
   // ---------- Carrinho ----------
   const addToCart = useCallback((p: ApiProduct) => {
@@ -186,9 +217,11 @@ export default function PDVPage() {
     if (term.length < 2) {
       setSearchResults([]);
       setHighlight(-1);
+      setSearchError(false);
       return;
     }
     setSearching(true);
+    setSearchError(false);
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=8&status=ACTIVE`);
@@ -198,6 +231,7 @@ export default function PDVPage() {
         setHighlight(list.length > 0 ? 0 : -1);
       } catch {
         setSearchResults([]);
+        setSearchError(true);
       } finally {
         setSearching(false);
       }
@@ -351,23 +385,36 @@ export default function PDVPage() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-background p-6">
+      <div className="p-6">
         <div className="mb-6 flex items-center justify-between gap-3">
           <div>
             <h1 className="font-heading text-2xl font-bold text-foreground">Ponto de Venda</h1>
             <span className="mt-1.5 block h-1 w-14 rounded-full bg-primary" />
           </div>
-          <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
+          <div
+            className={`flex shrink-0 items-center gap-2 text-sm ${
+              online ? 'text-muted-foreground' : 'font-medium text-danger'
+            }`}
+          >
+            {online ? (
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
+              </span>
+            ) : (
+              <WifiOff className="h-4 w-4 shrink-0" />
+            )}
+            <span className={online ? 'hidden sm:inline' : ''}>
+              {online ? 'Sistema online' : 'Sem conexão'}
             </span>
-            <span className="hidden sm:inline">Sistema online</span>
           </div>
         </div>
 
         {error && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+          <div
+            role="alert"
+            className="mb-4 flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+          >
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -377,10 +424,10 @@ export default function PDVPage() {
           {/* Coluna esquerda */}
           <div className="space-y-6 lg:col-span-2">
             {/* Leitor */}
-            <section className="rounded-xl border border-border bg-card shadow-sm p-6 shadow-sm">
+            <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
                 <Barcode className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-bold text-foreground">Leitor de Código de Barras</h2>
+                <h2 className="text-lg font-semibold text-foreground">Leitor de código de barras</h2>
               </div>
               <div className="relative">
                 <Barcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -404,15 +451,15 @@ export default function PDVPage() {
                 />
               </div>
               <div className="mt-3">
-                <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusPill[0]}`}>{statusPill[1]}</span>
+                <span className={`pill ${statusPill[0]}`}>{statusPill[1]}</span>
               </div>
             </section>
 
             {/* Busca */}
-            <section className="rounded-xl border border-border bg-card shadow-sm p-6 shadow-sm">
+            <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
                 <Search className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-bold text-foreground">Buscar Produto por Nome</h2>
+                <h2 className="text-lg font-semibold text-foreground">Buscar produto por nome</h2>
               </div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -430,7 +477,13 @@ export default function PDVPage() {
                 )}
               </div>
 
-              {searchTerm.trim().length >= 2 && !searching && searchResults.length === 0 && (
+              {searchTerm.trim().length >= 2 && !searching && searchError && (
+                <p className="mt-3 text-sm text-danger">
+                  Não foi possível buscar agora. Verifique a conexão e tente de novo.
+                </p>
+              )}
+
+              {searchTerm.trim().length >= 2 && !searching && !searchError && searchResults.length === 0 && (
                 <p className="mt-3 text-sm text-muted-foreground">Nenhum produto encontrado.</p>
               )}
 
@@ -453,8 +506,8 @@ export default function PDVPage() {
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="font-semibold text-foreground">{formatCurrency(p.salePrice)}</p>
-                        <p className="text-xs text-muted-foreground">estoque {toNumber(p.stockQuantity)}</p>
+                        <p className="font-semibold tabular-nums text-foreground">{formatCurrency(p.salePrice)}</p>
+                        <p className="text-xs tabular-nums text-muted-foreground">estoque {toNumber(p.stockQuantity)}</p>
                       </div>
                     </li>
                   ))}
@@ -464,19 +517,19 @@ export default function PDVPage() {
           </div>
 
           {/* Coluna direita */}
-          <div className="space-y-6">
+          <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
             {/* Carrinho */}
-            <section className="rounded-xl border border-border bg-card shadow-sm p-6 shadow-sm">
+            <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-bold text-foreground">Carrinho ({carrinho.length})</h2>
+                <h2 className="text-lg font-semibold text-foreground">Carrinho ({carrinho.length})</h2>
               </div>
 
               {carrinho.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border py-10 text-center">
-                  <ShoppingCart className="mx-auto mb-2 h-7 w-7 text-muted-foreground/50" />
+                  <ShoppingCart className="mx-auto mb-2 h-7 w-7 text-muted-foreground/60" />
                   <p className="text-sm font-medium text-muted-foreground">Carrinho vazio</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground/70">
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     Leia um código ou busque um produto
                   </p>
                 </div>
@@ -490,9 +543,10 @@ export default function PDVPage() {
                           <p className="text-xs text-muted-foreground">{i.codigo}</p>
                         </div>
                         <button
+                          type="button"
                           onClick={() => removeItem(i.id)}
-                          className="rounded p-1 text-danger hover:bg-danger/10"
-                          aria-label="Remover"
+                          className="rounded-md p-1 text-danger transition-colors hover:bg-danger/10"
+                          aria-label={`Remover ${i.nome} do carrinho`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -500,21 +554,25 @@ export default function PDVPage() {
                       <div className="mt-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <button
+                            type="button"
                             onClick={() => setQty(i.id, -1)}
-                            className="h-7 w-7 rounded bg-muted text-foreground/90 hover:bg-muted"
+                            aria-label={`Diminuir a quantidade de ${i.nome}`}
+                            className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-muted text-base leading-none text-foreground transition-colors hover:bg-border"
                           >
                             −
                           </button>
-                          <span className="w-8 text-center text-sm font-medium">{i.quantidade}</span>
+                          <span className="w-8 text-center text-sm font-medium tabular-nums">{i.quantidade}</span>
                           <button
+                            type="button"
                             onClick={() => setQty(i.id, 1)}
                             disabled={i.quantidade >= i.estoque}
-                            className="h-7 w-7 rounded bg-muted text-foreground/90 hover:bg-muted disabled:opacity-40"
+                            aria-label={`Aumentar a quantidade de ${i.nome}`}
+                            className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-muted text-base leading-none text-foreground transition-colors hover:bg-border disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-muted"
                           >
                             +
                           </button>
                         </div>
-                        <span className="text-sm font-semibold text-foreground">
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
                           {formatCurrency(i.preco * i.quantidade)}
                         </span>
                       </div>
@@ -525,12 +583,12 @@ export default function PDVPage() {
             </section>
 
             {/* Pagamento */}
-            <section className="rounded-xl border border-border bg-card shadow-sm p-6 shadow-sm">
+            <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
                 <CreditCard className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-bold text-foreground">Pagamento</h2>
+                <h2 className="text-lg font-semibold text-foreground">Pagamento</h2>
               </div>
-              <label className="mb-1 block text-sm font-medium text-foreground/90">Forma de pagamento</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Forma de pagamento</label>
               <select
                 value={metodo}
                 onChange={(e) => {
@@ -548,7 +606,7 @@ export default function PDVPage() {
 
               {metodo === 'cartao' && (
                 <div className="mt-3">
-                  <label className="mb-1 block text-sm font-medium text-foreground/90">Parcelas</label>
+                  <label className="mb-1 block text-sm font-medium text-foreground">Parcelas</label>
                   <select
                     value={parcelas}
                     onChange={(e) => setParcelas(parseInt(e.target.value, 10) || 1)}
@@ -565,7 +623,7 @@ export default function PDVPage() {
 
               {metodo === 'dinheiro' && (
                 <div className="mt-3">
-                  <label className="mb-1 block text-sm font-medium text-foreground/90">Valor recebido (opcional)</label>
+                  <label className="mb-1 block text-sm font-medium text-foreground">Valor recebido (opcional)</label>
                   <input
                     type="number"
                     min="0"
@@ -578,7 +636,7 @@ export default function PDVPage() {
                 </div>
               )}
 
-              <div className="mt-4 rounded-xl border-2 border-primary/30 bg-accent-soft/50 p-4">
+              <div className="mt-4 rounded-xl border-2 border-primary/25 bg-accent-soft/50 p-4">
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Subtotal</span>
@@ -613,9 +671,10 @@ export default function PDVPage() {
               </div>
 
               <button
+                type="button"
                 onClick={finalizarVenda}
                 disabled={isProcessing || carrinho.length === 0}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-heading text-base font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-heading text-base font-bold text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
               >
                 {isProcessing ? (
                   <>
@@ -633,13 +692,20 @@ export default function PDVPage() {
 
       {/* Pós-venda: imprimir comprovante ou não */}
       {finishedSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="postsale-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
             {!printing ? (
               <>
                 <div className="mb-2 flex items-center gap-2">
                   <CheckCircle className="h-6 w-6 text-primary" />
-                  <h2 className="text-xl font-bold text-foreground">Venda finalizada</h2>
+                  <h2 id="postsale-title" className="text-xl font-bold text-foreground">
+                    Venda finalizada
+                  </h2>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Venda <span className="font-medium">{finishedSale.saleNumber}</span> concluída.
@@ -653,15 +719,18 @@ export default function PDVPage() {
                 <p className="mt-4 text-sm font-medium text-foreground">Imprimir comprovante de compra?</p>
                 <div className="mt-3 flex gap-3">
                   <button
+                    ref={confirmBtnRef}
+                    type="button"
                     onClick={() => setPrinting(true)}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                   >
                     <Printer className="h-4 w-4" />
                     Imprimir
                   </button>
                   <button
+                    type="button"
                     onClick={closePostSale}
-                    className="flex-1 rounded-lg border border-border px-4 py-2.5 font-medium text-foreground/90 hover:bg-muted"
+                    className="flex-1 rounded-lg border border-border px-4 py-2.5 font-medium text-foreground transition-colors hover:bg-muted"
                   >
                     Concluir sem imprimir
                   </button>
@@ -670,9 +739,16 @@ export default function PDVPage() {
             ) : (
               <>
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-foreground">Comprovante</h2>
-                  <button onClick={closePostSale} className="rounded p-1 hover:bg-muted" aria-label="Fechar">
-                    <XCircle className="h-5 w-5 text-muted-foreground" />
+                  <h2 id="postsale-title" className="text-lg font-semibold text-foreground">
+                    Comprovante
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={closePostSale}
+                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label="Fechar"
+                  >
+                    <XCircle className="h-5 w-5" />
                   </button>
                 </div>
                 <div className="max-h-[60vh] overflow-y-auto rounded border border-border bg-muted p-3">
@@ -694,8 +770,9 @@ export default function PDVPage() {
                   />
                 </div>
                 <button
+                  type="button"
                   onClick={closePostSale}
-                  className="mt-3 w-full rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground/90 hover:bg-muted"
+                  className="mt-3 w-full rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                 >
                   Fechar
                 </button>
