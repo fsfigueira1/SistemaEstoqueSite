@@ -4,6 +4,14 @@ Objetivo: **o balcão não para sem internet.** Cache local de produtos/preços 
 fila local de vendas que sobe pro Supabase sozinha quando a conexão volta.
 Defasagem de estoque de alguns minutos é aceitável.
 
+## Arquitetura real (importante)
+
+**1 PC de venda** (o balcão). Os outros 2 só gerenciam/olham (cadastro, preços,
+relatórios). Ou seja: **só uma máquina escreve venda e mexe em estoque por
+venda.** Não há duas caixas concorrentes → sem conflito de venda entre
+máquinas, sem resolução de conflito, sem risco de "os dois venderam a última
+unidade". A fila é de um escritor só, flush em ordem.
+
 ## Escopo
 
 **Fica offline:** só o caminho de venda do PDV (`/pdv`) — busca por código/nome,
@@ -26,9 +34,9 @@ que já funciona.
 | Cache de produtos | Lista `ACTIVE` inteira baixada quando online, guardada em IndexedDB. Busca por código/nome resolve no cache (offline e também mais rápido online). |
 | Fila de vendas | IndexedDB. Cada venda tem `clientId` (UUID gerado no navegador) + carimbo de tempo. |
 | Anti-duplicata | Coluna nova `Sale.clientId @unique`. No flush, se já existe venda com aquele `clientId`, o servidor devolve a existente (200) em vez de duplicar. |
-| Estoque offline | Decrementa no cache local após a venda (impede revender o mesmo item na mesma sessão offline). O servidor faz o decremento real no flush. |
-| Conflito de estoque | 2 PCs vendem a última unidade offline → no 2º flush o estoque fica negativo. Aceito: registra a venda, marca aviso numa lista "problemas de sincronização". |
-| Sessão de caixa | Guarda o id da sessão aberta quando online. Venda offline usa esse id. No flush, se a sessão fechou, o servidor reaponta pra sessão aberta atual (ou abre uma). |
+| Estoque offline | Decrementa no cache local após a venda (impede revender o mesmo item na mesma sessão offline e mantém a validação do carrinho). O servidor faz o decremento real no flush. |
+| Conflito de estoque | Como só 1 PC vende, o único caso é um gerente ter mexido no estoque de um produto enquanto o balcão estava offline → o flush pode passar o estoque server a negativo. Raro. Aceito: registra a venda e loga um aviso. Não bloqueia. |
+| Sessão de caixa | Guarda o id da sessão aberta quando online. Venda offline usa esse id. No flush, se o próprio operador fechou o caixa antes de a fila subir, o servidor reaponta pra sessão aberta atual (ou abre uma). |
 | `createdAt` da venda | Usa o carimbo de tempo do cliente (`occurredAt` no payload), não a hora do flush — pros relatórios ficarem certos. |
 
 ## Mudança no banco (Supabase)
@@ -120,9 +128,10 @@ model Sale {
 3. **Fiar no PDV** (busca via cache, `finalizarVenda` com fallback, estados de UI,
    badge de pendentes). ~1 sessão.
 4. **Teste + RUNBOOK + build 0.1.5** (Playwright: online→cache, derruba rede→venda
-   na fila + comprovante, volta→flush; idempotência; 2 PCs oversell). ~0,5 sessão.
+   na fila + comprovante, volta→flush; idempotência: mesmo `clientId` 2x = 1 venda).
+   ~0,5 sessão.
 
-≈ 3 sessões focadas.
+≈ 2,5–3 sessões focadas.
 
 ## Ordem de deploy do 0.1.5
 
