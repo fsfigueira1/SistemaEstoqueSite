@@ -263,6 +263,37 @@ export class ProductService {
     })
   }
 
+  // Hard delete — apaga o produto de vez. Só permitido se NÃO houver histórico
+  // (vendas, movimentações de estoque, itens de compra). Se houver, orienta a
+  // descontinuar em vez de apagar, para não destruir o histórico.
+  static async deleteProduct(id: string) {
+    const existing = await prisma.product.findUnique({ where: { id } })
+    if (!existing) {
+      throw new Error('Produto não encontrado')
+    }
+
+    const [sales, movements, purchases] = await Promise.all([
+      prisma.saleItem.count({ where: { productId: id } }),
+      prisma.stockMovement.count({ where: { productId: id } }),
+      prisma.purchaseOrderItem.count({ where: { productId: id } }),
+    ])
+
+    if (sales + movements + purchases > 0) {
+      const err = new Error(
+        'Este produto tem histórico de vendas ou movimentações e não pode ser excluído em definitivo. ' +
+          'Mude o status para "Descontinuado" para tirá-lo do catálogo sem apagar o histórico.',
+      )
+      ;(err as Error & { code?: string }).code = 'HAS_HISTORY'
+      throw err
+    }
+
+    await prisma.$transaction([
+      prisma.priceHistory.deleteMany({ where: { productId: id } }),
+      prisma.product.delete({ where: { id } }),
+    ])
+    return { deleted: true }
+  }
+
   // Activate product (set to ACTIVE)
   static async activateProduct(id: string) {
     // Check if product exists

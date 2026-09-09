@@ -77,19 +77,22 @@ export async function PUT(
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
 }
 
-// DELETE /api/products/[id] - Delete product (deactivate)
+// DELETE /api/products/[id] - Exclui o produto de vez (hard delete).
+// Se o produto tiver histórico, retorna 409 e o cliente oferece "Descontinuar".
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authentication - Require ADMIN role for product deletion
-
-
-    await ProductService.deactivateProduct((await params).id)
-    return NextResponse.json({
-      success: true,
-      data: { deactivated: true }
-    })
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
+    const result = await ProductService.deleteProduct((await params).id)
+    return NextResponse.json({ success: true, data: result })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao excluir produto"
+    const code = (error as { code?: string })?.code
+    const status = code === "HAS_HISTORY" ? 409 : 500
+    return NextResponse.json(
+      { success: false, error: { message, code: code ?? "DELETE_FAILED" } },
+      { status }
+    )
+  }
 }

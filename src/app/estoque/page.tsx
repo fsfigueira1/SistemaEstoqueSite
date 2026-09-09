@@ -1,602 +1,736 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
 import { ProductStatus } from '@/generated/prisma/enums';
-import type { ProductFormData } from '@/app/estoque/form/types';
 import Layout from '@/components/Layout';
+import {
+  Plus,
+  Barcode,
+  Loader2,
+  XCircle,
+  AlertTriangle,
+  Trash2,
+  Pencil,
+} from 'lucide-react';
 
-type Category = {
-  id: string;
-  nome: string;
-};
-
-type Product = {
-  id: string;
-  sku?: string | null;
-  codigo?: string | null;
-  name?: string | null;
-  nome?: string | null;
-  categoryId?: string | null;
-  categoriaId?: string | null;
-  salePrice?: number | string | null;
-  preco?: number | string | null;
-  costPrice?: number | string | null;
-  custo?: number | string | null;
-  stockQuantity?: number | null;
-  estoque?: number | null;
-  minStockLevel?: number | null;
-  estoqueMinimo?: number | null;
-  status?: ProductStatus | null;
-};
-
-
-// Helper to safely convert price values (number, string, or Prisma Decimal) to number
+// ---------- helpers ----------
 function toNumber(value: unknown): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-
   if (typeof value === 'string') {
-    const normalized = value.replace(',', '.');
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : 0;
+    const n = Number(value.replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
   }
-
   if (value && typeof value === 'object' && 'toNumber' in value) {
-    const result = (value as { toNumber: () => number }).toNumber();
-    return Number.isFinite(result) ? result : 0;
+    const n = (value as { toNumber: () => number }).toNumber();
+    return Number.isFinite(n) ? n : 0;
   }
-
   return 0;
 }
 
-// Helper to format currency in Brazilian format
-function formatCurrency(value: unknown): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(toNumber(value));
+const brl = (v: unknown) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(toNumber(v));
+
+// Leitor USB emite teclas cruas (NumLock, Shift, etc.). Fica só com o que é
+// código de barras / SKU de verdade: dígitos, letras, hífen e ponto.
+const cleanCode = (s: string) => s.replace(/[^A-Za-z0-9.-]/g, '').trim();
+
+// ---------- types ----------
+type Category = { id: string; name: string };
+
+interface Product {
+  id: string;
+  name: string;
+  sku: string;
+  barcode: string | null;
+  categoryId: string;
+  category?: { id: string; name: string } | null;
+  salePrice: number | string;
+  costPrice: number | string;
+  stockQuantity: number;
+  minStockLevel: number | null;
+  status: ProductStatus;
 }
 
+type FormState = {
+  codigoBarras: string;
+  sku: string;
+  nome: string;
+  categoriaId: string;
+  preco: string;
+  custo: string;
+  estoque: string;
+  estoqueMinimo: string;
+  status: ProductStatus;
+};
+
+const EMPTY_FORM: FormState = {
+  codigoBarras: '',
+  sku: '',
+  nome: '',
+  categoriaId: '',
+  preco: '',
+  custo: '',
+  estoque: '0',
+  estoqueMinimo: '5',
+  status: ProductStatus.ACTIVE,
+};
+
+const STATUS_LABEL: Record<ProductStatus, string> = {
+  ACTIVE: 'Ativo',
+  INACTIVE: 'Inativo',
+  DISCONTINUED: 'Descontinuado',
+};
+
+function inputCls(error?: string) {
+  return `w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-ring/40 ${
+    error ? 'border-danger focus:border-danger' : 'border-border focus:border-ring'
+  } disabled:bg-muted disabled:text-muted-foreground`;
+}
+
+// ---------- page ----------
 export default function EstoquePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [barcode, setBarcode] = useState('');
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [mode, setMode] = useState<'add' | 'edit'>('add');
-  const [formData, setFormData] = useState<ProductFormData>({
-    codigo: '',
-    nome: '',
-    categoriaId: null,
-    preco: 0,
-    custo: 0,
-    estoque: 0,
-    estoqueMinimo: 5,
-    status: ProductStatus.ACTIVE
-  });
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [scannerStatus, setScannerStatus] = useState<'ready' | 'scanning' | 'added' | 'not-found'>('ready');
   const [loading, setLoading] = useState(true);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load products and categories on mount
+  const [barcode, setBarcode] = useState('');
+  const [scanStatus, setScanStatus] = useState<'ready' | 'scanning' | 'found' | 'not-found'>('ready');
+  const scanRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'base', string>>>({});
+  const [saving, setSaving] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+  const [deleteBlocked, setDeleteBlocked] = useState(false);
+
+  const reload = useCallback(async () => {
+    const r = await fetch('/api/products?limit=1000').then((x) => x.json());
+    if (r.success) setProducts(r.data?.products ?? []);
+  }, []);
+
   useEffect(() => {
-    const loadData = async () => {
+    (async () => {
       try {
-        setLoading(true);
-
-        const [productsRes, categoriesRes] = await Promise.all([
-          fetch('/api/products'),
-          fetch('/api/categories')
+        const [p, c] = await Promise.all([
+          fetch('/api/products?limit=1000').then((r) => r.json()),
+          fetch('/api/categories?limit=200').then((r) => r.json()),
         ]);
-
-        const productsData = await productsRes.json();
-        const categoriesData = await categoriesRes.json();
-
-        if (productsData.success) {
-          setProducts(productsData.data.products || []);
-        }
-        if (categoriesData.success) {
-          setCategories(categoriesData.data.categories || []);
-        }
-      } catch (error) {
-        console.error('Error loading products or categories:', error);
+        if (p.success) setProducts(p.data?.products ?? []);
+        if (c.success) setCategories(c.data?.categories ?? c.data ?? []);
       } finally {
         setLoading(false);
       }
-    };
-
-    loadData();
+    })();
   }, []);
 
-  // Focus input on mount and after modal closes
+  const anyModal = modalOpen || !!deleteTarget;
+
   useEffect(() => {
-    inputRef.current?.focus();
-  }, [modalOpen]);
+    if (!anyModal) scanRef.current?.focus();
+  }, [anyModal]);
 
-  // Handle barcode input from USB scanner
-  useEffect(() => {
-    if (barcode && !modalOpen) {
-      // Clear existing timeout
-      if (timeoutRef.current !== null) {
-        clearTimeout(timeoutRef.current);
-      }
+  // ---------- modal open ----------
+  const openNew = useCallback((code?: string) => {
+    setEditingId(null);
+    setForm({ ...EMPTY_FORM, codigoBarras: code ? cleanCode(code) : '' });
+    setErrors({});
+    setModalOpen(true);
+  }, []);
 
-      // Set new timeout to detect end of scanning
-      timeoutRef.current = setTimeout(async () => {
-        // Process the barcode when scanner finishes sending data
-        try {
-          const response = await fetch(`/api/products/barcode/${barcode}`);
-          const result = await response.json();
+  const openEdit = useCallback((p: Product) => {
+    setEditingId(p.id);
+    setForm({
+      codigoBarras: p.barcode ?? '',
+      sku: p.sku ?? '',
+      nome: p.name ?? '',
+      categoriaId: p.categoryId ?? '',
+      preco: String(toNumber(p.salePrice)),
+      custo: String(toNumber(p.costPrice)),
+      estoque: String(toNumber(p.stockQuantity)),
+      estoqueMinimo: String(toNumber(p.minStockLevel ?? 5)),
+      status: p.status ?? ProductStatus.ACTIVE,
+    });
+    setErrors({});
+    setModalOpen(true);
+  }, []);
 
-          if (result.success && result.data) {
-            const produto = result.data;
-            setSelectedProduct(produto);
-            setMode('edit');
-            setFormData({
-              codigo: produto.sku || produto.codigo || '',
-              nome: produto.name || produto.nome || '',
-              categoriaId: produto.categoryId || produto.categoriaId || null,
-              preco: toNumber(produto.salePrice || produto.preco || 0),
-              custo: toNumber(produto.costPrice || produto.custo || 0),
-              estoque: toNumber(produto.stockQuantity || produto.estoque || 0),
-              estoqueMinimo: toNumber(produto.minStockLevel || produto.estoqueMinimo || 5),
-              status: produto.status || ProductStatus.ACTIVE
-            });
-            setModalOpen(true);
-            setScannerStatus('added');
-          } else {
-            // If product not found, prepare to add new one
-            setSelectedProduct(null);
-            setMode('add');
-            setFormData({
-              codigo: barcode,
-              nome: '',
-              categoriaId: null,
-              preco: 0,
-              custo: 0,
-              estoque: 0,
-              estoqueMinimo: 5,
-              status: ProductStatus.ACTIVE
-            });
-            setModalOpen(true);
-            setScannerStatus('not-found');
-          }
-        } catch (err) {
-          setScannerStatus('not-found');
-          console.error('Barcode processing error:', err);
-        } finally {
-          setBarcode('');
-          // Auto-reset scanner status after a brief moment
-          setTimeout(() => {
-            if (scannerStatus !== 'ready') {
-              setScannerStatus('ready');
-            }
-          }, 1500);
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setErrors({});
+    setScanStatus('ready');
+  };
+
+  const set = (k: keyof FormState, v: string) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setErrors((e) => ({ ...e, [k]: undefined, base: undefined }));
+  };
+
+  // ---------- scanner ----------
+  const runScan = useCallback(
+    async (raw: string) => {
+      const code = cleanCode(raw);
+      setBarcode('');
+      if (!code) return;
+      setScanStatus('scanning');
+      try {
+        const res = await fetch(`/api/products/barcode/${encodeURIComponent(code)}`);
+        const data = await res.json();
+        if (data.success && data.data) {
+          openEdit(data.data);
+          setScanStatus('found');
+        } else {
+          openNew(code);
+          setScanStatus('not-found');
         }
-      }, 100);
-    }
-
-    // Cleanup function
-    return () => {
-      if (timeoutRef.current !== null) {
-        clearTimeout(timeoutRef.current);
+      } catch {
+        setScanStatus('not-found');
       }
+    },
+    [openEdit, openNew],
+  );
+
+  useEffect(() => {
+    if (!barcode.trim() || anyModal) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => runScan(barcode), 150);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [barcode, modalOpen, scannerStatus]);
+  }, [barcode, anyModal, runScan]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      // Prevent form submission
-      e.preventDefault();
-      // Código completo enviado pelo leitor
-      return;
-    }
-    // Acumular caracteres para o código de barras
-    setBarcode(prev => prev + e.key);
-  };
-
-  const handleBlur = () => {
-    // Reset on blur to avoid accumulating incorrect data
-    setBarcode('');
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    console.log('Dados enviados:', formData);
-
-    // VALIDAÇÃO COM MENSAGENS CLARAS (from prompt)
-    const errors: string[] = [];
-    if (!formData.codigo || formData.codigo.trim() === '') {
-      errors.push('Código/SKU é obrigatório');
-    }
-    if (!formData.nome || formData.nome.trim() === '') {
-      errors.push('Nome do produto é obrigatório');
-    }
-    if (formData.preco < 0) {
-      errors.push('Preço não pode ser negativo');
-    }
-    if (formData.estoque < 0) {
-      errors.push('Estoque não pode ser negativo');
-    }
-
-    if (errors.length > 0) {
-      alert(errors.join('\n'));
+  // ---------- save ----------
+  const submit = async () => {
+    const e: typeof errors = {};
+    if (!form.nome.trim()) e.nome = 'Informe o nome do produto';
+    if (!form.codigoBarras.trim() && !form.sku.trim())
+      e.codigoBarras = 'Informe o código de barras (ou um SKU)';
+    if (!form.categoriaId) e.categoriaId = 'Selecione uma categoria';
+    if (form.preco === '' || toNumber(form.preco) < 0) e.preco = 'Preço de venda inválido';
+    if (toNumber(form.custo) < 0) e.custo = 'Custo não pode ser negativo';
+    if (toNumber(form.estoque) < 0) e.estoque = 'Estoque não pode ser negativo';
+    if (toNumber(form.estoqueMinimo) < 0) e.estoqueMinimo = 'Valor não pode ser negativo';
+    if (Object.keys(e).length) {
+      setErrors(e);
       return;
     }
 
+    setSaving(true);
     try {
-      const url = mode === 'add' ? '/api/products' : (selectedProduct ? `/api/products/${selectedProduct.id}` : '/api/products');
-      const method = mode === 'add' ? 'POST' : 'PUT';
-
-      // Prepare data with proper conversion - API expects Portuguese field names
-      // GARANTIR QUE categoriaId SEJA ENVIADO COMO null EM VEZ DE STRING VAZIA
       const payload = {
-        codigo: formData.codigo,
-        nome: formData.nome,
-        categoriaId: formData.categoriaId,
-        preco: toNumber(formData.preco),
-        custo: toNumber(formData.custo),
-        estoque: toNumber(formData.estoque),
-        estoqueMinimo: toNumber(formData.estoqueMinimo),
-        status: formData.status
+        nome: form.nome.trim(),
+        codigoBarras: cleanCode(form.codigoBarras) || null,
+        sku: cleanCode(form.sku) || cleanCode(form.codigoBarras),
+        categoriaId: form.categoriaId,
+        preco: toNumber(form.preco),
+        custo: toNumber(form.custo),
+        estoque: toNumber(form.estoque),
+        estoqueMinimo: toNumber(form.estoqueMinimo),
+        status: form.status,
       };
-
-      const response = await fetch(url, {
-        method,
+      const res = await fetch(editingId ? `/api/products/${editingId}` : '/api/products', {
+        method: editingId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
-
-      console.log('Resposta da API:', response);
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        alert(result.error?.message || result.error || 'Erro ao salvar produto');
-        console.error('Erro detalhado:', result);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setErrors({ base: data?.error?.message || data?.error || 'Não foi possível salvar' });
         return;
       }
-
-      if (result.success) {
-        setModalOpen(false);
-        setFormData({
-          codigo: '',
-          nome: '',
-          categoriaId: null,
-          preco: 0,
-          custo: 0,
-          estoque: 0,
-          estoqueMinimo: 5,
-          status: ProductStatus.ACTIVE
-        });
-        setSelectedProduct(null);
-        setMode('add');
-        // Reload products
-        const productsRes = await fetch('/api/products');
-        const productsData = await productsRes.json();
-        if (productsData.success) {
-          setProducts(productsData.data.products || []);
-        }
-      } else {
-        alert(result.error?.message || 'Erro ao salvar produto');
-      }
-    } catch (error) {
-      console.error('Error saving product:', error);
-      alert('Erro ao salvar produto');
+      await reload();
+      closeModal();
+    } catch {
+      setErrors({ base: 'Erro de rede ao salvar' });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (product: Product) => {
-    if (!confirm(`Tem certeza que deseja excluir ${product.name}?`)) return;
+  // ---------- delete ----------
+  const askDelete = (p: Product) => {
+    setDeleteTarget(p);
+    setDeleteErr(null);
+    setDeleteBlocked(false);
+  };
+  const closeDelete = () => {
+    setDeleteTarget(null);
+    setDeleteErr(null);
+    setDeleteBlocked(false);
+    setDeleting(false);
+  };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteErr(null);
     try {
-      const response = await fetch(`/api/products/${product.id}`, {
-        method: 'DELETE'
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Reload products
-        const productsRes = await fetch('/api/products');
-        const productsData = await productsRes.json();
-        if (productsData.success) {
-          setProducts(productsData.data.products || []);
-        }
-      } else {
-        alert(result.error?.message || 'Erro ao excluir produto');
+      const res = await fetch(`/api/products/${deleteTarget.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        await reload();
+        closeDelete();
+        return;
       }
-    } catch (error) {
-      console.error('Error deleting product:', error);
-      alert('Erro ao excluir produto');
+      setDeleteErr(data?.error?.message || 'Não foi possível excluir o produto.');
+      setDeleteBlocked(data?.error?.code === 'HAS_HISTORY');
+    } catch {
+      setDeleteErr('Erro de rede ao excluir.');
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const handleCloseModal = () => {
-    setModalOpen(false);
-    setFormData({
-      codigo: '',
-      nome: '',
-      categoriaId: null,
-      preco: 0,
-      custo: 0,
-      estoque: 0,
-      estoqueMinimo: 5,
-      status: ProductStatus.ACTIVE
-    });
-    setSelectedProduct(null);
-    setMode('add');
+  const discontinue = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/products/${deleteTarget.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: ProductStatus.DISCONTINUED }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        await reload();
+        closeDelete();
+        return;
+      }
+      setDeleteErr(data?.error?.message || 'Não foi possível descontinuar.');
+    } catch {
+      setDeleteErr('Erro de rede.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64">Carregando...</div>;
-  }
+  // ---------- derived ----------
+  const catName = useMemo(() => {
+    const m = new Map(categories.map((c) => [c.id, c.name]));
+    return (id?: string | null) => (id && m.get(id)) || '—';
+  }, [categories]);
 
+  const scanPill = {
+    ready: ['pill-muted', 'Aguardando leitura'],
+    scanning: ['pill-warn', 'Lendo…'],
+    found: ['pill-ok', 'Produto encontrado'],
+    'not-found': ['pill-warn', 'Novo — preencha os dados'],
+  }[scanStatus];
+
+  // ---------- render ----------
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Estoque</h1>
+      <div className="space-y-6 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="font-heading text-2xl font-bold text-foreground">Estoque</h1>
+            <span className="mt-1.5 block h-1 w-14 rounded-full bg-primary" />
+          </div>
           <button
-            onClick={() => {
-              setMode('add');
-              setSelectedProduct(null);
-              setFormData({
-                codigo: '',
-                nome: '',
-                categoriaId: null,
-                preco: 0,
-                custo: 0,
-                estoque: 0,
-                estoqueMinimo: 5,
-                status: ProductStatus.ACTIVE
-              });
-              setModalOpen(true);
-            }}
-            className="btn-primary"
+            type="button"
+            onClick={() => openNew()}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Novo Produto
+            <Plus className="h-4 w-4" />
+            Novo produto
           </button>
         </div>
 
-      {/* Barcode Scanner Input */}
-      <div className="bg-card rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Leitor de Código de Barras (USB)</h2>
-        <div className="flex items-center gap-4">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Aproxime o leitor de código de barras ou digite manualmente..."
-            onKeyDown={handleKeyDown}
-            onBlur={handleBlur}
-            className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            autoFocus
-          />
-          <div className={`px-4 py-2 rounded-lg text-sm font-medium ${
-            scannerStatus === 'scanning' ? 'bg-blue-100 text-blue-800' :
-            scannerStatus === 'added' ? 'bg-green-100 text-green-800' :
-            scannerStatus === 'not-found' ? 'bg-yellow-100 text-yellow-800' :
-            'bg-muted text-foreground'
-          }`}>
-            {scannerStatus === 'scanning' ? 'Lendo...' :
-            scannerStatus === 'added' ? 'Produto encontrado!' :
-            scannerStatus === 'not-found' ? 'Produto não encontrado' :
-            'Aguardando leitura'}
+        {/* leitor */}
+        <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <Barcode className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Leitor de código de barras (USB)</h2>
           </div>
-        </div>
-      </div>
-
-      {/* Products Table */}
-      <div className="bg-card rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Código</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Nome</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Categoria</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Preço</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Custo</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Estoque</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Est. Mín.</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {products.map((product) => (
-                <tr key={product.id} className="hover:bg-muted">
-                  <td className="px-4 py-4 text-sm text-foreground">{product.sku || product.codigo}</td>
-                  <td className="px-4 py-4 text-sm text-foreground">{product.name || product.nome}</td>
-                  <td className="px-4 py-4 text-sm text-muted-foreground">
-                    {categories.find((c: Category) => c.id === (product.categoryId || product.categoriaId))?.nome || 'Sem categoria'}
-                  </td>
-                  <td className="px-4 py-4 text-sm text-foreground">{formatCurrency(product.salePrice ?? product.preco)}</td>
-                  <td className="px-4 py-4 text-sm text-muted-foreground">{formatCurrency(product.costPrice ?? product.custo)}</td>
-                  <td className="px-4 py-4 text-sm text-foreground font-medium">
-                    {product.stockQuantity !== undefined && product.stockQuantity !== null ? product.stockQuantity : (product.estoque || 0)}
-                  </td>
-                  <td className="px-4 py-4 text-sm text-muted-foreground">
-                    {product.minStockLevel !== undefined && product.minStockLevel !== null ? product.minStockLevel : (product.estoqueMinimo || 0)}
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      product.status === ProductStatus.ACTIVE ? 'bg-green-100 text-green-800' :
-                      product.status === ProductStatus.INACTIVE ? 'bg-yellow-100 text-yellow-800' :
-                      product.status === ProductStatus.DISCONTINUED ? 'bg-red-100 text-red-800' : 'bg-muted text-foreground'
-                    }`}>
-                      {product.status === ProductStatus.ACTIVE ? 'Ativo' :
-                       product.status === ProductStatus.INACTIVE ? 'Inativo' :
-                       product.status === ProductStatus.DISCONTINUED ? 'Descontinuado' : 'Desconhecido'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedProduct(product);
-                          setMode('edit');
-                          setFormData({
-                            codigo: product.sku || product.codigo || '',
-                            nome: product.name || product.nome || '',
-                            categoriaId: product.categoryId || product.categoriaId || null,
-                            preco: toNumber(product.salePrice || product.preco || 0),
-                            custo: toNumber(product.costPrice || product.custo || 0),
-                            estoque: toNumber(product.stockQuantity !== undefined && product.stockQuantity !== null ? product.stockQuantity : (product.estoque || 0)),
-                            estoqueMinimo: toNumber(product.minStockLevel !== undefined && product.minStockLevel !== null ? product.minStockLevel : (product.estoqueMinimo || 5)),
-                            status: product.status || ProductStatus.ACTIVE
-                          });
-                          setModalOpen(true);
-                        }}
-                        className="text-blue-600 hover:text-blue-900 text-sm"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product)}
-                        className="text-danger hover:text-red-900 text-sm"
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {products.length === 0 && (
-          <div className="p-8 text-center text-muted-foreground">
-            Nenhum produto cadastrado. Clique no botão Novo Produto para começar.
-          </div>
-        )}
-      </div>
-
-      {/* Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-semibold">
-                {mode === 'add' ? 'Novo Produto' : 'Editar Produto'}
-              </h2>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Barcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                ref={scanRef}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (debounceRef.current) clearTimeout(debounceRef.current);
+                    runScan(barcode);
+                  }
+                }}
+                onBlur={() => setBarcode('')}
+                placeholder="Aproxime o leitor ou digite o código e pressione Enter"
+                className="w-full rounded-lg border border-border py-3 pl-10 pr-4 text-lg focus:border-ring focus:ring-2 focus:ring-ring/40"
+                autoFocus
+              />
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1">Código / SKU</label>
-                  <input
-                    type="text"
-                    value={formData.codigo}
-                    onChange={(e) => setFormData(prev => ({ ...prev, codigo: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1">Nome</label>
-                  <input
-                    type="text"
-                    value={formData.nome}
-                    onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1">Categoria</label>
-                  <select
-                    value={formData.categoriaId ?? ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, categoriaId: e.target.value === '' ? null : e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Sem categoria</option>
-                    {categories.map((cat: Category) => (
-                      <option key={cat.id} value={cat.id}>{cat.nome}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1">Preço de Venda</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.preco}
-                    onChange={(e) => setFormData(prev => ({ ...prev, preco: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1">Preço de Custo</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.custo}
-                    onChange={(e) => setFormData(prev => ({ ...prev, custo: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1">Estoque Atual</label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    value={formData.estoque}
-                    onChange={(e) => setFormData(prev => ({ ...prev, estoque: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1">Estoque Mínimo</label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    value={formData.estoqueMinimo}
-                    onChange={(e) => setFormData(prev => ({ ...prev, estoqueMinimo: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground/90 mb-1">Status</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as ProductStatus }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  >
-                    <option value={ProductStatus.ACTIVE}>Ativo</option>
-                    <option value={ProductStatus.INACTIVE}>Inativo</option>
-                    <option value={ProductStatus.DISCONTINUED}>Descontinuado</option>
-                  </select>
-                </div>
+            <span className={`pill shrink-0 ${scanPill[0]}`}>{scanPill[1]}</span>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Código encontrado abre para editar; código novo abre o cadastro já preenchido.
+          </p>
+        </section>
+
+        {/* tabela */}
+        <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+          {loading ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin" />
+              Carregando produtos…
+            </div>
+          ) : products.length === 0 ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              Nenhum produto cadastrado. Clique em “Novo produto” ou use o leitor.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-3">Cód. barras</th>
+                  <th className="px-4 py-3">Produto</th>
+                  <th className="px-4 py-3">Categoria</th>
+                  <th className="px-4 py-3 text-right">Venda</th>
+                  <th className="px-4 py-3 text-right">Custo</th>
+                  <th className="px-4 py-3 text-right">Estoque</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {products.map((p) => {
+                  const stock = toNumber(p.stockQuantity);
+                  const min = toNumber(p.minStockLevel ?? 0);
+                  return (
+                    <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted">
+                      <td className="px-4 py-3 tabular-nums text-muted-foreground">{p.barcode || '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-foreground">{p.name}</div>
+                        <div className="text-xs text-muted-foreground">SKU {p.sku}</div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {p.category?.name ?? catName(p.categoryId)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">
+                        {brl(p.salePrice)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                        {brl(p.costPrice)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        <span
+                          className={
+                            stock === 0
+                              ? 'font-semibold text-danger'
+                              : stock <= min
+                                ? 'font-semibold text-amber-600'
+                                : 'text-foreground'
+                          }
+                        >
+                          {stock}
+                        </span>
+                        <span className="text-xs text-muted-foreground"> / {min}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`pill ${p.status === ProductStatus.ACTIVE ? 'pill-ok' : 'pill-muted'}`}
+                        >
+                          {STATUS_LABEL[p.status]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(p)}
+                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            aria-label={`Editar ${p.name}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => askDelete(p)}
+                            className="rounded-md p-1.5 text-danger transition-colors hover:bg-danger/10"
+                            aria-label={`Excluir ${p.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* modal add/edit */}
+      {modalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="estoque-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
+          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 id="estoque-modal-title" className="text-xl font-bold text-foreground">
+                {editingId ? 'Editar produto' : 'Novo produto'}
+              </h2>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Fechar"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            {errors.base && (
+              <div
+                role="alert"
+                className="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+              >
+                {errors.base}
               </div>
-              <div className="flex justify-end space-x-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="px-4 py-2 border rounded-lg text-foreground/90 hover:bg-muted"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary"
-                >
-                  {mode === 'add' ? 'Criar' : 'Salvar'}
-                </button>
+            )}
+
+            <div className="space-y-4">
+              <Field label="Nome do produto" required error={errors.nome}>
+                <input
+                  autoFocus
+                  value={form.nome}
+                  onChange={(e) => set('nome', e.target.value)}
+                  className={inputCls(errors.nome)}
+                  placeholder="Ex.: Caderno universitário 100 folhas"
+                />
+              </Field>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Código de barras" hint="O código escaneável no PDV" error={errors.codigoBarras}>
+                  <input
+                    value={form.codigoBarras}
+                    onChange={(e) => set('codigoBarras', e.target.value)}
+                    className={inputCls(errors.codigoBarras)}
+                    placeholder="Ex.: 7891234567890"
+                    inputMode="numeric"
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field label="SKU / código interno" hint="Opcional — usa o de barras se vazio">
+                  <input
+                    value={form.sku}
+                    onChange={(e) => set('sku', e.target.value)}
+                    className={inputCls()}
+                    placeholder="Ex.: CAD-UNI-001"
+                    autoComplete="off"
+                  />
+                </Field>
               </div>
-            </form>
+
+              <Field label="Categoria" required error={errors.categoriaId}>
+                <select
+                  value={form.categoriaId}
+                  onChange={(e) => set('categoriaId', e.target.value)}
+                  className={inputCls(errors.categoriaId)}
+                >
+                  <option value="">Selecione uma categoria…</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Preço de venda" required error={errors.preco}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.preco}
+                    onChange={(e) => set('preco', e.target.value)}
+                    className={inputCls(errors.preco)}
+                    placeholder="0,00"
+                  />
+                </Field>
+                <Field label="Preço de custo" error={errors.custo}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.custo}
+                    onChange={(e) => set('custo', e.target.value)}
+                    className={inputCls(errors.custo)}
+                    placeholder="0,00"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Estoque atual" error={errors.estoque}>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.estoque}
+                    onChange={(e) => set('estoque', e.target.value)}
+                    className={inputCls(errors.estoque)}
+                    disabled={!!editingId}
+                  />
+                  {editingId && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Ajuste o estoque por compras/vendas, não aqui.
+                    </p>
+                  )}
+                </Field>
+                <Field label="Estoque mínimo" error={errors.estoqueMinimo}>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.estoqueMinimo}
+                    onChange={(e) => set('estoqueMinimo', e.target.value)}
+                    className={inputCls(errors.estoqueMinimo)}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Status">
+                <select
+                  value={form.status}
+                  onChange={(e) => set('status', e.target.value)}
+                  className={inputCls()}
+                >
+                  <option value={ProductStatus.ACTIVE}>Ativo</option>
+                  <option value={ProductStatus.INACTIVE}>Inativo</option>
+                  <option value={ProductStatus.DISCONTINUED}>Descontinuado</option>
+                </select>
+              </Field>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-lg border border-border px-4 py-2 font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {editingId ? 'Salvar alterações' : 'Adicionar produto'}
+              </button>
+            </div>
           </div>
         </div>
       )}
-      </div>
+
+      {/* modal excluir */}
+      {deleteTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="estoque-delete-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
+            <div className="mb-2 flex items-center gap-2">
+              <AlertTriangle className="h-6 w-6 text-danger" />
+              <h2 id="estoque-delete-title" className="text-xl font-bold text-foreground">
+                Excluir produto
+              </h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Excluir <span className="font-medium text-foreground">{deleteTarget.name}</span> em
+              definitivo? Esta ação não pode ser desfeita.
+            </p>
+
+            {deleteErr && (
+              <div
+                role="alert"
+                className="mt-3 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+              >
+                {deleteErr}
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDelete}
+                disabled={deleting}
+                className="rounded-lg border border-border px-4 py-2 font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              {deleteBlocked ? (
+                <button
+                  type="button"
+                  onClick={discontinue}
+                  disabled={deleting}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Descontinuar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  disabled={deleting}
+                  className="inline-flex items-center gap-2 rounded-lg bg-danger px-4 py-2 font-medium text-danger-foreground transition-colors hover:bg-danger/90 disabled:opacity-50"
+                >
+                  {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Excluir de vez
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
+  );
+}
+
+// ---------- small component ----------
+function Field({
+  label,
+  required,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium text-foreground">
+        {label}
+        {required && <span className="text-danger"> *</span>}
+      </span>
+      {children}
+      {hint && !error && <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>}
+      {error && <span className="mt-1 block text-xs text-danger">{error}</span>}
+    </label>
   );
 }

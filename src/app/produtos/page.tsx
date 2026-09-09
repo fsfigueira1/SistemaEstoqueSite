@@ -225,8 +225,16 @@ export default function ProdutosPage() {
   };
 
   const remove = async (p: Product) => {
-    if (!window.confirm(`Excluir "${p.name}"? O produto ficará inativo.`)) return;
-    await fetch(`/api/products/${p.id}`, { method: 'DELETE' });
+    if (!window.confirm(`Excluir "${p.name}" em definitivo? Esta ação não pode ser desfeita.`)) return;
+    const res = await fetch(`/api/products/${p.id}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      window.alert(
+        data?.error?.message ||
+          'Não foi possível excluir o produto. Se ele tiver vendas, mude o status para "Descontinuado".',
+      );
+      return;
+    }
     await reload();
   };
 
