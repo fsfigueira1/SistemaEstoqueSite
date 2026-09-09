@@ -23,8 +23,12 @@ function create(): PrismaClient {
     idleTimeoutMillis: 15_000,
     connectionTimeoutMillis: 20_000,
   });
+  // Cacheia SEMPRE (dev e produção). O Proxy abaixo procura o client em
+  // globalForPrisma.prisma; sem este cache, produção recria um PrismaClient
+  // + pool pg a cada query — handshake novo no pooler do Supabase toda vez,
+  // conexões vazando até estourar o limite e disparar o circuit breaker.
   const client = new PrismaClient({ adapter });
-  if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;
+  globalForPrisma.prisma = client;
   return client;
 }
 
