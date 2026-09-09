@@ -19,11 +19,12 @@ export async function POST(request: Request) {
       customerId,
       notes,
       payment,
+      // PDV offline: idempotência + venda que veio da fila local
+      clientId,
+      occurredAt,
+      queued,
     } = body ?? {}
 
-    if (!cashSessionId) {
-      return NextResponse.json({ error: "cashSessionId é obrigatório" }, { status: 400 })
-    }
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "A venda precisa de ao menos um item" }, { status: 400 })
     }
@@ -34,15 +35,45 @@ export async function POST(request: Request) {
 
     const userId = await getSystemUserId()
 
+    // 0. Idempotência: se essa venda (clientId) já subiu antes, devolve a que existe.
+    if (clientId) {
+      const existing = await SaleService.findByClientId(String(clientId))
+      if (existing) {
+        return NextResponse.json(
+          {
+            success: true,
+            idempotent: true,
+            data: { ...existing, saleNumber: existing.saleNumber, items: existing.items },
+          },
+          { status: 200 },
+        )
+      }
+    }
+
+    // Resolve o caixa. Online: exige o cashSessionId. Fila offline: se a sessão
+    // fechou nesse meio tempo, aponta pra sessão aberta atual (ou abre uma).
+    let sessionId: string
+    if (queued) {
+      sessionId = await SaleService.ensureOpenCashSession(cashSessionId ?? null, userId)
+    } else {
+      if (!cashSessionId) {
+        return NextResponse.json({ error: "cashSessionId é obrigatório" }, { status: 400 })
+      }
+      sessionId = cashSessionId
+    }
+
     // 1. cria a venda (PENDING) — ainda não mexe no estoque
     const created = await SaleService.createSale({
-      cashSessionId,
+      cashSessionId: sessionId,
       createdById: userId,
       items,
       surchargeAmount,
       discountAmount,
       customerId,
       notes,
+      clientId: clientId ? String(clientId) : null,
+      occurredAt: occurredAt ?? null,
+      queued: Boolean(queued),
     })
     const sale = created.sale
 
@@ -57,7 +88,7 @@ export async function POST(request: Request) {
             : null,
         changeAmount: payment?.changeAmount ?? 0,
         processedById: userId,
-      })
+      }, { queued: Boolean(queued) })
 
       // dados completos p/ o comprovante
       const full = await SaleService.getSale(sale.id)

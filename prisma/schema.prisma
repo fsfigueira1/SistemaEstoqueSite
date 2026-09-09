@@ -110,6 +110,7 @@ model CashMovement {
 model Sale {
   id             String        @id @default(uuid())
   saleNumber     String        @unique
+  clientId       String?       @unique
   cashSessionId  String
   customerId     String?
   status         SaleStatus    @default(PENDING)

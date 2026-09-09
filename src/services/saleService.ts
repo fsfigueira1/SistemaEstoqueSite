@@ -15,6 +15,10 @@ type CreateSaleInput = {
   discountAmount?: number | Prisma.Decimal
   surchargeAmount?: number | Prisma.Decimal
   notes?: string | null
+  // PDV offline: idempotência + venda que veio da fila local
+  clientId?: string | null
+  occurredAt?: Date | string | null
+  queued?: boolean
 }
 
 export class SaleService {
@@ -69,7 +73,9 @@ export class SaleService {
       if (!product) {
         throw new Error(`Product not found: ${item.productId}`)
       }
-      if (product.stockQuantity < item.quantity) {
+      // Venda da fila offline: não bloqueia por estoque (pode ter mudado
+      // enquanto o balcão estava sem internet). Deixa ir a negativo e segue.
+      if (!input.queued && product.stockQuantity < item.quantity) {
         throw new Error(`Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, requested: ${item.quantity}`)
       }
       if (item.discountAmount !== undefined && Number(item.discountAmount) < 0) {
@@ -99,7 +105,7 @@ export class SaleService {
           throw new Error(`Product not found: ${item.productId}`)
         }
 
-        if (product.status !== ProductStatus.ACTIVE) {
+        if (!input.queued && product.status !== ProductStatus.ACTIVE) {
           throw new Error(`Cannot sell inactive or discontinued product: ${product.name}`)
         }
 
@@ -136,15 +142,17 @@ export class SaleService {
 
       // Número da venda — legível e sem colisão entre máquinas:
       // data + timestamp em base36 + 3 chars aleatórios.
-      const now = new Date()
+      // Venda da fila offline usa a data/hora em que a venda aconteceu.
+      const now = input.occurredAt ? new Date(input.occurredAt) : new Date()
       const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
       const rand = Math.random().toString(36).slice(2, 5).toUpperCase()
-      const saleNumber = `V${ymd}-${Date.now().toString(36).slice(-5).toUpperCase()}${rand}`
+      const saleNumber = `V${ymd}-${now.getTime().toString(36).slice(-5).toUpperCase()}${rand}`
 
       // Create the sale
       const sale = await tx.sale.create({
         data: {
           saleNumber,
+          clientId: input.clientId ?? null,
           cashSessionId: input.cashSessionId,
           customerId: input.customerId ?? null,
           status: SaleStatus.PENDING,
@@ -154,7 +162,8 @@ export class SaleService {
           paidAmount: 0, // Starts at 0
           changeAmount: 0, // Starts at 0
           notes: input.notes ?? null,
-          createdById: input.createdById
+          createdById: input.createdById,
+          ...(input.occurredAt ? { createdAt: new Date(input.occurredAt) } : {}),
         }
       })
 
@@ -191,6 +200,53 @@ export class SaleService {
         }
       }
     })
+  }
+
+  // PDV offline: acha uma venda já gravada pelo clientId (idempotência do flush)
+  static async findByClientId(clientId: string) {
+    if (!clientId) return null
+    return prisma.sale.findUnique({
+      where: { clientId },
+      include: {
+        items: { include: { product: { include: { category: true } } } },
+        payments: true,
+      },
+    })
+  }
+
+  // PDV offline: garante uma sessão de caixa ABERTA para escoar a fila.
+  // Usa a preferida se ainda estiver aberta; senão a sessão aberta atual;
+  // senão abre uma no primeiro caixa ativo.
+  static async ensureOpenCashSession(
+    preferredId: string | null | undefined,
+    openedById: string,
+  ): Promise<string> {
+    if (preferredId) {
+      const s = await prisma.cashSession.findUnique({ where: { id: preferredId } })
+      if (s && s.status === 'OPEN') return s.id
+    }
+    const open = await prisma.cashSession.findFirst({
+      where: { status: 'OPEN' },
+      orderBy: { openedAt: 'desc' },
+    })
+    if (open) return open.id
+
+    const reg = await prisma.cashRegister.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (!reg) throw new Error('Nenhum caixa cadastrado no sistema')
+
+    const created = await prisma.cashSession.create({
+      data: {
+        cashRegisterId: reg.id,
+        openedById,
+        openedAt: new Date(),
+        openingAmount: new Prisma.Decimal(0),
+        status: 'OPEN',
+      },
+    })
+    return created.id
   }
 
   // Get sale by ID
@@ -530,7 +586,7 @@ export class SaleService {
     changeAmount?: number | Prisma.Decimal | null
     processedById: string
     notes?: string | null
-  }) {
+  }, opts: { queued?: boolean } = {}) {
     // Use transaction to ensure consistency
     return prisma.$transaction(async (tx: any) => {
       // 1. Buscar Sale.
@@ -628,7 +684,7 @@ export class SaleService {
           throw new Error(`Product not found: ${item.productId}`)
         }
 
-        if (product.status !== ProductStatus.ACTIVE) {
+        if (!opts.queued && product.status !== ProductStatus.ACTIVE) {
           throw new Error(`Cannot sell inactive or discontinued product: ${product.name}`)
         }
 
