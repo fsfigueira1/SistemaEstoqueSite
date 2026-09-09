@@ -6,6 +6,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "prisma generate",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -18,8 +19,8 @@
     "db:from-sqlite": "node --experimental-strip-types scripts/migrate-sqlite-to-postgres.ts",
     "electron": "electron .",
     "electron:dev": "electron .",
-    "electron:build": "next build && node scripts/prepare-standalone.cjs && electron-builder --win nsis",
-    "electron:publish": "next build && node scripts/prepare-standalone.cjs && node scripts/publish-electron.mjs",
+    "electron:build": "prisma generate && next build && node scripts/prepare-standalone.cjs && electron-builder --win nsis",
+    "electron:publish": "prisma generate && next build && node scripts/prepare-standalone.cjs && node scripts/publish-electron.mjs",
     "electron:release": "electron-builder --publish=always",
     "electron:pack": "electron-builder --win nsis --dir"
   },
