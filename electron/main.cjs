@@ -157,7 +157,7 @@ function waitForServer(timeoutMs = 90000) {
 
 // ---------------- janela ----------------
 function trayImage() {
-  const p = path.join(__dirname, "..", "public", "icon.ico");
+  const p = path.join(__dirname, "icon.ico");
   try {
     const img = nativeImage.createFromPath(p);
     return img.isEmpty() ? nativeImage.createEmpty() : img;
@@ -185,7 +185,7 @@ async function createWindow() {
     minHeight: 640,
     show: false,
     autoHideMenuBar: true,
-    icon: path.join(__dirname, "..", "public", "icon.ico"),
+    icon: path.join(__dirname, "icon.ico"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

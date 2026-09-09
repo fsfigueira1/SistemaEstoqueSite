@@ -49,9 +49,11 @@ export function proxy(request: NextRequest) {
   return NextResponse.next()
 }
 
-// Match all paths except static assets, images, favicon, and public folder
+// Roda em tudo, menos assets do Next e arquivos estáticos (com extensão:
+// .png, .ico, .css, .js, .woff2, etc.) — senão o proxy redireciona
+// /logo.png para /senha e a imagem quebra.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|public/).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)',
   ],
 }

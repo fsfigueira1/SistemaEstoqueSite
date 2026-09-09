@@ -19,6 +19,10 @@ const bricolage = Bricolage_Grotesque({
 export const metadata: Metadata = {
   title: 'Laçolaria — Gestão',
   description: 'Sistema de gestão e PDV da papelaria Laçolaria',
+  icons: {
+    icon: '/logo.png',
+    apple: '/apple-icon.png',
+  },
 };
 
 export default function RootLayout({

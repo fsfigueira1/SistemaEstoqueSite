@@ -64,10 +64,17 @@ export default function PinLock({ children }: { children: React.ReactNode }) {
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="w-full max-w-sm p-6 bg-card rounded-lg shadow-xl">
-          <h2 className="text-2xl font-bold text-center mb-6">
-            {isFirstTime ? 'Defina seu PIN' : 'Digite seu PIN'}
-          </h2>
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-xl">
+          <div className="mb-5 flex flex-col items-center gap-2">
+            <img
+              src="/logo.png"
+              alt="Laçolaria"
+              className="h-16 w-16 rounded-2xl bg-white object-cover shadow-sm ring-1 ring-black/5"
+            />
+            <h2 className="font-heading text-xl font-bold">
+              {isFirstTime ? 'Defina seu PIN' : 'Digite seu PIN'}
+            </h2>
+          </div>
           <form onSubmit={isFirstTime ? handleChangePin : handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-foreground/90 mb-2">

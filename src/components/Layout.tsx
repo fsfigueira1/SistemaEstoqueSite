@@ -31,9 +31,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   const Rail = (
     <div className="flex h-full flex-col bg-sidebar">
       <div className="flex items-center gap-3 px-5 py-5">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary font-heading text-lg font-bold text-primary-foreground">
-          L
-        </span>
+        <img
+          src="/logo.png"
+          alt="Laçolaria"
+          className="h-10 w-10 shrink-0 rounded-xl bg-white object-cover shadow-sm ring-1 ring-black/5"
+        />
         <span className="leading-tight">
           <span className="block font-heading text-lg font-bold tracking-tight text-foreground">
             Laçolaria
@@ -98,6 +100,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
+          <img src="/logo.png" alt="" className="h-7 w-7 rounded-lg bg-white object-cover ring-1 ring-black/5" />
           <span className="font-heading font-bold">Laçolaria</span>
         </header>
 

@@ -1,6 +1,5 @@
 'use client';
 
-import Head from 'next/head'
 import { useState } from 'react'
 
 export default function SenhaPage() {
@@ -40,17 +39,18 @@ export default function SenhaPage() {
 
   return (
     <>
-      <Head>
-        <title>PIN de Acesso - Laçolaria ERP</title>
-        <meta name="description" content="Digite o PIN para acessar o sistema" />
-      </Head>
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-full max-w-md space-y-6 p-8 bg-card rounded-lg shadow-md">
-          <h2 className="text-2xl font-bold text-center text-foreground">
-            Acesso ao Sistema
-          </h2>
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-8 shadow-lg">
+          <div className="flex flex-col items-center gap-3">
+            <img
+              src="/logo.png"
+              alt="Laçolaria"
+              className="h-20 w-20 rounded-2xl bg-white object-cover shadow-sm ring-1 ring-black/5"
+            />
+            <h2 className="font-heading text-2xl font-bold text-foreground">Laçolaria</h2>
+          </div>
           <p className="text-center text-muted-foreground">
-            Digite o PIN para acessar o ERP Laçolaria
+            Digite o PIN para acessar o sistema
           </p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
