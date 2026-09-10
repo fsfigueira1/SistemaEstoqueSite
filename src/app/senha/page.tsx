@@ -26,9 +26,11 @@ export default function SenhaPage() {
       }
 
       // The cookie is set in the response by the API route
-      // Redirect to the dashboard or the previous page
+      // Redirect to the dashboard or the previous page.
+      // Só aceita caminho relativo same-origin — evita open redirect via ?redirect=
       const url = new URL(window.location.href)
-      const redirect = url.searchParams.get('redirect') || '/'
+      const raw = url.searchParams.get('redirect') || '/'
+      const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/'
       window.location.href = redirect
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido')

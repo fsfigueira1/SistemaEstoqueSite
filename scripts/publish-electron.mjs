@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 function run(cmd, args, opts = {}) {
+  // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
+  // Script de release local: cmd/args são internos (git, versão do package.json), sem input externo.
   return spawnSync(cmd, args, { encoding: "utf8", shell: process.platform === "win32", ...opts });
 }
 

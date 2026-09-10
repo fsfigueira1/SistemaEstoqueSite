@@ -84,6 +84,8 @@ function startServer() {
 
   if (isDev) {
     const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+    // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
+    // Args fixos ("run","dev"), sem input de usuário. shell só no Windows p/ resolver npm.cmd.
     serverProc = spawn(npm, ["run", "dev"], {
       cwd: path.join(__dirname, ".."),
       stdio: "inherit",

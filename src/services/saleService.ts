@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto"
 import { prisma, Prisma } from "../lib/prisma"
 import { SaleStatus, PaymentStatus, PaymentMethod, StockMovementType, ProductStatus, SalePayment } from "../generated/prisma/client.ts"
 
@@ -145,7 +146,7 @@ export class SaleService {
       // Venda da fila offline usa a data/hora em que a venda aconteceu.
       const now = input.occurredAt ? new Date(input.occurredAt) : new Date()
       const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-      const rand = Math.random().toString(36).slice(2, 5).toUpperCase()
+      const rand = randomBytes(3).toString('hex').slice(0, 3).toUpperCase()
       const saleNumber = `V${ymd}-${now.getTime().toString(36).slice(-5).toUpperCase()}${rand}`
 
       // Create the sale
