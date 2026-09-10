@@ -9,6 +9,7 @@ import {
   Package,
   List,
   Receipt,
+  FileBarChart,
   Settings,
   Menu,
   X,
@@ -21,6 +22,7 @@ const nav = [
   { name: 'Estoque', href: '/estoque', icon: Package },
   { name: 'Produtos', href: '/produtos', icon: List },
   { name: 'Vendas', href: '/vendas', icon: Receipt },
+  { name: 'Relatório', href: '/relatorio', icon: FileBarChart },
   { name: 'Configurações', href: '/configuracoes', icon: Settings },
 ];
 

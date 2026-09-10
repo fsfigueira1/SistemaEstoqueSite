@@ -24,6 +24,8 @@ export function summarizeStats(stats: Stats): DailySummary {
   }
 }
 
+// Classe estática seguindo o padrão dos outros services do projeto.
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class DailyReportService {
   /**
    * Calcula o resumo de vendas COMPLETED do dia civil BRT `day` ("YYYY-MM-DD")
