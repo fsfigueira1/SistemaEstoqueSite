@@ -25,13 +25,13 @@ export default function SenhaPage() {
         throw new Error(data.error || 'PIN incorreto')
       }
 
-      // The cookie is set in the response by the API route
-      // Redirect to the dashboard or the previous page.
-      // Só aceita caminho relativo same-origin — evita open redirect via ?redirect=
+      // The cookie is set in the response by the API route.
+      // O papel VIEWER (deploy público de consulta) vai direto pra PWA.
+      // Senão: caminho relativo same-origin do ?redirect= (evita open redirect).
       const url = new URL(window.location.href)
       const raw = url.searchParams.get('redirect') || '/'
-      const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/'
-      window.location.href = redirect
+      const safe = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/'
+      window.location.href = data.role === 'VIEWER' ? '/m' : safe
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido')
     } finally {
