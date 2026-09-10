@@ -7,7 +7,7 @@ type Input = {
   method: string;
   pathname: string;
   headers: Record<string, string | null | undefined>;
-  env: { READ_ONLY?: string; CRON_SECRET?: string };
+  env: Record<string, string | undefined>;
 };
 
 const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);

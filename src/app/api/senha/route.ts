@@ -1,29 +1,21 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { resolveRole } from '@/lib/auth'
 
 export async function POST(request: Request) {
   try {
     const { pin } = await request.json()
 
-    // Get PINs from environment variables
-    const ownerPin = process.env.OWNER_PASSWORD
-    const employeePin = process.env.EMPLOYEE_PASSWORD
-
-    // Check if PINs are set (in a real app, you would use a proper auth system)
-    if (!ownerPin || !employeePin) {
+    // PINs vêm do ambiente. OWNER/EMPLOYEE sempre; VIEWER só quando VIEWER_PIN
+    // está definido (deploy público de leitura na Vercel).
+    if (!process.env.OWNER_PASSWORD || !process.env.EMPLOYEE_PASSWORD) {
       return NextResponse.json(
         { error: 'Server configuration error' },
         { status: 500 }
       )
     }
 
-    // Simple PIN check (in production, use bcrypt or similar)
-    let role: 'OWNER' | 'EMPLOYEE' | null = null
-    if (pin === ownerPin) {
-      role = 'OWNER'
-    } else if (pin === employeePin) {
-      role = 'EMPLOYEE'
-    }
+    const role = resolveRole(String(pin ?? ''), process.env)
 
     if (!role) {
       return NextResponse.json(
@@ -32,15 +24,13 @@ export async function POST(request: Request) {
       )
     }
 
-    // Set a cookie with the role and a timestamp (or just role for simplicity)
-    // In a real app, you would use a signed JWT or session
     const cookieValue = `${role}:${Date.now()}`
     const response = NextResponse.json({ success: true, role })
     const cookieStore = await cookies()
     cookieStore.set('erp_auth', cookieValue, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // use secure in production
-      maxAge: 60 * 60 * 8, // 8 hours
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 8, // 8 horas
       path: '/',
     })
 

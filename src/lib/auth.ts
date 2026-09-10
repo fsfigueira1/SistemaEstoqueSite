@@ -1,10 +1,6 @@
 export type Role = 'OWNER' | 'EMPLOYEE' | 'VIEWER';
 
-type PinEnv = {
-  OWNER_PASSWORD?: string;
-  EMPLOYEE_PASSWORD?: string;
-  VIEWER_PIN?: string;
-};
+type PinEnv = Record<string, string | undefined>;
 
 /**
  * Resolve um PIN para um papel. `VIEWER` só existe quando `VIEWER_PIN` está
