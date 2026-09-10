@@ -102,6 +102,40 @@ internet (mostram "sem conexão" até voltar).
 - Fila e cache ficam no IndexedDB do app e **sobrevivem a fechar o app e a
   atualizações**. Só somem se limpar os dados do site.
 
+## 4b. Consulta pelo celular (PWA) + relatório das 19h
+
+Um app de consulta **somente leitura** roda na Vercel, no mesmo banco. O app
+de computador **não muda** — só ganhou a tela **Relatório** no menu.
+
+### Publicar na Vercel (uma vez)
+
+1. `vercel` → importar o repo `fsfigueira1/SistemaEstoqueSite`.
+2. Variáveis de ambiente do projeto (Production):
+   - `DATABASE_URL` = a mesma string do Transaction pooler (6543).
+   - `READ_ONLY` = `1`  ← trava toda escrita; sem isso o deploy aceitaria alterações.
+   - `VIEWER_PIN` = um PIN novo só pra isso (não use o `owner123`/`emp123`).
+   - `CRON_SECRET` = uma senha aleatória qualquer (a Vercel usa pra chamar o cron).
+   - **Não** defina `OWNER_PASSWORD`/`EMPLOYEE_PASSWORD` fracos aqui; se definir,
+     eles também caem no `READ_ONLY`.
+3. Deploy. O `vercel.json` já agenda o cron das **22:00 UTC = 19:00 de Brasília**.
+4. Aplique a tabela nova no Supabase (SQL Editor):
+   `prisma/migrations/20260910190000_add_daily_report/migration.sql`.
+
+### Usar no iPhone
+
+1. Safari → `https://<seu-projeto>.vercel.app/m` → digite o `VIEWER_PIN`.
+2. Compartilhar → **Adicionar à Tela de Início**. Vira ícone, abre em tela cheia.
+3. Abas: Painel · Produtos · Estoque · Vendas · Relatório.
+
+### Relatório do dia
+
+- Todo dia às 19:00 o cron grava um resumo (total vendido, nº de vendas,
+  ticket médio) em `daily_reports`.
+- Aparece em **Relatório** nos dois apps. Antes das 19h mostra uma prévia
+  parcial do dia; guarda os últimos 90 dias.
+- Testar o cron na mão:
+  `curl -X POST https://<projeto>.vercel.app/api/cron/daily-report -H "Authorization: Bearer <CRON_SECRET>"`
+
 ## 5. Impressora (Epson TM-T20X)
 
 Fica no USB do PC onde o caixa imprime. Ao finalizar a venda, o app pergunta
