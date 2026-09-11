@@ -574,272 +574,272 @@ export default function PDVPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Coluna esquerda */}
-          <div className="space-y-6 lg:col-span-2">
-            {/* Leitor */}
-            <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <Barcode className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold text-foreground">Leitor de código de barras</h2>
-              </div>
-              <div className="relative">
-                <Barcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  ref={barcodeRef}
-                  type="text"
-                  value={barcode}
-                  onChange={(e) => {
-                    setBarcode(e.target.value);
-                    setScanStatus('ready');
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      scanBarcode();
-                    }
-                  }}
-                  placeholder="Aproxime o leitor ou digite o código e pressione Enter"
-                  autoComplete="off"
-                  className="w-full rounded-lg border border-border py-3 pl-10 pr-4 text-lg focus:border-ring focus:ring-2 focus:ring-ring/40"
-                />
-              </div>
-              <div className="mt-3">
-                <span className={`pill ${statusPill[0]}`}>{statusPill[1]}</span>
-              </div>
-            </section>
+        <div className="space-y-6">
+          {/* Carrinho — em cima, largura toda, letras maiores pro cliente ver o preço */}
+          <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <ShoppingCart className="h-6 w-6 text-primary" />
+              <h2 className="text-xl font-semibold text-foreground">Carrinho ({carrinho.length})</h2>
+            </div>
 
-            {/* Busca */}
-            <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <Search className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold text-foreground">Buscar produto por nome</h2>
-              </div>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={onSearchKey}
-                  placeholder="Digite pelo menos 2 letras do nome ou SKU…"
-                  className="w-full rounded-lg border border-border py-3 pl-10 pr-10 text-lg focus:border-ring focus:ring-2 focus:ring-ring/40"
-                />
-                {searching && (
-                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-                )}
-              </div>
-
-              {searchTerm.trim().length >= 2 && !searching && searchError && (
-                <p className="mt-3 text-sm text-danger">
-                  Não foi possível buscar agora. Verifique a conexão e tente de novo.
+            {carrinho.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border py-14 text-center">
+                <ShoppingCart className="mx-auto mb-2 h-9 w-9 text-muted-foreground/60" />
+                <p className="text-base font-medium text-muted-foreground">Carrinho vazio</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Leia um código ou busque um produto
                 </p>
-              )}
-
-              {searchTerm.trim().length >= 2 && !searching && !searchError && searchResults.length === 0 && (
-                <p className="mt-3 text-sm text-muted-foreground">Nenhum produto encontrado.</p>
-              )}
-
-              {searchResults.length > 0 && (
-                <ul className="mt-3 max-h-72 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-                  {searchResults.map((p, idx) => (
-                    <li
-                      key={p.id}
-                      onMouseEnter={() => setHighlight(idx)}
-                      onClick={() => pickResult(p)}
-                      className={`flex cursor-pointer items-center justify-between gap-3 p-3 ${
-                        idx === highlight ? 'bg-accent-soft' : 'hover:bg-muted'
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{p.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          SKU {p.sku}
-                          {p.barcode ? ` · ${p.barcode}` : ''}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="font-semibold tabular-nums text-foreground">{formatCurrency(p.salePrice)}</p>
-                        <p className="text-xs tabular-nums text-muted-foreground">estoque {toNumber(p.stockQuantity)}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          </div>
-
-          {/* Coluna direita */}
-          <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-            {/* Carrinho */}
-            <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold text-foreground">Carrinho ({carrinho.length})</h2>
               </div>
-
-              {carrinho.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border py-10 text-center">
-                  <ShoppingCart className="mx-auto mb-2 h-7 w-7 text-muted-foreground/60" />
-                  <p className="text-sm font-medium text-muted-foreground">Carrinho vazio</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Leia um código ou busque um produto
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {carrinho.map((i) => (
-                    <div key={i.id} className="rounded-lg border border-border p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">{i.nome}</p>
-                          <p className="text-xs text-muted-foreground">{i.codigo}</p>
-                        </div>
+            ) : (
+              <div className="grid max-h-[45vh] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+                {carrinho.map((i) => (
+                  <div key={i.id} className="rounded-lg border border-border p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-semibold text-foreground">{i.nome}</p>
+                        <p className="text-xs text-muted-foreground">{i.codigo}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(i.id)}
+                        className="rounded-md p-1 text-danger transition-colors hover:bg-danger/10"
+                        aria-label={`Remover ${i.nome} do carrinho`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => removeItem(i.id)}
-                          className="rounded-md p-1 text-danger transition-colors hover:bg-danger/10"
-                          aria-label={`Remover ${i.nome} do carrinho`}
+                          onClick={() => setQty(i.id, -1)}
+                          aria-label={`Diminuir a quantidade de ${i.nome}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-muted text-base leading-none text-foreground transition-colors hover:bg-border"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          −
+                        </button>
+                        <span className="w-8 text-center text-base font-medium tabular-nums">{i.quantidade}</span>
+                        <button
+                          type="button"
+                          onClick={() => setQty(i.id, 1)}
+                          disabled={i.quantidade >= i.estoque}
+                          aria-label={`Aumentar a quantidade de ${i.nome}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-muted text-base leading-none text-foreground transition-colors hover:bg-border disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-muted"
+                        >
+                          +
                         </button>
                       </div>
-                      <div className="mt-2 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setQty(i.id, -1)}
-                            aria-label={`Diminuir a quantidade de ${i.nome}`}
-                            className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-muted text-base leading-none text-foreground transition-colors hover:bg-border"
-                          >
-                            −
-                          </button>
-                          <span className="w-8 text-center text-sm font-medium tabular-nums">{i.quantidade}</span>
-                          <button
-                            type="button"
-                            onClick={() => setQty(i.id, 1)}
-                            disabled={i.quantidade >= i.estoque}
-                            aria-label={`Aumentar a quantidade de ${i.nome}`}
-                            className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-muted text-base leading-none text-foreground transition-colors hover:bg-border disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-muted"
-                          >
-                            +
-                          </button>
-                        </div>
-                        <span className="text-sm font-semibold tabular-nums text-foreground">
-                          {formatCurrency(i.preco * i.quantidade)}
-                        </span>
-                      </div>
+                      <span className="text-lg font-bold tabular-nums text-foreground">
+                        {formatCurrency(i.preco * i.quantidade)}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Pagamento */}
-            <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold text-foreground">Pagamento</h2>
+                  </div>
+                ))}
               </div>
-              <label className="mb-1 block text-sm font-medium text-foreground">Forma de pagamento</label>
-              <select
-                value={metodo}
-                onChange={(e) => {
-                  const v = e.target.value as PaymentMethodUI;
-                  setMetodo(v);
-                  if (v !== 'cartao') setParcelas(1);
-                  if (v !== 'dinheiro') setValorRecebido('');
-                }}
-                className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
-              >
-                <option value="dinheiro">Dinheiro</option>
-                <option value="pix">PIX</option>
-                <option value="cartao">Cartão de crédito</option>
-              </select>
+            )}
+          </section>
 
-              {metodo === 'cartao' && (
-                <div className="mt-3">
-                  <label className="mb-1 block text-sm font-medium text-foreground">Parcelas</label>
-                  <select
-                    value={parcelas}
-                    onChange={(e) => setParcelas(parseInt(e.target.value, 10) || 1)}
-                    className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
-                  >
-                    {[1, 2, 3, 4, 5, 6, 10, 12].map((n) => (
-                      <option key={n} value={n}>
-                        {n}x
-                      </option>
-                    ))}
-                  </select>
+          {/* Embaixo: leitor+busca (esquerda) e pagamento+finalizar (direita), lado a lado */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Leitor + busca */}
+            <div className="space-y-6">
+              <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <Barcode className="h-5 w-5 text-primary" />
+                  <h2 className="text-lg font-semibold text-foreground">Leitor de código de barras</h2>
                 </div>
-              )}
-
-              {metodo === 'dinheiro' && (
-                <div className="mt-3">
-                  <label className="mb-1 block text-sm font-medium text-foreground">Valor recebido (opcional)</label>
+                <div className="relative">
+                  <Barcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={valorRecebido}
-                    onChange={(e) => setValorRecebido(e.target.value)}
-                    placeholder="0,00"
-                    className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
+                    ref={barcodeRef}
+                    type="text"
+                    value={barcode}
+                    onChange={(e) => {
+                      setBarcode(e.target.value);
+                      setScanStatus('ready');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        scanBarcode();
+                      }
+                    }}
+                    placeholder="Aproxime o leitor ou digite o código e pressione Enter"
+                    autoComplete="off"
+                    className="w-full rounded-lg border border-border py-3 pl-10 pr-4 text-lg focus:border-ring focus:ring-2 focus:ring-ring/40"
                   />
                 </div>
-              )}
+                <div className="mt-3">
+                  <span className={`pill ${statusPill[0]}`}>{statusPill[1]}</span>
+                </div>
+              </section>
 
-              <div className="mt-4 rounded-xl border-2 border-primary/25 bg-accent-soft/50 p-4">
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Subtotal</span>
-                    <span className="tabular-nums">{formatCurrency(subtotal)}</span>
-                  </div>
-                  {juros > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Juros do cartão ({cfg.cardInterestPercent}%)</span>
-                      <span className="tabular-nums">{formatCurrency(juros)}</span>
-                    </div>
+              <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <Search className="h-5 w-5 text-primary" />
+                  <h2 className="text-lg font-semibold text-foreground">Buscar produto por nome</h2>
+                </div>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    ref={searchRef}
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={onSearchKey}
+                    placeholder="Digite pelo menos 2 letras do nome ou SKU…"
+                    className="w-full rounded-lg border border-border py-3 pl-10 pr-10 text-lg focus:border-ring focus:ring-2 focus:ring-ring/40"
+                  />
+                  {searching && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
                   )}
-                  {troco > 0 && (
+                </div>
+
+                {searchTerm.trim().length >= 2 && !searching && searchError && (
+                  <p className="mt-3 text-sm text-danger">
+                    Não foi possível buscar agora. Verifique a conexão e tente de novo.
+                  </p>
+                )}
+
+                {searchTerm.trim().length >= 2 && !searching && !searchError && searchResults.length === 0 && (
+                  <p className="mt-3 text-sm text-muted-foreground">Nenhum produto encontrado.</p>
+                )}
+
+                {searchResults.length > 0 && (
+                  <ul className="mt-3 max-h-72 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+                    {searchResults.map((p, idx) => (
+                      <li
+                        key={p.id}
+                        onMouseEnter={() => setHighlight(idx)}
+                        onClick={() => pickResult(p)}
+                        className={`flex cursor-pointer items-center justify-between gap-3 p-3 ${
+                          idx === highlight ? 'bg-accent-soft' : 'hover:bg-muted'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-foreground">{p.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            SKU {p.sku}
+                            {p.barcode ? ` · ${p.barcode}` : ''}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="font-semibold tabular-nums text-foreground">{formatCurrency(p.salePrice)}</p>
+                          <p className="text-xs tabular-nums text-muted-foreground">estoque {toNumber(p.stockQuantity)}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+
+            {/* Pagamento + finalizar */}
+            <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+              <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-primary" />
+                  <h2 className="text-lg font-semibold text-foreground">Pagamento</h2>
+                </div>
+                <label className="mb-1 block text-sm font-medium text-foreground">Forma de pagamento</label>
+                <select
+                  value={metodo}
+                  onChange={(e) => {
+                    const v = e.target.value as PaymentMethodUI;
+                    setMetodo(v);
+                    if (v !== 'cartao') setParcelas(1);
+                    if (v !== 'dinheiro') setValorRecebido('');
+                  }}
+                  className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
+                >
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="pix">PIX</option>
+                  <option value="cartao">Cartão de crédito</option>
+                </select>
+
+                {metodo === 'cartao' && (
+                  <div className="mt-3">
+                    <label className="mb-1 block text-sm font-medium text-foreground">Parcelas</label>
+                    <select
+                      value={parcelas}
+                      onChange={(e) => setParcelas(parseInt(e.target.value, 10) || 1)}
+                      className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 10, 12].map((n) => (
+                        <option key={n} value={n}>
+                          {n}x
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {metodo === 'dinheiro' && (
+                  <div className="mt-3">
+                    <label className="mb-1 block text-sm font-medium text-foreground">Valor recebido (opcional)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={valorRecebido}
+                      onChange={(e) => setValorRecebido(e.target.value)}
+                      placeholder="0,00"
+                      className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
+                    />
+                  </div>
+                )}
+
+                <div className="mt-4 rounded-xl border-2 border-primary/25 bg-accent-soft/50 p-4">
+                  <div className="space-y-1 text-sm">
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Troco</span>
-                      <span className="tabular-nums">{formatCurrency(troco)}</span>
+                      <span>Subtotal</span>
+                      <span className="tabular-nums">{formatCurrency(subtotal)}</span>
+                    </div>
+                    {juros > 0 && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Juros do cartão ({cfg.cardInterestPercent}%)</span>
+                        <span className="tabular-nums">{formatCurrency(juros)}</span>
+                      </div>
+                    )}
+                    {troco > 0 && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Troco</span>
+                        <span className="tabular-nums">{formatCurrency(troco)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-2 flex items-end justify-between border-t border-primary/20 pt-2">
+                    <span className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                      Total
+                    </span>
+                    <span className="font-heading text-2xl font-bold tabular-nums text-primary">
+                      {formatCurrency(total)}
+                    </span>
+                  </div>
+                  {valorParcela > 0 && (
+                    <div className="mt-1 text-right text-xs text-muted-foreground">
+                      {parcelas}× de {formatCurrency(valorParcela)}
                     </div>
                   )}
                 </div>
-                <div className="mt-2 flex items-end justify-between border-t border-primary/20 pt-2">
-                  <span className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Total
-                  </span>
-                  <span className="font-heading text-2xl font-bold tabular-nums text-primary">
-                    {formatCurrency(total)}
-                  </span>
-                </div>
-                {valorParcela > 0 && (
-                  <div className="mt-1 text-right text-xs text-muted-foreground">
-                    {parcelas}× de {formatCurrency(valorParcela)}
-                  </div>
-                )}
-              </div>
 
-              <button
-                type="button"
-                onClick={finalizarVenda}
-                disabled={isProcessing || carrinho.length === 0}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-heading text-base font-bold text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Finalizando…
-                  </>
-                ) : (
-                  'Finalizar Venda'
-                )}
-              </button>
-            </section>
+                <button
+                  type="button"
+                  onClick={finalizarVenda}
+                  disabled={isProcessing || carrinho.length === 0}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-heading text-base font-bold text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Finalizando…
+                    </>
+                  ) : (
+                    'Finalizar Venda'
+                  )}
+                </button>
+              </section>
+            </div>
           </div>
         </div>
       </div>
