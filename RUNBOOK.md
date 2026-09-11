@@ -43,20 +43,31 @@ npm run seed:demo
 
 Confira no Supabase → **Table editor** se as tabelas apareceram.
 
-## 2. Gerar o instalador (uma vez)
+## 2. Gerar e publicar o instalador
 
 No computador de desenvolvimento:
 
 ```bash
-npm run electron:build
+npm run electron:publish
 ```
 
-Sai em `release/Laçolaria Setup 0.1.0.exe`. Copie esse arquivo para os 3 PCs
-(pendrive, rede, etc.).
+Builda, cria a tag da versão e sobe o instalador pro GitHub Releases. O nome
+do arquivo é sempre o mesmo (`Lacolaria-Setup.exe`), então o link abaixo
+**nunca muda** — sempre baixa a versão mais nova:
+
+```
+https://github.com/fsfigueira1/SistemaEstoqueSite/releases/latest/download/Lacolaria-Setup.exe
+```
+
+Manda esse link pra qualquer PC novo — não precisa de pendrive nem de
+atualizar o link a cada release.
+
+(Alternativa offline, sem publicar: `npm run electron:build` gera o `.exe`
+em `release/` pra copiar por pendrive/rede.)
 
 ## 3. Instalar em cada PC (1, 2 e 3)
 
-1. Rode `Laçolaria Setup 0.1.0.exe` → escolhe a pasta, cria atalho, abre no fim.
+1. Baixe pelo link acima e rode o instalador → escolhe a pasta, cria atalho, abre no fim.
 2. Abra o **Laçolaria**. No ícone da **bandeja** (ao lado do relógio):
    **Configurar banco de dados…** → cole a `DATABASE_URL` do Supabase → salvar.
    O app reinicia já conectado.
