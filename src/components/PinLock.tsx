@@ -1,13 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react'
-import { usePathname } from 'next/navigation'
 
 export default function PinLock({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  // A PWA de consulta (/m) tem seu próprio PIN de leitura (/senha); não
-  // sobrepõe o cadeado local do balcão.
-  const skipLock = pathname?.startsWith('/m') ?? false
   const [ready, setReady] = useState(false)
   const [storedPin, setStoredPin] = useState<string | null>(null)
   const [isUnlocked, setIsUnlocked] = useState(false)
@@ -49,10 +44,6 @@ export default function PinLock({ children }: { children: React.ReactNode }) {
     } else {
       setError('O PIN deve ter pelo menos 4 dígitos')
     }
-  }
-
-  if (skipLock) {
-    return <>{children}</>
   }
 
   if (!ready) {

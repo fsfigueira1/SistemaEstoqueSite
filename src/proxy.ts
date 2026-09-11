@@ -1,32 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { readOnlyDecision } from '@/lib/readOnly'
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Public paths: password page and its API (o login precisa funcionar mesmo
-  // sob READ_ONLY — é como o PIN de leitura entra).
+  // Public paths: password page and its API
   const publicPaths = ['/senha', '/api/senha']
 
   if (publicPaths.includes(pathname)) {
-    return NextResponse.next()
-  }
-
-  // Deploy público (Vercel) roda com READ_ONLY=1: nenhuma escrita, exceto o
-  // cron autenticado pelo CRON_SECRET. No Electron a env não existe e isto é no-op.
-  const ro = readOnlyDecision({
-    method: request.method,
-    pathname,
-    headers: { authorization: request.headers.get('authorization') },
-    env: process.env,
-  })
-  if (!ro.allow) {
-    return NextResponse.json({ error: 'Somente leitura' }, { status: ro.status })
-  }
-
-  // O cron se autentica pelo secret; não passa pela verificação de cookie de PIN.
-  if (pathname.startsWith('/api/cron/')) {
     return NextResponse.next()
   }
 

@@ -383,13 +383,3 @@ model Settings {
   cardInterestFromInstallments Int      @default(2)
   updatedAt                    DateTime @updatedAt
 }
-
-/// Snapshot diário de vendas, gerado às 19:00 (horário de Brasília) por um
-/// cron central. `date` é o dia civil BRT no formato date puro.
-model DailyReport {
-  date          DateTime @id @db.Date
-  generatedAt   DateTime
-  totalAmount   Decimal  @default(0)
-  salesCount    Int      @default(0)
-  averageTicket Decimal  @default(0)
-}
