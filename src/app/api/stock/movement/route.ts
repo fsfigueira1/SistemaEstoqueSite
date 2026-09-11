@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server"
 import { StockService } from "@/services/stockService"
-
+import { getSystemUserId } from "@/lib/systemUser"
 
 import { StockMovementType } from "@/generated/prisma/client"
 
 // POST /api/stock/movement - Create stock movements (add/remove/adjust)
 export async function POST(request: Request) {
   try {
-    // Authentication - Require ADMIN or MANAGER role for stock modification
-
-
     const data = await request.json()
-    const { type, ...input } = data
+    // performedById nunca vem do cliente (não há login por usuário) —
+    // sempre o usuário de sistema, igual /api/sales.
+    const { type, performedById: _ignored, ...rest } = data
+    const performedById = await getSystemUserId()
+    const input = { ...rest, performedById }
 
     let result;
 

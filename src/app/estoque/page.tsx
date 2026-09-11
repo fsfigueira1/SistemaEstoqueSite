@@ -11,6 +11,8 @@ import {
   AlertTriangle,
   Trash2,
   Pencil,
+  PackagePlus,
+  PackageMinus,
 } from 'lucide-react';
 
 // ---------- helpers ----------
@@ -110,6 +112,14 @@ export default function EstoquePage() {
   const [deleteBlocked, setDeleteBlocked] = useState(false);
   const [deleteForce, setDeleteForce] = useState(false);
 
+  // ---------- ajuste de estoque (entrada/saída num produto já cadastrado) ----------
+  const [stockTarget, setStockTarget] = useState<Product | null>(null);
+  const [stockType, setStockType] = useState<'add' | 'remove'>('add');
+  const [stockQty, setStockQty] = useState('');
+  const [stockNote, setStockNote] = useState('');
+  const [stockSaving, setStockSaving] = useState(false);
+  const [stockErr, setStockErr] = useState<string | null>(null);
+
   const reload = useCallback(async () => {
     const r = await fetch('/api/products?limit=1000').then((x) => x.json());
     if (r.success) setProducts(r.data?.products ?? []);
@@ -130,7 +140,7 @@ export default function EstoquePage() {
     })();
   }, []);
 
-  const anyModal = modalOpen || !!deleteTarget;
+  const anyModal = modalOpen || !!deleteTarget || !!stockTarget;
 
   useEffect(() => {
     if (!anyModal) scanRef.current?.focus();
@@ -315,6 +325,56 @@ export default function EstoquePage() {
     }
   };
 
+  // ---------- ajuste de estoque ----------
+  const openStockAdjust = (p: Product, type: 'add' | 'remove' = 'add') => {
+    setStockTarget(p);
+    setStockType(type);
+    setStockQty('');
+    setStockNote('');
+    setStockErr(null);
+  };
+  const closeStockAdjust = () => {
+    setStockTarget(null);
+    setStockQty('');
+    setStockNote('');
+    setStockErr(null);
+    setStockSaving(false);
+  };
+
+  const submitStockAdjust = async () => {
+    if (!stockTarget) return;
+    const qty = toNumber(stockQty);
+    if (qty <= 0) {
+      setStockErr('Informe uma quantidade maior que zero');
+      return;
+    }
+    setStockSaving(true);
+    setStockErr(null);
+    try {
+      const res = await fetch('/api/stock/movement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: stockType,
+          productId: stockTarget.id,
+          quantity: qty,
+          notes: stockNote.trim() || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setStockErr(data?.error?.message || data?.error || 'Não foi possível ajustar o estoque');
+        return;
+      }
+      await reload();
+      closeStockAdjust();
+    } catch {
+      setStockErr('Erro de rede ao ajustar o estoque');
+    } finally {
+      setStockSaving(false);
+    }
+  };
+
   // ---------- derived ----------
   const catName = useMemo(() => {
     const m = new Map(categories.map((c) => [c.id, c.name]));
@@ -451,6 +511,15 @@ export default function EstoquePage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openStockAdjust(p, 'add')}
+                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent-soft hover:text-accent-soft-foreground"
+                            aria-label={`Ajustar estoque de ${p.name}`}
+                            title="Ajustar estoque"
+                          >
+                            <PackagePlus className="h-4 w-4" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => openEdit(p)}
@@ -595,7 +664,9 @@ export default function EstoquePage() {
                   />
                   {editingId && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Ajuste o estoque por compras/vendas, não aqui.
+                      Pra adicionar ou remover quantidade, use o botão{' '}
+                      <PackagePlus className="inline h-3.5 w-3.5 align-text-bottom" /> "Ajustar estoque"
+                      na lista.
                     </p>
                   )}
                 </Field>
@@ -717,6 +788,118 @@ export default function EstoquePage() {
               >
                 {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
                 {deleteForce ? 'Excluir com histórico' : 'Excluir de vez'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* modal ajustar estoque */}
+      {stockTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="estoque-ajuste-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
+            <div className="mb-1 flex items-center justify-between">
+              <h2 id="estoque-ajuste-title" className="text-xl font-bold text-foreground">
+                Ajustar estoque
+              </h2>
+              <button
+                type="button"
+                onClick={closeStockAdjust}
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Fechar"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-muted-foreground">
+              {stockTarget.name} · estoque atual{' '}
+              <span className="font-semibold text-foreground">{toNumber(stockTarget.stockQuantity)}</span>
+            </p>
+
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setStockType('add')}
+                className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 font-medium transition-colors ${
+                  stockType === 'add'
+                    ? 'border-primary bg-accent-soft text-accent-soft-foreground'
+                    : 'border-border text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                <PackagePlus className="h-4 w-4" />
+                Entrada
+              </button>
+              <button
+                type="button"
+                onClick={() => setStockType('remove')}
+                className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 font-medium transition-colors ${
+                  stockType === 'remove'
+                    ? 'border-primary bg-accent-soft text-accent-soft-foreground'
+                    : 'border-border text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                <PackageMinus className="h-4 w-4" />
+                Saída
+              </button>
+            </div>
+
+            <Field label={stockType === 'add' ? 'Quantidade a adicionar' : 'Quantidade a remover'} required>
+              <input
+                autoFocus
+                type="number"
+                min="1"
+                step="1"
+                value={stockQty}
+                onChange={(e) => {
+                  setStockQty(e.target.value);
+                  setStockErr(null);
+                }}
+                className={inputCls()}
+                placeholder="0"
+              />
+            </Field>
+
+            <div className="mt-4">
+              <Field label="Observação" hint="Opcional — ex.: nota fiscal, motivo do ajuste">
+                <input
+                  value={stockNote}
+                  onChange={(e) => setStockNote(e.target.value)}
+                  className={inputCls()}
+                  placeholder="Ex.: compra NF 12345"
+                />
+              </Field>
+            </div>
+
+            {stockErr && (
+              <div
+                role="alert"
+                className="mt-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+              >
+                {stockErr}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeStockAdjust}
+                className="rounded-lg border border-border px-4 py-2 font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={submitStockAdjust}
+                disabled={stockSaving}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                {stockSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                Confirmar
               </button>
             </div>
           </div>
