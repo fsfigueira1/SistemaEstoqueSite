@@ -122,8 +122,14 @@ export function ReceiptPrint({
     minute: '2-digit',
   });
 
+  const pageSize = cfg.receiptWidth === '58mm' ? '58mm' : '80mm';
+
   return (
     <div>
+      {/* @page não pode ser condicionado por atributo/classe — precisa saber
+          cfg.receiptWidth em runtime, por isso é injetado aqui e não fica só
+          no globals.css. Tem que bater com o data-w abaixo. */}
+      <style>{`@media print { @page { size: ${pageSize} auto; margin: 0; } } `}</style>
       <div id="receipt-print-area" data-w={cfg.receiptWidth}>
       <div
         className="receipt"
@@ -297,16 +303,9 @@ export function ReceiptPrint({
           .no-print {
             display: none !important;
           }
-          @page {
-            size: 80mm auto;
-            margin: 0;
-          }
           :global(body) {
             margin: 0;
             background: #fff;
-          }
-          .receipt {
-            width: 72mm;
           }
         }
       `}</style>

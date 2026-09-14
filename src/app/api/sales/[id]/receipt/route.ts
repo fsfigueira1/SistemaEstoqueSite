@@ -46,7 +46,7 @@ export async function GET(
 
     // Format items for receipt
     const items = sale.items?.map(item => ({
-      name: item.product.name,
+      name: item.product?.name ?? item.productName ?? 'Produto',
       quantity: item.quantity,
       unitPrice: item.unitPrice.toNumber ? item.unitPrice.toNumber() : Number(item.unitPrice),
       total: item.totalAmount.toNumber ? item.totalAmount.toNumber() : Number(item.totalAmount),

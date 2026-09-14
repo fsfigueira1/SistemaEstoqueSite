@@ -8,7 +8,10 @@ type CreateSaleInput = {
   customerId?: string | null
   createdById: string
   items: Array<{
-    productId: string
+    // Ausente/nulo = item avulso (não cadastrado no catálogo): exige `name`,
+    // não baixa estoque e não passa pelas validações de Product.
+    productId?: string | null
+    name?: string | null
     quantity: number
     unitPrice: number | Prisma.Decimal
     discountAmount?: number | Prisma.Decimal
@@ -65,19 +68,28 @@ export class SaleService {
 
     // Validate items
     for (const item of input.items) {
-      if (!item.productId) throw new Error('Product ID is required for each item')
       if (!item.quantity || item.quantity <= 0) throw new Error('Quantity must be positive for each item')
-      // Check if we have sufficient stock
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId }
-      })
-      if (!product) {
-        throw new Error(`Product not found: ${item.productId}`)
-      }
-      // Venda da fila offline: não bloqueia por estoque (pode ter mudado
-      // enquanto o balcão estava sem internet). Deixa ir a negativo e segue.
-      if (!input.queued && product.stockQuantity < item.quantity) {
-        throw new Error(`Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, requested: ${item.quantity}`)
+      if (item.productId) {
+        // Check if we have sufficient stock
+        const product = await prisma.product.findUnique({
+          where: { id: item.productId }
+        })
+        if (!product) {
+          throw new Error(`Product not found: ${item.productId}`)
+        }
+        // Venda da fila offline: não bloqueia por estoque (pode ter mudado
+        // enquanto o balcão estava sem internet). Deixa ir a negativo e segue.
+        if (!input.queued && product.stockQuantity < item.quantity) {
+          throw new Error(`Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, requested: ${item.quantity}`)
+        }
+      } else {
+        // Item avulso: não cadastrado no catálogo, precisa de nome e preço.
+        if (!item.name || !item.name.trim()) {
+          throw new Error('Nome é obrigatório para item avulso')
+        }
+        if (item.unitPrice === undefined || item.unitPrice === null || Number(item.unitPrice) < 0) {
+          throw new Error('Preço inválido para item avulso')
+        }
       }
       if (item.discountAmount !== undefined && Number(item.discountAmount) < 0) {
         throw new Error('Discount amount cannot be negative for each item')
@@ -97,21 +109,33 @@ export class SaleService {
       const saleItemsData = []
 
       for (const item of input.items) {
-        // Get current product data (not trusting frontend prices)
-        const product = await tx.product.findUnique({
-          where: { id: item.productId }
-        })
+        let unitPrice: number | Prisma.Decimal
+        let productId: string | null = null
+        let productName: string | null = null
 
-        if (!product) {
-          throw new Error(`Product not found: ${item.productId}`)
+        if (item.productId) {
+          // Get current product data (not trusting frontend prices)
+          const product = await tx.product.findUnique({
+            where: { id: item.productId }
+          })
+
+          if (!product) {
+            throw new Error(`Product not found: ${item.productId}`)
+          }
+
+          if (!input.queued && product.status !== ProductStatus.ACTIVE) {
+            throw new Error(`Cannot sell inactive or discontinued product: ${product.name}`)
+          }
+
+          // Use passed-in unitPrice if provided, otherwise fallback to product's sale price
+          unitPrice = item.unitPrice ?? product.salePrice
+          productId = product.id
+        } else {
+          // Item avulso: preço e nome vêm do balcão, não existe Product por trás.
+          unitPrice = item.unitPrice
+          productName = String(item.name).trim()
         }
 
-        if (!input.queued && product.status !== ProductStatus.ACTIVE) {
-          throw new Error(`Cannot sell inactive or discontinued product: ${product.name}`)
-        }
-
-        // Use passed-in unitPrice if provided, otherwise fallback to product's sale price
-        const unitPrice = item.unitPrice ?? product.salePrice
         const lineTotal = Number(unitPrice) * Number(item.quantity)
         const itemDiscount = Number(item.discountAmount ?? 0)
         const itemTotal = lineTotal - itemDiscount
@@ -120,7 +144,8 @@ export class SaleService {
         itemDiscountTotal += itemDiscount
 
         saleItemsData.push({
-          productId: item.productId,
+          productId,
+          productName,
           quantity: item.quantity,
           unitPrice, // Store the actual price used
           discountAmount: itemDiscount,
@@ -174,7 +199,9 @@ export class SaleService {
         const saleItem = await tx.saleItem.create({
           data: {
             sale: { connect: { id: sale.id } },
-            product: { connect: { id: itemData.productId } },
+            ...(itemData.productId
+              ? { product: { connect: { id: itemData.productId } } }
+              : { productName: itemData.productName }),
             quantity: itemData.quantity,
             unitPrice: new Prisma.Decimal(itemData.unitPrice),
             discountAmount: new Prisma.Decimal(itemData.discountAmount ?? 0),
@@ -431,6 +458,7 @@ export class SaleService {
 
       if (opts.restock && sale.status === SaleStatus.COMPLETED) {
         for (const it of sale.items) {
+          if (!it.productId) continue // item avulso — nunca baixou estoque
           await tx.product.update({
             where: { id: it.productId },
             data: { stockQuantity: { increment: it.quantity } },
@@ -676,6 +704,9 @@ export class SaleService {
       const itemsWithStockUpdate = []
 
       for (const item of sale.items) {
+        // Item avulso (sem productId): não existe estoque para baixar.
+        if (!item.productId) continue
+
         // Get current product data
         const product = await tx.product.findUnique({
           where: { id: item.productId }
@@ -845,6 +876,7 @@ export class SaleService {
 
       // 7. Devolver estoque (aumentar quantidade dos produtos)
       for (const item of sale.items) {
+        if (!item.productId) continue // item avulso — nunca baixou estoque
         // Update product stock (increment)
         await tx.product.update({
           where: { id: item.productId },

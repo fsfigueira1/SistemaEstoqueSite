@@ -224,7 +224,10 @@
   }
 }
 
-/* --- Impressão de comprovante (Epson TM-T20X, bobina 80mm) --- */
+/* --- Impressão de comprovante (bobinas 58mm e 80mm) ---
+   O tamanho real da página (@page) é injetado dinamicamente pelo próprio
+   ReceiptPrint (ele conhece cfg.receiptWidth); aqui só ficam as regras de
+   layout, escolhidas pelo atributo data-w="58mm" | "80mm" no container. */
 @media print {
   body * {
     visibility: hidden !important;
@@ -238,11 +241,7 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 80mm;
     margin: 0;
-    /* A Epson TM-T20X tem uma zona não-imprimível de ~4mm na esquerda.
-       Sem esse recuo, "TOTAL" saía "TAL" e "Pagamento" saía "gamento". */
-    padding: 0 2mm 0 5mm;
     box-sizing: border-box;
     background: #fff;
   }
@@ -252,8 +251,20 @@
     margin: 0 !important;
     padding: 0 !important;
   }
-  @page {
-    size: 80mm auto;
-    margin: 0;
+
+  /* Bobina 80mm (ex.: Epson TM-T20X) — zona não-imprimível de ~4mm na
+     esquerda. Sem esse recuo, "TOTAL" saía "TAL" e "Pagamento" saía
+     "gamento". Área útil final: 80 - 5 - 2 = 73mm. */
+  #receipt-print-area[data-w='80mm'],
+  #receipt-print-area:not([data-w]) {
+    width: 80mm;
+    padding: 0 2mm 0 5mm;
+  }
+
+  /* Bobina 58mm — recuo simétrico (impressoras compactas não têm a mesma
+     zona cega assimétrica do TM-T20X). Área útil final: 58 - 5 - 5 = 48mm. */
+  #receipt-print-area[data-w='58mm'] {
+    width: 58mm;
+    padding: 0 5mm;
   }
 }

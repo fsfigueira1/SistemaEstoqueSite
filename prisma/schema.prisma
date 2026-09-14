@@ -138,13 +138,17 @@ model Sale {
 model SaleItem {
   id             String   @id @default(uuid())
   saleId         String
-  productId      String
+  // Nulo para item avulso (não cadastrado no catálogo — ex.: laço sem
+  // código de barras adicionado na hora da venda). Nesse caso productName
+  // guarda o nome digitado e o estoque não é mexido.
+  productId      String?
+  productName    String?
   quantity       Int
   unitPrice      Decimal
   discountAmount Decimal  @default(0)
   totalAmount    Decimal
   createdAt      DateTime @default(now())
-  product        Product  @relation("ProductSaleItems", fields: [productId], references: [id])
+  product        Product? @relation("ProductSaleItems", fields: [productId], references: [id])
   sale           Sale     @relation("SaleItems", fields: [saleId], references: [id])
   @@index([saleId])
   @@index([productId])

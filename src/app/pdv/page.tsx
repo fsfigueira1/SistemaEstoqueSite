@@ -13,6 +13,7 @@ import {
   Printer,
   Trash2,
   WifiOff,
+  PlusCircle,
 } from 'lucide-react';
 import { ReceiptPrint } from '@/components/pdv/ReceiptPrint';
 import Layout from '@/components/Layout';
@@ -81,7 +82,18 @@ type CartItem = {
   preco: number;
   estoque: number;
   quantidade: number;
+  /** true = produto avulso, não cadastrado no catálogo (não baixa estoque) */
+  avulso?: boolean;
 };
+
+// Produto avulso: não vem do catálogo (ex.: laço sem código de barras).
+// Usa um id determinístico (nome+preço) pra dois "adiciona" iguais virarem
+// a mesma linha no carrinho, como já acontece com produto de catálogo.
+const ADHOC_ID_PREFIX = 'avulso:';
+const ADHOC_STOCK = 999999;
+function adhocId(nome: string, preco: number): string {
+  return `${ADHOC_ID_PREFIX}${nome.trim().toLowerCase()}::${preco}`;
+}
 
 type PaymentMethodUI = 'dinheiro' | 'pix' | 'cartao';
 
@@ -114,6 +126,10 @@ export default function PDVPage() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [highlight, setHighlight] = useState(-1);
+
+  const [avulsoOpen, setAvulsoOpen] = useState(false);
+  const [avulsoNome, setAvulsoNome] = useState('');
+  const [avulsoPreco, setAvulsoPreco] = useState('');
 
   const [metodo, setMetodo] = useState<PaymentMethodUI>('dinheiro');
   const [parcelas, setParcelas] = useState(1);
@@ -195,6 +211,7 @@ export default function PDVPage() {
           preco: toNumber(p.salePrice),
           estoque: toNumber(p.stockQuantity),
           quantidade: 1,
+          avulso: p.id.startsWith(ADHOC_ID_PREFIX),
         },
       ];
     });
@@ -318,6 +335,33 @@ export default function PDVPage() {
     }
   };
 
+  // ---------- Produto avulso (sem cadastro, não baixa estoque) ----------
+  const addAvulso = () => {
+    const nome = avulsoNome.trim();
+    const preco = toNumber(avulsoPreco);
+    setError(null);
+    if (!nome) {
+      setError('Digite o nome do produto avulso');
+      return;
+    }
+    if (!(preco > 0)) {
+      setError('Digite um preço válido para o produto avulso');
+      return;
+    }
+    addToCart({
+      id: adhocId(nome, preco),
+      name: nome,
+      sku: 'AVULSO',
+      barcode: null,
+      salePrice: preco,
+      stockQuantity: ADHOC_STOCK,
+    });
+    setAvulsoNome('');
+    setAvulsoPreco('');
+    setAvulsoOpen(false);
+    barcodeRef.current?.focus();
+  };
+
   // ---------- Totais ----------
   const subtotal = carrinho.reduce((s, i) => s + i.preco * i.quantidade, 0);
   const juros =
@@ -394,7 +438,13 @@ export default function PDVPage() {
     setError(null);
     setSavedOffline(false);
 
-    const items = carrinho.map((i) => ({ productId: i.id, quantity: i.quantidade, unitPrice: i.preco }));
+    // Item avulso: manda productId null + name (o backend não busca no
+    // catálogo, não baixa estoque). Item de catálogo: manda productId normal.
+    const items = carrinho.map((i) =>
+      i.avulso
+        ? { productId: null, name: i.nome, quantity: i.quantidade, unitPrice: i.preco }
+        : { productId: i.id, quantity: i.quantidade, unitPrice: i.preco },
+    );
     const receiptItems = carrinho.map((i) => ({
       name: i.nome,
       quantity: i.quantidade,
@@ -419,7 +469,10 @@ export default function PDVPage() {
         occurredAt,
         payload: { cashSessionId, items, surchargeAmount: juros || undefined, payment },
       });
-      await applyLocalStockDelta(items);
+      // Produto avulso não existe no cache de catálogo — nada a abater.
+      await applyLocalStockDelta(
+        carrinho.filter((i) => !i.avulso).map((i) => ({ productId: i.id, quantity: i.quantidade })),
+      );
       const now = new Date();
       const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
       setFinishedSale({
@@ -597,7 +650,11 @@ export default function PDVPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate text-base font-semibold text-foreground">{i.nome}</p>
-                        <p className="text-xs text-muted-foreground">{i.codigo}</p>
+                        {i.avulso ? (
+                          <span className="pill pill-warn mt-0.5 inline-block">Avulso</span>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">{i.codigo}</p>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -730,6 +787,67 @@ export default function PDVPage() {
                       </li>
                     ))}
                   </ul>
+                )}
+              </section>
+
+              <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setAvulsoOpen((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 text-left"
+                >
+                  <span className="flex items-center gap-2">
+                    <PlusCircle className="h-5 w-5 text-primary" />
+                    <h2 className="text-lg font-semibold text-foreground">Produto avulso</h2>
+                  </span>
+                  <span className="text-sm font-medium text-primary">
+                    {avulsoOpen ? 'Fechar' : 'Adicionar'}
+                  </span>
+                </button>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Para item sem cadastro (ex.: laço variado, sem código de barras). Não baixa
+                  estoque — só entra nessa venda e no comprovante.
+                </p>
+
+                {avulsoOpen && (
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-foreground">Nome</label>
+                      <input
+                        type="text"
+                        value={avulsoNome}
+                        onChange={(e) => setAvulsoNome(e.target.value)}
+                        placeholder="Ex.: Laço fita dupla rosa"
+                        autoComplete="off"
+                        className="w-full rounded-lg border border-border px-3 py-2.5 text-base focus:border-ring focus:ring-2 focus:ring-ring/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-foreground">Preço</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={avulsoPreco}
+                        onChange={(e) => setAvulsoPreco(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addAvulso();
+                          }
+                        }}
+                        placeholder="0,00"
+                        autoComplete="off"
+                        className="w-full rounded-lg border border-border px-3 py-2.5 text-base focus:border-ring focus:ring-2 focus:ring-ring/40"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addAvulso}
+                      className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:opacity-90"
+                    >
+                      Adicionar ao carrinho
+                    </button>
+                  </div>
                 )}
               </section>
             </div>

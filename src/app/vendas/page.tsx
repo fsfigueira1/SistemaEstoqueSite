@@ -23,7 +23,7 @@ function saleToReceipt(sale: any): ReceiptData {
     date: sale.createdAt,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     items: (sale.items ?? []).map((it: any) => ({
-      name: it.product?.name ?? 'Produto',
+      name: it.product?.name ?? it.productName ?? 'Produto',
       quantity: it.quantity,
       unitPrice: Number(it.unitPrice),
       total: Number(it.totalAmount),
@@ -368,7 +368,7 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
                 {sale.items?.map((it: any) => (
                   <li key={it.id} className="flex justify-between gap-3 px-3 py-2">
                     <span className="text-foreground">
-                      {it.quantity}× {it.product?.name ?? 'Produto'}
+                      {it.quantity}× {it.product?.name ?? it.productName ?? 'Produto'}
                     </span>
                     <span className="font-medium text-foreground">{brl(it.totalAmount)}</span>
                   </li>
