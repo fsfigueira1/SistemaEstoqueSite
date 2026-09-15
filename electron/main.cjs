@@ -552,19 +552,28 @@ ipcMain.handle("set-receipt-printer", (_e, name) => {
   return c.PRINTER_NAME;
 });
 
-ipcMain.handle("print-receipt", async () => {
+// pageSize (opcional): { width, height } em microns, calculado no renderer a
+// partir da largura configurada (58/80mm) e da altura real do comprovante
+// renderizado. Sem isso, o Electron às vezes usa o tamanho de página padrão
+// do driver da impressora em vez do @page do CSS — e o texto sai cortado na
+// lateral (ou sobra papel em branco) quando o driver não bate com a bobina.
+ipcMain.handle("print-receipt", async (_e, pageSize) => {
   if (!mainWindow) return { ok: false, reason: "sem janela" };
   const deviceName = readConfig().PRINTER_NAME || "";
+  const printOptions = {
+    // silencioso só se já escolheram a impressora; senão mostra o diálogo
+    silent: Boolean(deviceName),
+    deviceName: deviceName || undefined,
+    margins: { marginType: "none" },
+    printBackground: false,
+  };
+  if (pageSize && Number(pageSize.width) > 0 && Number(pageSize.height) > 0) {
+    printOptions.pageSize = {
+      width: Math.round(Number(pageSize.width)),
+      height: Math.round(Number(pageSize.height)),
+    };
+  }
   return new Promise((resolve) => {
-    mainWindow.webContents.print(
-      {
-        // silencioso só se já escolheram a impressora; senão mostra o diálogo
-        silent: Boolean(deviceName),
-        deviceName: deviceName || undefined,
-        margins: { marginType: "none" },
-        printBackground: false,
-      },
-      (ok, reason) => resolve({ ok, reason }),
-    );
+    mainWindow.webContents.print(printOptions, (ok, reason) => resolve({ ok, reason }));
   });
 });

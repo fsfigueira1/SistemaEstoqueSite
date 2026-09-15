@@ -46,8 +46,14 @@ interface ReceiptPrintProps {
 }
 
 type ElectronReceiptAPI = {
-  printReceipt?: () => Promise<{ ok?: boolean; reason?: string }>;
+  printReceipt?: (
+    pageSize?: { width: number; height: number },
+  ) => Promise<{ ok?: boolean; reason?: string }>;
 };
+
+// Referência de conversão do CSS: 96px = 1in = 25.4mm, independente do DPI
+// físico da tela — é o que o Chromium usa internamente pra layout.
+const MM_PER_PX = 25.4 / 96;
 
 const METHOD_LABEL: Record<string, string> = {
   dinheiro: 'DINHEIRO',
@@ -72,6 +78,7 @@ export function ReceiptPrint({
   const storeInfo = cfg.companyTagline;
   const printingRef = React.useRef(false);
   const autoStarted = React.useRef(false);
+  const receiptRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     const after = () => {
@@ -91,7 +98,19 @@ export function ReceiptPrint({
         : undefined);
       if (api && typeof api.printReceipt === 'function') {
         // App instalado: impressão silenciosa na impressora configurada.
-        await api.printReceipt();
+        // Manda o tamanho exato da página em microns — sem isso, o Electron
+        // às vezes ignora o @page do CSS e usa o tamanho padrão do driver da
+        // impressora, cortando a lateral (ou sobrando bobina em branco).
+        const widthMm = cfg.receiptWidth === '58mm' ? 58 : 80;
+        const heightPx = receiptRef.current?.getBoundingClientRect().height ?? 0;
+        // +4mm de folga: melhor sobrar um pouco de papel em branco no fim do
+        // que arriscar cortar a última linha por diferença de arredondamento
+        // entre a medição na tela e o motor de impressão.
+        const heightMm = Math.max(40, heightPx * MM_PER_PX + 4);
+        await api.printReceipt({
+          width: Math.round(widthMm * 1000),
+          height: Math.round(heightMm * 1000),
+        });
       } else {
         // Navegador: diálogo padrão. window.print() é bloqueante no Chromium.
         window.print();
@@ -103,7 +122,7 @@ export function ReceiptPrint({
       printingRef.current = false;
       onPrintComplete?.();
     }
-  }, [onPrintComplete]);
+  }, [onPrintComplete, cfg.receiptWidth]);
 
   React.useEffect(() => {
     if (!autoPrint || autoStarted.current) return;
@@ -122,16 +141,19 @@ export function ReceiptPrint({
     minute: '2-digit',
   });
 
-  const pageSize = cfg.receiptWidth === '58mm' ? '58mm' : '80mm';
+  // Fallback pro caminho navegador (window.print()) — no Electron quem manda
+  // é o pageSize em microns calculado no handlePrint acima.
+  const cssPageSize = cfg.receiptWidth === '58mm' ? '58mm' : '80mm';
 
   return (
     <div>
       {/* @page não pode ser condicionado por atributo/classe — precisa saber
           cfg.receiptWidth em runtime, por isso é injetado aqui e não fica só
           no globals.css. Tem que bater com o data-w abaixo. */}
-      <style>{`@media print { @page { size: ${pageSize} auto; margin: 0; } } `}</style>
+      <style>{`@media print { @page { size: ${cssPageSize} auto; margin: 0; } } `}</style>
       <div id="receipt-print-area" data-w={cfg.receiptWidth}>
       <div
+        ref={receiptRef}
         className="receipt"
         style={{ width: cfg.receiptWidth === '58mm' ? '48mm' : '72mm' }}
       >
