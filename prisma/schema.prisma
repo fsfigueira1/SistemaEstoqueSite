@@ -385,5 +385,64 @@ model Settings {
   receiptWidth                 String   @default("80mm")
   cardInterestPercent          Float    @default(3.5)
   cardInterestFromInstallments Int      @default(2)
+  /// Perfil da loja usado pela IA para sugerir preços (posicionamento, público, bairro).
+  storeProfile                 String   @default("Papelaria nova, bem localizada, com curadoria e toque gourmet: produtos selecionados, atendimento caprichado e embalagem bonita. O cliente aceita pagar um pouco acima da média, desde que o preço seja justificável.")
+  /// Cidade/UF para a pesquisa de preços considerar o mercado local.
+  storeCity                    String   @default("")
+  /// Chave da API do Claude (Anthropic). Nunca é devolvida pela API de configurações.
+  aiApiKey                     String   @default("")
+  aiModel                      String   @default("claude-sonnet-5")
+  /// % acima do preço atual que dispara o aviso de "mercado em alta".
+  priceAlertPercent            Float    @default(10)
+  /// Assistente do relatório do dia.
+  reportReminderEnabled        Boolean  @default(true)
+  reportReminderTime           String   @default("18:00")
+  /// Fundo de troco padrão (dinheiro que já fica na gaveta ao abrir).
+  cashFloatDefault             Float    @default(0)
   updatedAt                    DateTime @updatedAt
+}
+
+/// Conferência do fechamento do dia (dinheiro, cartão e Pix contados x sistema).
+model DailyClosing {
+  id           String   @id @default(uuid())
+  /// Dia no formato AAAA-MM-DD (horário local da loja).
+  date         String   @unique
+  cashFloat    Decimal  @default(0)
+  withdrawals  Decimal  @default(0)
+  expectedCash Decimal  @default(0)
+  expectedCard Decimal  @default(0)
+  expectedPix  Decimal  @default(0)
+  countedCash  Decimal?
+  countedCard  Decimal?
+  countedPix   Decimal?
+  difference   Decimal  @default(0)
+  notes        String?
+  closedAt     DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// Resultado de uma pesquisa de preço de mercado feita pela IA.
+model PriceCheck {
+  id             String   @id @default(uuid())
+  /// Produto do catálogo (sem FK: pesquisa pode ser feita antes do cadastro).
+  productId      String?
+  barcode        String?
+  query          String
+  productName    String?
+  brand          String?
+  currentPrice   Decimal?
+  costPrice      Decimal?
+  suggestedPrice Decimal?
+  rangeMin       Decimal?
+  rangeMax       Decimal?
+  marketMin      Decimal?
+  marketMedian   Decimal?
+  marketMax      Decimal?
+  direction      String?
+  confidence     String?
+  sources        Json?
+  createdAt      DateTime @default(now())
+  @@index([productId])
+  @@index([barcode])
+  @@index([createdAt])
 }

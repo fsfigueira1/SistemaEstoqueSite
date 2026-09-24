@@ -11,7 +11,42 @@ Auth por usuário está **desligada de propósito**: acesso só por PIN
 (tela `/senha`, PINs no `.env`; e um cadeado local por navegador via
 `PinLock`, padrão `1234`, trocável em Configurações).
 
-## O que foi feito nesta rodada (13 commits sobre `f9d3e9b`)
+## Rodada 0.2.0 — relatórios, assistente, IA de preços, erros simples, visual "gourmet"
+
+Branch `feat/relatorios-ia-assistente`.
+
+**Novo**
+- `/relatorios` (lista de dias) e `/relatorios/AAAA-MM-DD` (página do dia):
+  entradas por **Dinheiro / Cartão (crédito+débito) / Pix**, estornos
+  descontados no dia do estorno, e **conferência do caixa** (fundo de troco,
+  retiradas, valores contados → "Bateu / Faltam / Sobram"). Salva em `DailyClosing`.
+  Regras em `src/services/reportService.ts` (topo) e `src/lib/closing.ts`.
+- **Assistente do dia** (`src/components/DailyAssistant.tsx`): aparece no
+  horário configurado (padrão 18:00) se houve venda e o caixa não foi conferido.
+  "30 min" adia; fechar dispensa até amanhã (preferência local do PC).
+- **Sugestão de preço com IA** (`src/services/priceAdvisorService.ts`,
+  `src/components/PriceAdvisor.tsx`): Claude + pesquisa na web
+  (`web_search_20250305`), por código de barras ou nome. No cadastro novo, um
+  EAN válido dispara a pesquisa sozinho e preenche o nome. Resultado salvo em
+  `PriceCheck` (cache de 7 dias). Aviso "abaixo do mercado" em Produtos e no
+  relatório. Chave/modelo/perfil da loja em Configurações → "Perfil da loja e IA".
+  A chave fica no banco e **nunca** volta pela API (`publicSettings`).
+  `ANTHROPIC_BASE_URL` permite apontar para proxy/simulador.
+- **Erros simples**: `src/lib/friendlyError.ts` transforma qualquer erro
+  (Prisma, rede, serviços em inglês) em nome curto ("Estoque insuficiente",
+  "Sem conexão"). Usado no `errorHandler`, nas rotas e nas telas (`errorText`).
+- **Visual**: Fraunces + Inter locais, trilho escuro, `PageHeader`, tela de PIN
+  nova — ver `DESIGN.md`.
+
+**Banco**: colunas novas em `Settings` + tabelas `DailyClosing` e `PriceCheck`.
+Cada PC aplica sozinho ao abrir (`src/lib/schemaUpgrade.ts`, tudo `IF NOT EXISTS`).
+O mesmo SQL está em `prisma/migrations/20260924120000_reports_ai/migration.sql`
+se quiser rodar no SQL Editor do Supabase antes.
+
+**Testes**: `src/lib/*.test.ts` (39 testes). A suíte antiga tem 47 falhas
+pré-existentes (stock/payment/productApi/integração) — iguais antes e depois.
+
+## Rodada anterior (13 commits sobre `f9d3e9b`)
 
 | Commit | Assunto |
 |---|---|

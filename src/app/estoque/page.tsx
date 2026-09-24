@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
 import { ProductStatus } from '@/generated/prisma/enums';
-import Layout from '@/components/Layout';
+import Layout, { PageHeader } from '@/components/Layout';
 import {
   Plus,
   Barcode,
@@ -14,6 +14,8 @@ import {
   PackagePlus,
   PackageMinus,
 } from 'lucide-react';
+import { errorText } from '@/lib/friendlyError';
+import PriceAdvisor from '@/components/PriceAdvisor';
 
 // ---------- helpers ----------
 function toNumber(value: unknown): number {
@@ -183,6 +185,14 @@ export default function EstoquePage() {
     setForm((f) => ({ ...f, [k]: v }));
     setErrors((e) => ({ ...e, [k]: undefined, base: undefined }));
   };
+  const applyPrice = useCallback((price: number) => {
+    setForm((f) => ({ ...f, preco: price.toFixed(2) }));
+    setErrors((e) => ({ ...e, preco: undefined }));
+  }, []);
+  const applyName = useCallback((nome: string) => {
+    setForm((f) => ({ ...f, nome }));
+    setErrors((e) => ({ ...e, nome: undefined }));
+  }, []);
 
   // ---------- scanner ----------
   const runScan = useCallback(
@@ -253,13 +263,13 @@ export default function EstoquePage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setErrors({ base: data?.error?.message || data?.error || 'Não foi possível salvar' });
+        setErrors({ base: errorText(data, 'Não foi possível salvar') });
         return;
       }
       await reload();
       closeModal();
     } catch {
-      setErrors({ base: 'Erro de rede ao salvar' });
+      setErrors({ base: 'Sem conexão' });
     } finally {
       setSaving(false);
     }
@@ -293,10 +303,10 @@ export default function EstoquePage() {
         closeDelete();
         return;
       }
-      setDeleteErr(data?.error?.message || 'Não foi possível excluir o produto.');
+      setDeleteErr(errorText(data, 'Não foi possível excluir o produto.'));
       setDeleteBlocked(data?.error?.code === 'HAS_HISTORY');
     } catch {
-      setDeleteErr('Erro de rede ao excluir.');
+      setDeleteErr('Sem conexão');
     } finally {
       setDeleting(false);
     }
@@ -317,9 +327,9 @@ export default function EstoquePage() {
         closeDelete();
         return;
       }
-      setDeleteErr(data?.error?.message || 'Não foi possível descontinuar.');
+      setDeleteErr(errorText(data, 'Não foi possível descontinuar.'));
     } catch {
-      setDeleteErr('Erro de rede.');
+      setDeleteErr('Sem conexão');
     } finally {
       setDeleting(false);
     }
@@ -363,13 +373,13 @@ export default function EstoquePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        setStockErr(data?.error?.message || data?.error || 'Não foi possível ajustar o estoque');
+        setStockErr(errorText(data, 'Não foi possível ajustar o estoque'));
         return;
       }
       await reload();
       closeStockAdjust();
     } catch {
-      setStockErr('Erro de rede ao ajustar o estoque');
+      setStockErr('Sem conexão');
     } finally {
       setStockSaving(false);
     }
@@ -392,20 +402,21 @@ export default function EstoquePage() {
   return (
     <Layout>
       <div className="space-y-6 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="font-heading text-2xl font-bold text-foreground">Estoque</h1>
-            <span className="mt-1.5 block h-1 w-14 rounded-full bg-primary" />
-          </div>
-          <button
-            type="button"
-            onClick={() => openNew()}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Novo produto
-          </button>
-        </div>
+        <PageHeader
+          eyebrow="Gestão"
+          title="Estoque"
+          subtitle="Bipe um código para achar, cadastrar ou ajustar"
+          actions={
+            <button
+              type="button"
+              onClick={() => openNew()}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Novo produto
+            </button>
+          }
+        />
 
         {/* leitor */}
         <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -555,7 +566,7 @@ export default function EstoquePage() {
           aria-labelledby="estoque-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         >
-          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-xl">
+          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 id="estoque-modal-title" className="text-xl font-bold text-foreground">
                 {editingId ? 'Editar produto' : 'Novo produto'}
@@ -651,6 +662,16 @@ export default function EstoquePage() {
                   />
                 </Field>
               </div>
+
+              <PriceAdvisor
+                barcode={form.codigoBarras}
+                name={form.nome}
+                costPrice={toNumber(form.custo)}
+                currentPrice={editingId ? toNumber(form.preco) : 0}
+                productId={editingId}
+                onUsePrice={applyPrice}
+                onUseName={applyName}
+              />
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Estoque atual" error={errors.estoque}>

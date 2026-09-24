@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { ProductService } from "@/services/productService"
+import { friendlyError } from "@/lib/friendlyError"
 
 
 
@@ -31,7 +32,7 @@ export async function GET(
       success: true,
       data: product
     })
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }
 
 // PUT /api/products/[id] - Update product
@@ -74,7 +75,7 @@ export async function PUT(
       success: true,
       data: product
     })
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }
 
 // DELETE /api/products/[id] - Exclui o produto de vez (hard delete).
@@ -88,8 +89,10 @@ export async function DELETE(
     const result = await ProductService.deleteProduct((await params).id, { force })
     return NextResponse.json({ success: true, data: result })
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro ao excluir produto"
     const code = (error as { code?: string })?.code
+    // HAS_HISTORY: a tela usa o código para oferecer "Descontinuar"; o nome fica curto.
+    const message =
+      code === "HAS_HISTORY" ? "Produto tem vendas — marque como Descontinuado" : friendlyError(error).message
     const status = code === "HAS_HISTORY" ? 409 : 500
     return NextResponse.json(
       { success: false, error: { message, code: code ?? "DELETE_FAILED" } },

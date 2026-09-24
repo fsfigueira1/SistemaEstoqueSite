@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Layout from '@/components/Layout';
+import Layout, { PageHeader } from '@/components/Layout';
 import {
   DollarSign,
   ShoppingCart,
@@ -14,7 +14,9 @@ import {
   Boxes,
   ArrowRight,
   Loader2,
+  NotebookPen,
 } from 'lucide-react';
+import { errorText } from '@/lib/friendlyError';
 
 type Stats = {
   totalProducts: number;
@@ -60,9 +62,9 @@ export default function DashboardPage() {
         const res = await fetch('/api/dashboard/stats');
         const data = await res.json();
         if (data.success) setStats(data.data);
-        else setError(data?.error || 'Falha ao carregar indicadores');
+        else setError(errorText(data, 'Falha ao carregar indicadores'));
       } catch {
-        setError('Erro de rede ao carregar indicadores');
+        setError('Sem conexão');
       } finally {
         setLoading(false);
       }
@@ -72,10 +74,18 @@ export default function DashboardPage() {
   return (
     <Layout>
       <div className="space-y-6 p-6">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-foreground">Painel</h1>
-          <span className="mt-1.5 block h-1 w-14 rounded-full bg-primary" />
-        </div>
+        <PageHeader
+          eyebrow={new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+          title="Painel"
+          actions={
+            <Link
+              href="/relatorios"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:border-primary/40"
+            >
+              <NotebookPen className="h-4 w-4 text-primary" /> Relatório do dia
+            </Link>
+          }
+        />
 
         {loading ? (
           <div className="py-20 text-center text-sm text-muted-foreground">
@@ -151,7 +161,7 @@ export default function DashboardPage() {
               {/* vendas recentes */}
               <div className="rounded-xl border border-border bg-card shadow-sm lg:col-span-2">
                 <div className="flex items-center justify-between border-b border-border px-5 py-3">
-                  <h2 className="font-semibold text-foreground">Vendas recentes</h2>
+                  <h2 className="text-lg text-foreground">Vendas recentes</h2>
                   <Link href="/vendas" className="flex items-center gap-1 text-sm text-primary hover:underline">
                     Ver todas <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
@@ -189,13 +199,13 @@ export default function DashboardPage() {
               {/* alerta de estoque */}
               <div className="rounded-xl border border-border bg-card shadow-sm">
                 <div className="flex items-center justify-between border-b border-border px-5 py-3">
-                  <h2 className="font-semibold text-foreground">Repor estoque</h2>
+                  <h2 className="text-lg text-foreground">Repor estoque</h2>
                   <Link href="/estoque" className="flex items-center gap-1 text-sm text-primary hover:underline">
                     Estoque <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
                 {stats.lowStockList.length === 0 ? (
-                  <p className="px-5 py-8 text-center text-sm text-muted-foreground">Nada para repor. 👍</p>
+                  <p className="px-5 py-8 text-center text-sm text-muted-foreground">Nada para repor.</p>
                 ) : (
                   <ul className="divide-y divide-border">
                     {stats.lowStockList.map((p) => (
@@ -220,7 +230,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <QuickLink href="/pdv" label="Abrir PDV" desc="Registrar uma venda" icon={<ShoppingCart />} />
               <QuickLink href="/produtos" label="Produtos" desc="Cadastrar / editar catálogo" icon={<Package />} />
-              <QuickLink href="/vendas" label="Vendas" desc="Histórico e relatórios" icon={<Receipt />} />
+              <QuickLink href="/relatorios" label="Relatórios" desc="Conferir o caixa do dia" icon={<NotebookPen />} />
             </div>
           </>
         ) : null}

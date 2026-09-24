@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { CashSessionService } from "@/services/cashSessionService"
 import { prisma } from "@/lib/prisma"
 import { getSystemUserId } from "@/lib/systemUser"
+import { friendlyError } from "@/lib/friendlyError"
 
 // GET /api/cash-session/open - Get available cash registers for opening
 export async function GET() {
@@ -40,7 +41,7 @@ export async function GET() {
   } catch (error) {
     console.error("Cash session open API error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      { error: friendlyError(error).message },
       { status: 500 }
     );
   }
@@ -153,7 +154,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Cash session open API error:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      { error: friendlyError(error).message },
       { status: 500 }
     )
   }

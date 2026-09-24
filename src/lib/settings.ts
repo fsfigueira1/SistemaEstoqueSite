@@ -15,6 +15,18 @@ export type StoreSettings = {
   receiptWidth: '58mm' | '80mm';
   cardInterestPercent: number;
   cardInterestFromInstallments: number;
+  // perfil da loja e IA de preços
+  storeProfile: string;
+  storeCity: string;
+  aiModel: string;
+  priceAlertPercent: number;
+  // assistente do relatório do dia
+  reportReminderEnabled: boolean;
+  reportReminderTime: string;
+  cashFloatDefault: number;
+  // somente leitura (a chave nunca vem do servidor)
+  aiKeySet?: boolean;
+  aiKeyHint?: string;
 };
 
 const CACHE_KEY = 'lacolaria_settings';
@@ -30,6 +42,16 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   receiptWidth: '80mm',
   cardInterestPercent: 3.5,
   cardInterestFromInstallments: 2,
+  storeProfile:
+    'Papelaria nova, bem localizada, com curadoria e toque gourmet: produtos selecionados, atendimento caprichado e embalagem bonita. O cliente aceita pagar um pouco acima da média, desde que o preço seja justificável.',
+  storeCity: '',
+  aiModel: 'claude-sonnet-5',
+  priceAlertPercent: 10,
+  reportReminderEnabled: true,
+  reportReminderTime: '18:00',
+  cashFloatDefault: 0,
+  aiKeySet: false,
+  aiKeyHint: '',
 };
 
 function readCache(): StoreSettings {
@@ -71,16 +93,28 @@ export async function loadSettings(): Promise<StoreSettings> {
   return readCache();
 }
 
-/** Grava no banco e no cache. */
-export async function saveSettings(patch: Partial<StoreSettings>): Promise<StoreSettings> {
+/**
+ * Grava no banco e no cache. `extra` vai só para o servidor (ex.: a chave da
+ * IA, que nunca é guardada no navegador).
+ */
+export async function saveSettings(
+  patch: Partial<StoreSettings>,
+  extra?: { aiApiKey?: string; aiApiKeyClear?: boolean },
+): Promise<StoreSettings> {
   const next = { ...readCache(), ...patch };
   writeCache(next);
   try {
-    await fetch('/api/settings', {
+    const res = await fetch('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(next),
+      body: JSON.stringify({ ...next, ...extra }),
     });
+    const data = await res.json().catch(() => null);
+    if (data?.success && data.data) {
+      const merged = { ...DEFAULT_SETTINGS, ...data.data } as StoreSettings;
+      writeCache(merged);
+      return merged;
+    }
   } catch {
     /* offline: mantém só no cache até reconectar */
   }

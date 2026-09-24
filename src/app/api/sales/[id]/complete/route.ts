@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { SaleService } from "@/services/saleService"
 import { getSystemUserId } from "@/lib/systemUser"
+import { friendlyError } from "@/lib/friendlyError"
 
 export async function POST(
   request: Request,
@@ -49,6 +50,6 @@ export async function POST(
       data: result
     })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
   }
 }

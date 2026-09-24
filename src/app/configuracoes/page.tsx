@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Layout from '@/components/Layout';
-import { Settings, Store, Printer, KeyRound, CheckCircle, CreditCard, Users, Database } from 'lucide-react';
+import Layout, { PageHeader } from '@/components/Layout';
+import { Store, Printer, KeyRound, CheckCircle, CreditCard, Users, Database, Sparkles, BellRing, Eye, EyeOff } from 'lucide-react';
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -16,6 +16,9 @@ export default function ConfiguracoesPage() {
   const [form, setForm] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // chave da IA: nunca vem do servidor; o campo só serve para trocar
+  const [aiKey, setAiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
 
   // PIN
   const [pinCur, setPinCur] = useState('');
@@ -35,9 +38,17 @@ export default function ConfiguracoesPage() {
   };
 
   const save = async () => {
-    await saveSettings(form);
+    const next = await saveSettings(form, aiKey.trim() ? { aiApiKey: aiKey.trim() } : undefined);
+    setForm(next);
+    setAiKey('');
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+  };
+
+  const removeKey = async () => {
+    if (!window.confirm('Remover a chave da IA? A sugestão de preço para de funcionar até colar outra.')) return;
+    const next = await saveSettings(form, { aiApiKeyClear: true });
+    setForm(next);
   };
 
   const changePin = () => {
@@ -62,13 +73,7 @@ export default function ConfiguracoesPage() {
   return (
     <Layout>
       <div className="mx-auto max-w-3xl space-y-6 p-6">
-        <div className="flex items-center gap-2">
-          <Settings className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
-            <p className="text-sm text-muted-foreground">Preferências da loja neste dispositivo</p>
-          </div>
-        </div>
+        <PageHeader eyebrow="Gestão" title="Configurações" subtitle="Valem para todos os computadores da loja (exceto o PIN)" />
 
         {/* Dados da empresa */}
         <Section icon={<Store className="h-5 w-5" />} title="Dados da empresa" desc="Aparecem no comprovante de compra">
@@ -91,6 +96,147 @@ export default function ConfiguracoesPage() {
               </Field>
             </div>
           </div>
+        </Section>
+
+        {/* IA de preços */}
+        <div id="ia" className="scroll-mt-6" />
+        <Section
+          icon={<Sparkles className="h-5 w-5" />}
+          title="Perfil da loja e IA de preços"
+          desc="A IA pesquisa o mercado e sugere preços pensando neste perfil"
+        >
+          <div className="space-y-4">
+            <Field label="Como é a sua loja">
+              <textarea
+                value={form.storeProfile}
+                onChange={(e) => set('storeProfile', e.target.value)}
+                rows={3}
+                className={inp}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Posicionamento, público, bairro. Ex.: &quot;papelaria nova, bem localizada, toque gourmet&quot;.
+              </p>
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Cidade / UF">
+                <input
+                  value={form.storeCity}
+                  onChange={(e) => set('storeCity', e.target.value)}
+                  className={inp}
+                  placeholder="Ex.: São Paulo/SP"
+                />
+              </Field>
+              <Field label="Avisar quando o mercado passar do meu preço em">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={form.priceAlertPercent}
+                    onChange={(e) => set('priceAlertPercent', Number(e.target.value) || 10)}
+                    className={inp}
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+              </Field>
+            </div>
+
+            <div className="rounded-xl border border-border bg-muted/40 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-foreground">Chave do Claude (Anthropic)</p>
+                {form.aiKeySet ? (
+                  <span className="pill pill-ok">
+                    <CheckCircle className="h-3 w-3" /> Configurada {form.aiKeyHint}
+                  </span>
+                ) : (
+                  <span className="pill pill-muted">Não configurada</span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showKey ? 'text' : 'password'}
+                    value={aiKey}
+                    onChange={(e) => {
+                      setAiKey(e.target.value);
+                      setSaved(false);
+                    }}
+                    placeholder={form.aiKeySet ? 'Cole outra chave para trocar' : 'sk-ant-…'}
+                    autoComplete="off"
+                    className={`${inp} pr-10`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                    aria-label={showKey ? 'Esconder chave' : 'Mostrar chave'}
+                  >
+                    {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {form.aiKeySet && (
+                  <button type="button" onClick={removeKey} className="rounded-lg border border-border px-3 text-sm text-danger hover:bg-danger/10">
+                    Remover
+                  </button>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Crie em console.anthropic.com (é cobrada à parte do plano Pro, por uso). A chave fica guardada no banco da loja
+                e não aparece de novo nesta tela.
+              </p>
+              <div className="mt-3">
+                <Field label="Qualidade da pesquisa">
+                  <select value={form.aiModel} onChange={(e) => set('aiModel', e.target.value)} className={inp}>
+                    <option value="claude-sonnet-5">Equilibrada — Claude Sonnet 5 (recomendado)</option>
+                    <option value="claude-haiku-4-5-20251001">Econômica — Claude Haiku 4.5</option>
+                    <option value="claude-opus-5-5">Máxima — Claude Opus 5.5</option>
+                  </select>
+                </Field>
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        {/* Assistente do relatório do dia */}
+        <Section
+          icon={<BellRing className="h-5 w-5" />}
+          title="Assistente do relatório do dia"
+          desc="Avisa no horário de fechamento com o resumo e o atalho para conferir o caixa"
+        >
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="flex items-center gap-2 text-sm text-foreground/90 sm:col-span-3">
+              <input
+                type="checkbox"
+                checked={form.reportReminderEnabled}
+                onChange={(e) => set('reportReminderEnabled', e.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              Avisar todo dia
+            </label>
+            <Field label="Horário do aviso">
+              <input
+                type="time"
+                value={form.reportReminderTime}
+                onChange={(e) => set('reportReminderTime', e.target.value)}
+                disabled={!form.reportReminderEnabled}
+                className={inp}
+              />
+            </Field>
+            <Field label="Fundo de troco padrão (R$)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.cashFloatDefault}
+                onChange={(e) => set('cashFloatDefault', Number(e.target.value) || 0)}
+                className={inp}
+              />
+            </Field>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            O fundo de troco é o dinheiro que já fica na gaveta ao abrir. Ele entra na conta do &quot;dinheiro esperado&quot; na
+            conferência.
+          </p>
         </Section>
 
         {/* Impressão */}
@@ -195,9 +341,8 @@ export default function ConfiguracoesPage() {
 
         <Section icon={<Database className="h-5 w-5" />} title="Backup e restauração" desc="Manual">
           <p className="text-sm text-muted-foreground">
-            Os dados ficam no arquivo <code className="rounded bg-muted px-1">dev.db</code> na pasta do
-            sistema. Faça backup copiando esse arquivo. Restauração automática pela interface ainda não
-            está disponível.
+            Os dados ficam no banco da loja no Supabase, compartilhado pelos computadores. O Supabase faz cópias
+            automáticas; restauração pela interface ainda não está disponível.
           </p>
         </Section>
       </div>
@@ -206,7 +351,7 @@ export default function ConfiguracoesPage() {
 }
 
 const inp =
-  'w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40';
+  'w-full rounded-lg border border-border bg-card px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40 disabled:opacity-60';
 
 function Section({
   icon,
@@ -220,11 +365,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card shadow-sm p-5">
+    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-start gap-3">
         <span className="rounded-lg bg-accent-soft p-2 text-primary">{icon}</span>
         <div>
-          <h2 className="font-semibold text-foreground">{title}</h2>
+          <h2 className="text-lg text-foreground">{title}</h2>
           {desc && <p className="text-xs text-muted-foreground">{desc}</p>}
         </div>
       </div>

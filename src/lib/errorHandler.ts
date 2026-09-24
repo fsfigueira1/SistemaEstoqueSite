@@ -1,80 +1,55 @@
 import { apiValidationError, apiNotFoundError, apiConflictError, apiBusinessError, apiError, apiUnauthorizedError, apiForbiddenError } from "@/lib/apiResponse"
-import type { PrismaClientKnownRequestError, PrismaClientValidationError } from "@prisma/client/runtime/client"
+import { simplifyMessage } from "@/lib/friendlyError"
 
+// Log técnico no servidor. O helper pino (src/lib/logger.ts) depende de
+// pino-pretty, que não está instalado — por isso console aqui, num ponto só.
+function logTechnical(label: string, detail: unknown) {
+  // eslint-disable-next-line quality/no-direct-console -- ver comentário acima
+  console.error(label, detail)
+}
 
 /**
- * Handle Prisma and service errors, converting them to appropriate API responses
+ * Converte erros do Prisma e dos serviços em respostas de API.
+ * O status HTTP continua o mesmo de antes; a mensagem vira um nome curto em
+ * português (ver src/lib/friendlyError.ts). O detalhe técnico fica no log.
  */
 export function handleApiError(error: unknown): ReturnType<typeof apiError> {
-  // Prisma known error types
-  if (error && typeof error === 'object' && 'code' in error) {
-    const prismaError = error as PrismaClientKnownRequestError
+  // Erros conhecidos do Prisma
+  if (error && typeof error === 'object' && 'code' in error && typeof (error as { code: unknown }).code === 'string') {
+    const code = (error as { code: string }).code
+    const raw = `${code} ${String((error as { message?: unknown }).message ?? '')}`
+    if (code.startsWith('P')) logTechnical('[erro banco]', raw)
 
-    switch (prismaError.code) {
-      case 'P2002': // Unique constraint violation
-        return apiConflictError('A record with these values already exists')
-      case 'P2025': // Record not found
-        return apiNotFoundError()
-      case 'P2003': // Foreign key constraint failed
-        return apiConflictError('Cannot perform this operation due to related records')
+    switch (code) {
+      case 'P2002': // unique
+        return apiConflictError(simplifyMessage(raw))
+      case 'P2025': // não encontrado
+        return apiNotFoundError(simplifyMessage(raw))
+      case 'P2003': // FK
+        return apiConflictError('Em uso — não pode excluir')
       default:
-        // Other Prisma errors
-        return apiError('Database error occurred', 500, 'DATABASE_ERROR')
+        if (code.startsWith('P')) return apiError(simplifyMessage(raw), 500, 'DATABASE_ERROR')
     }
   }
 
-  // Handle validation errors from services
+  // Erros de validação/regra vindos dos serviços
   if (error && typeof error === 'object' && 'message' in error) {
     const message = String((error as { message: unknown }).message)
+    const short = simplifyMessage(message.replace(/^(UNAUTHORIZED|FORBIDDEN):\s*/, ''))
 
-    // Auth errors should be checked first (most specific)
-    if (message.startsWith('UNAUTHORIZED:')) {
-      return apiUnauthorizedError(message.replace('UNAUTHORIZED: ', ''))
-    }
+    if (message.startsWith('UNAUTHORIZED:')) return apiUnauthorizedError(short)
+    if (message.startsWith('FORBIDDEN:')) return apiForbiddenError(short)
+    if (/not found|não encontrad/i.test(message)) return apiNotFoundError(short)
+    if (/required|missing|obrigat/i.test(message)) return apiValidationError(short)
+    if (/email/i.test(message) && /format/i.test(message)) return apiValidationError(short)
+    if (/password/i.test(message) && /length|characters/i.test(message)) return apiValidationError(short)
+    if (/already exists|duplicate|já existe/i.test(message)) return apiConflictError(short)
 
-    if (message.startsWith('FORBIDDEN:')) {
-      return apiForbiddenError(message.replace('FORBIDDEN: ', ''))
-    }
-
-    // Not found errors should return 404 not 422
-    if (message.includes('not found') || message.includes('Not found')) {
-      return apiNotFoundError(message)
-    }
-
-    // Common validation error messages
-    if (message.includes('required') || message.includes('missing')) {
-      return apiValidationError(message)
-    }
-
-    if (message.includes('email') && message.includes('format')) {
-      return apiValidationError(message)
-    }
-
-    if (message.includes('password') && message.includes('length')) {
-      return apiValidationError(message)
-    }
-
-    if (message.includes('already exists') || message.includes('duplicate')) {
-      return apiConflictError(message)
-    }
-
-    if (message.includes('stock') && (message.includes('insufficient') || message.includes('availability'))) {
-      return apiBusinessError(message)
-    }
-
-    if (message.includes('session') && message.includes('open')) {
-      return apiBusinessError(message)
-    }
-
-    if (message.includes('admin') && (message.includes('last') || message.includes('only'))) {
-      return apiBusinessError(message)
-    }
-
-    // Default to business error for service validation messages
-    return apiBusinessError(message)
+    // Demais regras de negócio (estoque, caixa, etc.)
+    if (short === 'Algo deu errado') logTechnical('[erro]', message)
+    return apiBusinessError(short)
   }
 
-  // Unexpected error
-  console.error('Unexpected API error:', error)
-  return apiError('An unexpected error occurred', 500, 'INTERNAL_ERROR')
+  logTechnical('[erro inesperado]', error)
+  return apiError('Algo deu errado', 500, 'INTERNAL_ERROR')
 }

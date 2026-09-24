@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Layout from '@/components/Layout';
-import { Receipt, Loader2, XCircle, Search, Printer, Trash2 } from 'lucide-react';
+import Layout, { PageHeader } from '@/components/Layout';
+import { Loader2, XCircle, Search, Printer, Trash2 } from 'lucide-react';
 import { ReceiptPrint, type ReceiptData } from '@/components/pdv/ReceiptPrint';
+import { errorText } from '@/lib/friendlyError';
 
 // método do banco -> forma usada no comprovante
 const METHOD_TO_RECEIPT: Record<string, ReceiptData['paymentMethod']> = {
@@ -130,13 +131,7 @@ export default function VendasPage() {
   return (
     <Layout>
       <div className="space-y-6 p-6">
-        <div className="flex items-center gap-2">
-          <Receipt className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Gestão de Vendas</h1>
-            <p className="text-sm text-muted-foreground">Histórico e desempenho das vendas realizadas</p>
-          </div>
-        </div>
+        <PageHeader eyebrow="Balcão" title="Vendas" subtitle="Histórico das vendas, estornos e comprovantes" />
 
         {/* filtros */}
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card shadow-sm p-4">
@@ -266,7 +261,7 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
         const res = await fetch(`/api/sales/${id}`);
         const data = await res.json();
         if (data.success) setSale(data.data);
-        else setErr(data?.error || 'Falha ao carregar a venda');
+        else setErr(errorText(data, 'Falha ao carregar a venda'));
       } finally {
         setLoading(false);
       }
@@ -281,7 +276,7 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
       const res = await fetch(`/api/sales/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setErr(data?.error?.message || data?.error || 'Não foi possível cancelar');
+        setErr(errorText(data, 'Não foi possível cancelar'));
         return;
       }
       onChanged();
@@ -300,7 +295,7 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
       const res = await fetch(`/api/sales/${id}/refund`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setErr(data?.error?.message || data?.error || 'Não foi possível estornar');
+        setErr(errorText(data, 'Não foi possível estornar'));
         return;
       }
       onChanged();
@@ -319,7 +314,7 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setErr(data?.error?.message || data?.error || 'Não foi possível excluir a venda');
+        setErr(errorText(data, 'Não foi possível excluir a venda'));
         return;
       }
       onChanged();

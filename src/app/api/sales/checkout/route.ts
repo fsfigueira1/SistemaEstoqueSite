@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { SaleService } from "@/services/saleService"
 import { getSystemUserId } from "@/lib/systemUser"
 import type { PaymentMethod } from "@/generated/prisma/enums"
+import { friendlyError } from "@/lib/friendlyError"
 
 // POST /api/sales/checkout
 // Cria e conclui a venda numa única chamada. Ou tudo dá certo (venda COMPLETED,
@@ -99,13 +100,11 @@ export async function POST(request: Request) {
     } catch (completeErr) {
       // desfaz a venda pendente para não deixar lixo
       await SaleService.cancelSale(sale.id).catch(() => {})
-      const msg =
-        completeErr instanceof Error ? completeErr.message : "Falha ao concluir a venda"
-      return NextResponse.json({ error: msg }, { status: 409 })
+      return NextResponse.json({ error: friendlyError(completeErr).message }, { status: 409 })
     }
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      { error: friendlyError(error).message },
       { status: 500 },
     )
   }

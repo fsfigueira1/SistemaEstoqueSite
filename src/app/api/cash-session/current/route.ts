@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { CashSessionService } from "@/services/cashSessionService"
+import { friendlyError } from "@/lib/friendlyError"
 
 // GET /api/cash-session/current - Get the currently open cash session (if any)
 export async function GET() {
@@ -27,7 +28,7 @@ export async function GET() {
   } catch (error) {
     console.error("Cash session current API error:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      { error: friendlyError(error).message },
       { status: 500 }
     )
   }

@@ -870,6 +870,8 @@ export class SaleService {
         where: { id: paidPayment.id },
         data: {
           status: PaymentStatus.REFUNDED,
+          // o fechamento do dia usa esta data para descontar o estorno do dia certo
+          refundedAt: new Date(),
           processedById: paidPayment.processedById
         }
       })

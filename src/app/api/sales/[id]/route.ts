@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { SaleService } from "@/services/saleService"
+import { friendlyError } from "@/lib/friendlyError"
 
 
 
@@ -19,7 +20,7 @@ export async function GET(
       success: true,
       data: result
     })
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }
 
 // PUT /api/sales/[id] - NOT IMPLEMENTED: SaleService doesn't have update method
@@ -44,7 +45,7 @@ export async function PUT(
       },
       { status: 405 }
     )
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }
 
 // DELETE /api/sales/[id]
@@ -68,7 +69,7 @@ export async function DELETE(
     return NextResponse.json({ success: true, data: result })
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: { message: error instanceof Error ? error.message : "Erro ao excluir a venda" } },
+      { success: false, error: friendlyError(error) },
       { status: 500 },
     )
   }
