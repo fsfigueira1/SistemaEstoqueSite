@@ -1,0 +1,48 @@
+# Publica o instalador Windows no GitHub Releases (auto-update dos PCs da loja).
+# Faz na nuvem o mesmo que `npm run electron:publish` faz no PC servidor, para
+# dar para soltar atualização sem estar na loja.
+#
+# Dispara quando uma tag vX.Y.Z é enviada (a versão tem que bater com o
+# package.json), ou manualmente em Actions → "Publicar instalador" → Run workflow.
+name: Publicar instalador
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Conferir versão x tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          if [ "v$v" != "${GITHUB_REF_NAME}" ]; then
+            echo "A tag ${GITHUB_REF_NAME} não bate com a versão $v do package.json"; exit 1
+          fi
+
+      - run: npm ci
+
+      # prebuild roda o prisma generate
+      - run: npm run build
+
+      - run: node scripts/prepare-standalone.cjs
+
+      - name: Gerar e publicar o instalador
+        run: npx electron-builder --win nsis --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
