@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { SaleService } from "@/services/saleService"
 import { getSystemUserId } from "@/lib/systemUser"
 import { SaleStatus } from "@/generated/prisma/enums"
+import { friendlyError } from "@/lib/friendlyError"
 
 // GET /api/sales - List sales with filters and pagination
 export async function GET(request: Request) {
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
       data: result
     })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
   }
 }
 
@@ -106,6 +107,6 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
   }
 }

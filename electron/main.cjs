@@ -14,6 +14,7 @@ const {
   dialog,
   powerSaveBlocker,
   nativeImage,
+  shell,
 } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
@@ -200,6 +201,16 @@ async function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
+
+  // links externos (ex.: lojas da pesquisa de preço) abrem no navegador padrão,
+  // não numa janela solta do app
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url) && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(url)) {
+      shell.openExternal(url).catch(() => {});
+      return { action: "deny" };
+    }
+    return { action: "allow" };
+  });
 
   // renderer travou/morreu -> recarrega, com trava anti-loop
   let reloads = [];

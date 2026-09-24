@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { ProductService } from "@/services/productService"
 import { SaleService } from "@/services/saleService"
 import { SaleStatus } from "@/generated/prisma/enums"
+import { friendlyError } from "@/lib/friendlyError"
 
 // GET /api/dashboard/stats - indicadores da tela inicial
 export async function GET() {
@@ -82,7 +83,7 @@ export async function GET() {
     })
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      { error: friendlyError(error).message },
       { status: 500 },
     )
   }

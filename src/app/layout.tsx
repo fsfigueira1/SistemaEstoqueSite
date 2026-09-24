@@ -1,20 +1,9 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Inter, Bricolage_Grotesque } from 'next/font/google';
+// Fontes locais (sem Google Fonts): o build e o app funcionam offline.
+import '@fontsource-variable/inter/wght.css';
+import '@fontsource-variable/fraunces/opsz.css';
 import AppWrapper from '@/app/AppWrapper';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-  display: 'swap',
-});
-
-const bricolage = Bricolage_Grotesque({
-  subsets: ['latin'],
-  variable: '--font-heading',
-  weight: ['500', '600', '700'],
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: 'Laçolaria — Gestão',
@@ -31,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning className={`${inter.variable} ${bricolage.variable}`}>
+    <html lang="pt-BR" suppressHydrationWarning>
       <body>
         <AppWrapper>{children}</AppWrapper>
       </body>

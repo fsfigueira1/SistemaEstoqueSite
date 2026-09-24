@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { CashRegisterService } from "@/services/cashRegisterService"
+import { friendlyError } from "@/lib/friendlyError"
 
 // GET /api/cash-registers - List cash registers with filters and pagination
 export async function GET(request: Request) {
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Cash registers API error:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      { error: friendlyError(error).message },
       { status: 500 }
     )
   }
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Cash registers API error:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      { error: friendlyError(error).message },
       { status: 500 }
     )
   }

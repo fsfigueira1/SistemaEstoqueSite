@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { ProductService } from "@/services/productService"
+import { friendlyError } from "@/lib/friendlyError"
 
 
 // GET /api/products/barcode/[code] - Get product by barcode
@@ -30,5 +31,5 @@ export async function GET(
       success: true,
       data: product
     })
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }

@@ -27,6 +27,7 @@ import {
 } from '@/lib/offline/productCache';
 import { enqueueSale } from '@/lib/offline/saleQueue';
 import { useOfflineStatus } from '@/components/OfflineSync';
+import { errorText } from '@/lib/friendlyError';
 
 const CASH_KEY = 'lacolaria:lastCashSessionId';
 
@@ -400,7 +401,7 @@ export default function PDVPage() {
       }).then((r) => r.json());
 
       if (!openRes?.success || !openRes.data?.id) {
-        throw new Error(openRes?.error?.message || openRes?.error || 'Falha ao abrir a sessão de caixa');
+        throw new Error(errorText(openRes, 'Falha ao abrir a sessão de caixa'));
       }
       return remember(openRes.data.id);
     } catch (err) {
@@ -541,7 +542,7 @@ export default function PDVPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         throw new Error(
-          data?.error?.message || data?.error || 'Não foi possível finalizar a venda. Tente de novo.',
+          errorText(data, 'Venda não finalizada'),
         );
       }
       offlineUntilRef.current = 0; // deu certo — voltou a ter internet
@@ -564,7 +565,7 @@ export default function PDVPage() {
       });
       resetAfterSale();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao finalizar a venda');
+      setError(errorText(err, 'Venda não finalizada'));
     } finally {
       setIsProcessing(false);
     }

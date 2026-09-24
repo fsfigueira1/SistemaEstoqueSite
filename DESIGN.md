@@ -10,6 +10,12 @@ Um balcão de papelaria fina: o **azul Tiffany** é a cor de trabalho da tela
 (não um respingo de acento), neutros de papel quente, títulos com voz própria.
 Recusa o dashboard SaaS cinza e o verde esmeralda genérico da versão anterior.
 
+**Rodada 0.2 ("gourmet")** — mesma tese, mais acabamento de vitrine:
+papel creme, trilho lateral em tinta escura como moldura, títulos em serifa
+suave (Fraunces), sobrescritos em versalete e o **rosa do laço** da mascote
+reservado para a assistente e a IA. O uso continua simples: nada mudou de
+lugar no PDV.
+
 ## Cor
 
 Estratégia: **Committed** — o Tiffany carrega ~30–50% da superfície (rail ativo,
@@ -30,13 +36,22 @@ Botão primário = fundo Tiffany + **texto tinta** (estilo casa Tiffany: preto n
 Neutros têm leve viés teal/quente — nunca `oklch(x 0 0)` puro.
 
 Semânticos: `--success` (verde), `--warning` (âmbar), `--danger` (vermelho), cada um
-com `-foreground`. Pílulas de status: classes `.pill` + `.pill-ok/-warn/-danger/-muted`.
+com `-foreground`. Pílulas de status: classes `.pill` + `.pill-ok/-warn/-danger/-muted/-bow`.
+
+**Rosa do laço** (`--bow`, `--bow-soft`, `--bow-foreground`): só em detalhes —
+assistente, painel de preço com IA, aviso "abaixo do mercado". Nunca em botão primário.
+
+**Trilho lateral** em tinta (`--sidebar`, `--sidebar-muted`, `--sidebar-active`):
+escuro nos dois temas, item ativo com barrinha Tiffany à esquerda.
 
 ## Tipografia
 
-- **Bricolage Grotesque** (500/600/700) — wordmark, títulos de página (`h1`,`h2`),
-  linha "TOTAL", valores-chave. Voz de placa de vitrine, contemporânea.
-- **Inter** (`--font-sans`) — todo o corpo, tabelas, formulários.
+- **Fraunces Variable** (eixo óptico) — wordmark, `h1`/`h2`, valores-chave
+  (`font-heading`). Serifa suave, de papelaria fina, com calor (combina com a mascote).
+- **Inter Variable** — todo o corpo, tabelas, formulários.
+- Arquivos **locais** via `@fontsource-variable/*` (importados em `layout.tsx`):
+  o build e o app funcionam sem internet. Não usar `next/font/google`.
+- `.eyebrow` — sobrescrito em versalete (11px, tracking 0.14em) acima de títulos e rótulos.
 - `tabular-nums` em valores monetários e contagens.
 
 ## Forma
@@ -48,11 +63,22 @@ com `-foreground`. Pílulas de status: classes `.pill` + `.pill-ok/-warn/-danger
 
 ## Shell (`src/components/Layout.tsx`)
 
-Rail claro/paper de 60 (`w-60`), wordmark "Laçolaria" + selo "L" Tiffany, item ativo
-com `bg-accent-soft` + ponto Tiffany. Toggle de tema (`next-themes`, classe `dark`)
-no rodapé. Header com hambúrguer só no mobile; rail vira drawer < `lg`.
+Trilho escuro `w-64`, mascote + wordmark "Laçolaria" em serifa + "Papelaria fina".
+Navegação em dois grupos: **Balcão** (Painel, PDV, Vendas) e **Gestão** (Produtos,
+Estoque, Relatórios, Configurações). Rodapé: botão "Resumo do dia" (abre a
+assistente), tema e versão (do `package.json`). Hambúrguer só no mobile.
+
+`PageHeader` (mesmo arquivo): sobrescrito + título serifado + `.rule-accent`
+(filete com trecho Tiffany). Todas as telas de gestão usam.
 
 ## Momentos de assinatura
+
+- **Assistente do dia** (`DailyAssistant.tsx`): balão com a mascote no horário de
+  fechamento (compacto no topo quando está no PDV), resumo Dinheiro/Cartão/Pix e
+  atalho para a conferência.
+- **Relatório do dia** (`/relatorios/AAAA-MM-DD`): "O que entrou" em três cartões,
+  conferência Sistema × Contei × Resultado com "Bateu / Faltam / Sobram" ao vivo.
+- **Preço de mercado** (`PriceAdvisor.tsx`): cartão rosa-laço dentro do cadastro.
 
 - **PDV**: bloco de totais como soma de recibo (borda Tiffany, "TOTAL" grande em
   Bricolage Tiffany); "Finalizar Venda" é o único botão grande, Tiffany sólido.

@@ -43,21 +43,21 @@ export function apiValidationError(message: string): NextResponse {
 /**
  * Not found error response (404)
  */
-export function apiNotFoundError(message: string = "Resource not found"): NextResponse {
+export function apiNotFoundError(message: string = "Não encontrado"): NextResponse {
   return apiError(message, 404, "NOT_FOUND")
 }
 
 /**
  * Unauthorized error response (401)
  */
-export function apiUnauthorizedError(message: string = "Unauthorized"): NextResponse {
+export function apiUnauthorizedError(message: string = "Acesso bloqueado — digite o PIN"): NextResponse {
   return apiError(message, 401, "UNAUTHORIZED")
 }
 
 /**
  * Forbidden error response (403)
  */
-export function apiForbiddenError(message: string = "Forbidden"): NextResponse {
+export function apiForbiddenError(message: string = "Sem permissão"): NextResponse {
   return apiError(message, 403, "FORBIDDEN")
 }
 

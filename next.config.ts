@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
+import pkg from "./package.json" with { type: "json" };
 
 const nextConfig: NextConfig = {
   images: { unoptimized: true },
+  // versão do app no rodapé do menu (vem do package.json)
+  env: { NEXT_PUBLIC_APP_VERSION: pkg.version },
   // servidor auto-contido para empacotar no Electron
   output: "standalone",
   // o Electron carrega http://localhost:4123 — libera as origens locais no dev

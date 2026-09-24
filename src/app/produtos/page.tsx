@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ProductStatus } from '@/generated/prisma/enums';
-import Layout from '@/components/Layout';
-import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, XCircle, Loader2 } from 'lucide-react';
+import Layout, { PageHeader } from '@/components/Layout';
+import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, XCircle, Loader2, TrendingUp } from 'lucide-react';
+import { errorText } from '@/lib/friendlyError';
+import PriceAdvisor from '@/components/PriceAdvisor';
 
 // ---------- helpers ----------
 function toNumber(value: unknown): number {
@@ -85,6 +87,9 @@ export default function ProdutosPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ProductStatus>('all');
   const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'out'>('all');
+  // aviso de alta: produtos com preço de mercado acima do preço da loja
+  const [priceAlerts, setPriceAlerts] = useState<Map<string, { marketMedian: number; suggested: number | null; abovePct: number }>>(new Map());
+  const [onlyBelowMarket, setOnlyBelowMarket] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -97,6 +102,31 @@ export default function ProdutosPage() {
     const data = await res.json();
     if (data.success) setProducts(data.data?.products ?? []);
   }, []);
+
+  const loadAlerts = useCallback(async () => {
+    try {
+      const r = await fetch('/api/price-suggestion/alerts').then((x) => x.json());
+      if (r?.success) {
+        setPriceAlerts(
+          new Map(
+            (r.data as Array<{ productId: string; marketMedian: number; suggested: number | null; abovePct: number }>).map((a) => [
+              a.productId,
+              a,
+            ]),
+          ),
+        );
+      }
+    } catch {
+      /* sem aviso, sem problema */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('alerta') === 'preco') {
+      setOnlyBelowMarket(true);
+    }
+    loadAlerts();
+  }, [loadAlerts]);
 
   useEffect(() => {
     (async () => {
@@ -118,6 +148,7 @@ export default function ProdutosPage() {
     return products.filter((p) => {
       if (search && !norm(`${p.name} ${p.sku} ${p.barcode ?? ''}`).includes(norm(search))) return false;
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+      if (onlyBelowMarket && !priceAlerts.has(p.id)) return false;
       if (stockFilter !== 'all') {
         const stock = toNumber(p.stockQuantity);
         const min = toNumber(p.minStockLevel ?? 0);
@@ -126,7 +157,7 @@ export default function ProdutosPage() {
       }
       return true;
     });
-  }, [products, search, statusFilter, stockFilter]);
+  }, [products, search, statusFilter, stockFilter, onlyBelowMarket, priceAlerts]);
 
   const stats = useMemo(() => {
     let low = 0;
@@ -176,6 +207,14 @@ export default function ProdutosPage() {
     setForm((f) => ({ ...f, [k]: v }));
     setErrors((e) => ({ ...e, [k]: undefined, base: undefined }));
   };
+  const applyPrice = useCallback((price: number) => {
+    setForm((f) => ({ ...f, preco: price.toFixed(2) }));
+    setErrors((e) => ({ ...e, preco: undefined }));
+  }, []);
+  const applyName = useCallback((nome: string) => {
+    setForm((f) => ({ ...f, nome }));
+    setErrors((e) => ({ ...e, nome: undefined }));
+  }, []);
 
   const submit = async () => {
     const e: typeof errors = {};
@@ -212,13 +251,14 @@ export default function ProdutosPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setErrors({ base: data?.error?.message || data?.error || 'Não foi possível salvar' });
+        setErrors({ base: errorText(data, 'Não foi possível salvar') });
         return;
       }
       await reload();
+      loadAlerts();
       closeModal();
     } catch {
-      setErrors({ base: 'Erro de rede ao salvar' });
+      setErrors({ base: 'Sem conexão' });
     } finally {
       setSaving(false);
     }
@@ -229,10 +269,7 @@ export default function ProdutosPage() {
     const res = await fetch(`/api/products/${p.id}`, { method: 'DELETE' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.success) {
-      window.alert(
-        data?.error?.message ||
-          'Não foi possível excluir o produto. Se ele tiver vendas, mude o status para "Descontinuado".',
-      );
+      window.alert(errorText(data, 'Não foi possível excluir'));
       return;
     }
     await reload();
@@ -242,19 +279,20 @@ export default function ProdutosPage() {
   return (
     <Layout>
       <div className="space-y-6 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Gestão de Produtos</h1>
-            <p className="text-sm text-muted-foreground">Catálogo, preços e estoque</p>
-          </div>
-          <button
-            onClick={openNew}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Novo Produto
-          </button>
-        </div>
+        <PageHeader
+          eyebrow="Gestão"
+          title="Produtos"
+          subtitle="Catálogo, preços e estoque"
+          actions={
+            <button
+              onClick={openNew}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Novo produto
+            </button>
+          }
+        />
 
         {/* stats */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -273,6 +311,23 @@ export default function ProdutosPage() {
           />
           <StatCard icon={<Package className="h-4 w-4" />} label="Valor em estoque" value={brl(stats.value)} />
         </div>
+
+        {priceAlerts.size > 0 && (
+          <button
+            type="button"
+            onClick={() => setOnlyBelowMarket((v) => !v)}
+            className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+              onlyBelowMarket ? 'border-bow/50 bg-bow-soft' : 'border-bow/25 bg-bow-soft/50 hover:border-bow/50'
+            }`}
+          >
+            <TrendingUp className="h-4 w-4 shrink-0 text-bow" />
+            <span className="flex-1 text-foreground">
+              <strong>{priceAlerts.size}</strong> {priceAlerts.size === 1 ? 'produto está' : 'produtos estão'} abaixo do preço
+              de mercado (última pesquisa da IA).
+            </span>
+            <span className="text-xs font-medium text-primary">{onlyBelowMarket ? 'Mostrar todos' : 'Ver quais'}</span>
+          </button>
+        )}
 
         {/* toolbar */}
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card shadow-sm p-4">
@@ -333,6 +388,7 @@ export default function ProdutosPage() {
                 {filtered.map((p) => {
                   const stock = toNumber(p.stockQuantity);
                   const min = toNumber(p.minStockLevel ?? 0);
+                  const alert = priceAlerts.get(p.id);
                   return (
                     <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted">
                       <td className="px-4 py-3">
@@ -341,7 +397,17 @@ export default function ProdutosPage() {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{p.barcode || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">{p.category?.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-right font-medium text-foreground">{brl(p.salePrice)}</td>
+                      <td className="px-4 py-3 text-right font-medium text-foreground">
+                        {brl(p.salePrice)}
+                        {alert && (
+                          <span
+                            className="pill pill-bow ml-1.5 align-middle"
+                            title={`Mercado: ${brl(alert.marketMedian)}${alert.suggested ? ` · sugestão ${brl(alert.suggested)}` : ''}`}
+                          >
+                            <TrendingUp className="h-3 w-3" />+{alert.abovePct}%
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right text-muted-foreground">{brl(p.costPrice)}</td>
                       <td className="px-4 py-3 text-right">
                         <span
@@ -396,7 +462,7 @@ export default function ProdutosPage() {
       {/* modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl bg-card p-6 shadow-xl">
+          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-card p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-xl font-bold text-foreground">
                 {editingId ? 'Editar produto' : 'Novo produto'}
@@ -486,6 +552,16 @@ export default function ProdutosPage() {
                   />
                 </Field>
               </div>
+
+              <PriceAdvisor
+                barcode={form.codigoBarras}
+                name={form.nome}
+                costPrice={toNumber(form.custo)}
+                currentPrice={editingId ? toNumber(form.preco) : 0}
+                productId={editingId}
+                onUsePrice={applyPrice}
+                onUseName={applyName}
+              />
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Estoque atual" error={errors.estoque}>

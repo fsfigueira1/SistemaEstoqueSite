@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Layout from '@/components/Layout';
-import { Settings, Store, Printer, KeyRound, CheckCircle, CreditCard, Users, Database } from 'lucide-react';
+import Layout, { PageHeader } from '@/components/Layout';
+import PriceSearchSettings from '@/components/settings/PriceSearchSettings';
+import ReceiptWidthPreview from '@/components/settings/ReceiptWidthPreview';
+import { Store, Printer, KeyRound, CheckCircle, CreditCard, Users, Database, BellRing } from 'lucide-react';
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -16,6 +18,9 @@ export default function ConfiguracoesPage() {
   const [form, setForm] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // chave da IA: nunca vem do servidor; o campo só serve para trocar
+  const [aiKey, setAiKey] = useState('');
+  const [shoppingKey, setShoppingKey] = useState('');
 
   // PIN
   const [pinCur, setPinCur] = useState('');
@@ -35,9 +40,26 @@ export default function ConfiguracoesPage() {
   };
 
   const save = async () => {
-    await saveSettings(form);
+    const next = await saveSettings(form, {
+      ...(aiKey.trim() ? { aiApiKey: aiKey.trim() } : {}),
+      ...(shoppingKey.trim() ? { shoppingApiKey: shoppingKey.trim() } : {}),
+    });
+    setForm(next);
+    setAiKey('');
+    setShoppingKey('');
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+  };
+
+  const removeKey = async () => {
+    if (!window.confirm('Remover a chave do Claude?')) return;
+    const next = await saveSettings(form, { aiApiKeyClear: true });
+    setForm(next);
+  };
+  const removeShopping = async () => {
+    if (!window.confirm('Remover a chave da pesquisa de preço? Ela para até colar outra.')) return;
+    const next = await saveSettings(form, { shoppingApiKeyClear: true });
+    setForm(next);
   };
 
   const changePin = () => {
@@ -62,13 +84,7 @@ export default function ConfiguracoesPage() {
   return (
     <Layout>
       <div className="mx-auto max-w-3xl space-y-6 p-6">
-        <div className="flex items-center gap-2">
-          <Settings className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
-            <p className="text-sm text-muted-foreground">Preferências da loja neste dispositivo</p>
-          </div>
-        </div>
+        <PageHeader eyebrow="Gestão" title="Configurações" subtitle="Valem para todos os computadores da loja (exceto o PIN)" />
 
         {/* Dados da empresa */}
         <Section icon={<Store className="h-5 w-5" />} title="Dados da empresa" desc="Aparecem no comprovante de compra">
@@ -91,6 +107,66 @@ export default function ConfiguracoesPage() {
               </Field>
             </div>
           </div>
+        </Section>
+
+        {/* Pesquisa de preço */}
+        <PriceSearchSettings
+          form={form}
+          set={set}
+          aiKey={aiKey}
+          onAiKey={(v) => {
+            setAiKey(v);
+            setSaved(false);
+          }}
+          shoppingKey={shoppingKey}
+          onShoppingKey={(v) => {
+            setShoppingKey(v);
+            setSaved(false);
+          }}
+          onRemoveAi={removeKey}
+          onRemoveShopping={removeShopping}
+        />
+
+        {/* Assistente do relatório do dia */}
+        <Section
+          icon={<BellRing className="h-5 w-5" />}
+          title="Assistente do relatório do dia"
+          desc="Avisa no horário de fechamento com o resumo e o atalho para conferir o caixa"
+        >
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="flex items-center gap-2 text-sm text-foreground/90 sm:col-span-3">
+              <input
+                type="checkbox"
+                checked={form.reportReminderEnabled}
+                onChange={(e) => set('reportReminderEnabled', e.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              Avisar todo dia
+            </label>
+            <Field label="Horário do aviso">
+              <input
+                type="time"
+                value={form.reportReminderTime}
+                onChange={(e) => set('reportReminderTime', e.target.value)}
+                disabled={!form.reportReminderEnabled}
+                className={inp}
+              />
+            </Field>
+            <Field label="Fundo de troco padrão (R$)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.cashFloatDefault}
+                onChange={(e) => set('cashFloatDefault', Number(e.target.value) || 0)}
+                className={inp}
+              />
+            </Field>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            O fundo de troco é o dinheiro que já fica na gaveta ao abrir. Ele entra na conta do &quot;dinheiro esperado&quot; na
+            conferência.
+          </p>
         </Section>
 
         {/* Impressão */}
@@ -195,9 +271,8 @@ export default function ConfiguracoesPage() {
 
         <Section icon={<Database className="h-5 w-5" />} title="Backup e restauração" desc="Manual">
           <p className="text-sm text-muted-foreground">
-            Os dados ficam no arquivo <code className="rounded bg-muted px-1">dev.db</code> na pasta do
-            sistema. Faça backup copiando esse arquivo. Restauração automática pela interface ainda não
-            está disponível.
+            Os dados ficam no banco da loja no Supabase, compartilhado pelos computadores. O Supabase faz cópias
+            automáticas; restauração pela interface ainda não está disponível.
           </p>
         </Section>
       </div>
@@ -206,7 +281,7 @@ export default function ConfiguracoesPage() {
 }
 
 const inp =
-  'w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40';
+  'w-full rounded-lg border border-border bg-card px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40 disabled:opacity-60';
 
 function Section({
   icon,
@@ -220,11 +295,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card shadow-sm p-5">
+    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-start gap-3">
         <span className="rounded-lg bg-accent-soft p-2 text-primary">{icon}</span>
         <div>
-          <h2 className="font-semibold text-foreground">{title}</h2>
+          <h2 className="text-lg text-foreground">{title}</h2>
           {desc && <p className="text-xs text-muted-foreground">{desc}</p>}
         </div>
       </div>
@@ -238,46 +313,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="mb-1 block text-sm font-medium text-foreground/90">{label}</label>
       {children}
-    </div>
-  );
-}
-
-// Espelha as margens cegas reais usadas na impressão (ver @media print em
-// globals.css / ReceiptPrint.tsx): 80mm tem folga assimétrica pela zona não
-// imprimível da Epson TM-T20X; 58mm usa recuo simétrico.
-function ReceiptWidthPreview({
-  width,
-  storeName,
-}: {
-  width: StoreSettings['receiptWidth'];
-  storeName: string;
-}) {
-  const isNarrow = width === '58mm';
-  const padRight = isNarrow ? '5mm' : '2mm';
-  const printable = isNarrow ? '48mm' : '73mm';
-
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-muted/40 p-4">
-      <p className="mb-3 text-center text-xs text-muted-foreground">
-        Pré-visualização — bobina de {width === '58mm' ? '58 mm' : '80 mm'} (área imprimível ≈ {printable}, sempre
-        centralizada)
-      </p>
-      <div
-        className="mx-auto rounded-sm border border-border bg-white shadow-sm transition-[width] duration-200"
-        style={{ width, boxSizing: 'border-box', padding: `3mm ${padRight} 3mm 5mm` }}
-      >
-        <div className="text-center text-[11px] font-bold text-black">{storeName || 'LAÇOLARIA'}</div>
-        <div className="my-1.5 border-t border-dashed border-black/40" />
-        <div className="flex justify-between gap-2 text-[9px] text-black">
-          <span>2 x R$ 11,50</span>
-          <span>R$ 23,00</span>
-        </div>
-        <div className="my-1.5 border-t border-dashed border-black/40" />
-        <div className="flex justify-between gap-2 text-[11px] font-bold text-black">
-          <span>TOTAL</span>
-          <span>R$ 23,00</span>
-        </div>
-      </div>
     </div>
   );
 }

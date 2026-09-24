@@ -40,8 +40,13 @@
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-border: var(--sidebar-border);
-  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-heading: var(--font-heading), var(--font-sans), ui-sans-serif, sans-serif;
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-bow: var(--bow);
+  --color-bow-soft: var(--bow-soft);
+  --color-bow-foreground: var(--bow-foreground);
+  --font-sans: var(--app-font-sans);
+  --font-heading: var(--app-font-heading);
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -59,40 +64,54 @@
 :root {
   --radius: 0.75rem;
 
-  --background: oklch(0.985 0.005 180);
-  --foreground: oklch(0.25 0.016 210);
-  --card: oklch(1 0.001 180);
-  --card-foreground: oklch(0.25 0.016 210);
-  --popover: oklch(1 0.001 180);
-  --popover-foreground: oklch(0.25 0.016 210);
+  /* tipografia: Fraunces (serifa suave, voz de papelaria fina) nos títulos,
+     Inter no trabalho do dia a dia. Arquivos locais — funciona offline. */
+  --app-font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --app-font-heading: "Fraunces Variable", ui-serif, Georgia, serif;
+
+  /* papel creme quente + tinta azul-petróleo + Tiffany de assinatura */
+  --background: oklch(0.982 0.007 85);
+  --foreground: oklch(0.245 0.025 225);
+  --card: oklch(0.997 0.003 85);
+  --card-foreground: oklch(0.245 0.025 225);
+  --popover: oklch(0.997 0.003 85);
+  --popover-foreground: oklch(0.245 0.025 225);
 
   --primary: oklch(0.72 0.118 190);
-  --primary-foreground: oklch(0.24 0.03 210);
+  --primary-foreground: oklch(0.22 0.03 215);
 
-  --secondary: oklch(0.955 0.006 185);
-  --secondary-foreground: oklch(0.28 0.016 210);
-  --muted: oklch(0.955 0.006 185);
-  --muted-foreground: oklch(0.47 0.015 205);
+  --secondary: oklch(0.958 0.01 85);
+  --secondary-foreground: oklch(0.28 0.02 220);
+  --muted: oklch(0.955 0.01 85);
+  --muted-foreground: oklch(0.48 0.02 220);
 
   --accent: oklch(0.72 0.118 190);
-  --accent-foreground: oklch(0.24 0.03 210);
-  --accent-soft: oklch(0.945 0.035 190);
+  --accent-foreground: oklch(0.22 0.03 215);
+  --accent-soft: oklch(0.948 0.03 190);
   --accent-soft-foreground: oklch(0.36 0.07 200);
 
-  --success: oklch(0.62 0.13 158);
+  /* rosa do laço da mascote — só em detalhes (assistente, IA, selos) */
+  --bow: oklch(0.63 0.2 358);
+  --bow-soft: oklch(0.955 0.025 358);
+  --bow-foreground: oklch(0.99 0.01 358);
+
+  --success: oklch(0.6 0.13 158);
   --success-foreground: oklch(0.99 0.01 160);
   --warning: oklch(0.79 0.14 78);
   --warning-foreground: oklch(0.28 0.05 70);
-  --danger: oklch(0.585 0.2 25);
+  --danger: oklch(0.575 0.2 25);
   --danger-foreground: oklch(0.99 0.01 20);
 
-  --border: oklch(0.9 0.012 195);
-  --input: oklch(0.9 0.012 195);
+  --border: oklch(0.9 0.013 80);
+  --input: oklch(0.88 0.014 80);
   --ring: oklch(0.72 0.118 190);
 
-  --sidebar: oklch(0.995 0.003 180);
-  --sidebar-foreground: oklch(0.25 0.016 210);
-  --sidebar-border: oklch(0.91 0.012 195);
+  /* trilho lateral em tinta escura — moldura de vitrine */
+  --sidebar: oklch(0.255 0.032 218);
+  --sidebar-foreground: oklch(0.95 0.012 85);
+  --sidebar-muted: oklch(0.76 0.02 205);
+  --sidebar-active: oklch(1 0 0 / 9%);
+  --sidebar-border: oklch(1 0 0 / 9%);
 }
 
 .dark {
@@ -127,9 +146,15 @@
   --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.8 0.13 187);
 
-  --sidebar: oklch(0.215 0.02 212);
+  --bow: oklch(0.72 0.17 358);
+  --bow-soft: oklch(0.3 0.06 358);
+  --bow-foreground: oklch(0.16 0.03 358);
+
+  --sidebar: oklch(0.165 0.02 215);
   --sidebar-foreground: oklch(0.95 0.006 180);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-muted: oklch(0.72 0.02 195);
+  --sidebar-active: oklch(1 0 0 / 7%);
+  --sidebar-border: oklch(1 0 0 / 8%);
 }
 
 @layer base {
@@ -137,7 +162,8 @@
     border-color: var(--border);
   }
   html {
-    font-family: var(--font-sans);
+    font-family: var(--app-font-sans);
+    font-feature-settings: "cv11", "ss01";
   }
   body {
     background-color: var(--background);
@@ -145,7 +171,12 @@
     -webkit-font-smoothing: antialiased;
   }
   h1, h2, .font-heading {
-    font-family: var(--font-heading);
+    font-family: var(--app-font-heading);
+    font-optical-sizing: auto;
+    letter-spacing: -0.01em;
+  }
+  h1 {
+    font-weight: 600;
   }
 
   /* superfícies do navegador — parte do sistema, não default */
@@ -214,6 +245,29 @@
   }
   .dark .pill-danger {
     color: color-mix(in oklch, var(--danger) 82%, white);
+  }
+  .dark .pill-warn {
+    color: var(--warning);
+  }
+
+  /* rótulo pequeno em versalete — "sobrescrito" de seção */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  /* filete fino (hairline) com um toque Tiffany no início */
+  .rule-accent {
+    height: 2px;
+    background:
+      linear-gradient(var(--primary), var(--primary)) left center / 3.5rem 2px no-repeat,
+      linear-gradient(var(--border), var(--border)) left center / 100% 1px no-repeat;
+  }
+  .pill-bow {
+    background: var(--bow-soft);
+    color: var(--bow);
   }
 
   /* cartão base do app */

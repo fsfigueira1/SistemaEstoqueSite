@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react'
+import { errorText } from '@/lib/friendlyError'
 
 export default function SenhaPage() {
   const [pin, setPin] = useState('')
@@ -22,7 +23,7 @@ export default function SenhaPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'PIN incorreto')
+        throw new Error(errorText(data, 'PIN incorreto'))
       }
 
       // The cookie is set in the response by the API route
@@ -33,7 +34,7 @@ export default function SenhaPage() {
       const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/'
       window.location.href = redirect
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro desconhecido')
+      setError(errorText(err, 'Algo deu errado'))
     } finally {
       setLoading(false)
     }
