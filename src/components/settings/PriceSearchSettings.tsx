@@ -1,7 +1,7 @@
 'use client';
 
-// Configurações → "Pesquisa de preço": escolher a fonte (Cosmos grátis ou
-// Claude pago), colar o token/chave e ajustar o "toque da loja".
+// Configurações → "Pesquisa de preço": escolher a fonte (Google Shopping grátis
+// ou Claude pago), colar a chave e ajustar o "toque da loja".
 
 import { useState } from 'react';
 import { CheckCircle, Eye, EyeOff, Sparkles } from 'lucide-react';
@@ -15,19 +15,19 @@ export default function PriceSearchSettings({
   set,
   aiKey,
   onAiKey,
-  cosmosKey,
-  onCosmosKey,
+  shoppingKey,
+  onShoppingKey,
   onRemoveAi,
-  onRemoveCosmos,
+  onRemoveShopping,
 }: {
   form: StoreSettings;
   set: <K extends keyof StoreSettings>(k: K, v: StoreSettings[K]) => void;
   aiKey: string;
   onAiKey: (v: string) => void;
-  cosmosKey: string;
-  onCosmosKey: (v: string) => void;
+  shoppingKey: string;
+  onShoppingKey: (v: string) => void;
   onRemoveAi: () => void;
-  onRemoveCosmos: () => void;
+  onRemoveShopping: () => void;
 }) {
   return (
     <>
@@ -40,11 +40,11 @@ export default function PriceSearchSettings({
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Fonte da pesquisa de preço">
             <ProviderCard
-              active={form.priceProvider === 'cosmos'}
-              onClick={() => set('priceProvider', 'cosmos')}
-              title="Cosmos — grátis"
-              badge="Recomendado"
-              text="Preço médio no Brasil pelo código de barras (ou por nome). Até 25 consultas por dia."
+              active={form.priceProvider === 'shopping'}
+              onClick={() => set('priceProvider', 'shopping')}
+              title="Google Shopping"
+              badge="Grátis"
+              text="Preços das lojas brasileiras no Google Shopping, pelo código de barras ou nome. 250 buscas por mês."
             />
             <ProviderCard
               active={form.priceProvider === 'claude'}
@@ -54,24 +54,24 @@ export default function PriceSearchSettings({
             />
           </div>
 
-          {form.priceProvider === 'cosmos' ? (
+          {form.priceProvider === 'shopping' ? (
             <>
               <SecretBox
-                label="Token do Cosmos"
-                isSet={Boolean(form.cosmosTokenSet)}
-                hint={form.cosmosTokenHint}
-                value={cosmosKey}
-                onChange={onCosmosKey}
-                placeholder="Cole o token da sua conta Cosmos"
-                onRemove={onRemoveCosmos}
+                label="Chave da SerpApi (Google Shopping)"
+                isSet={Boolean(form.shoppingKeySet)}
+                hint={form.shoppingKeyHint}
+                value={shoppingKey}
+                onChange={onShoppingKey}
+                placeholder="Cole a Private API Key da SerpApi"
+                onRemove={onRemoveShopping}
                 help={
                   <>
-                    Crie uma conta grátis em cosmos.bluesoft.com.br e copie o token da API na sua conta. O token fica
-                    guardado no banco da loja e não aparece de novo nesta tela.
+                    Crie uma conta grátis em serpapi.com (sem cartão) e copie a &quot;Private API Key&quot; em
+                    serpapi.com/manage-api-key. A chave fica guardada no banco da loja e não aparece de novo nesta tela.
                   </>
                 }
               />
-              <Field label="Toque da loja: sugerir acima do preço médio em">
+              <Field label="Toque da loja: sugerir acima do preço de mercado em">
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -84,8 +84,8 @@ export default function PriceSearchSettings({
                   <span className="text-sm text-muted-foreground">%</span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Ex.: preço médio R$ 12,00 com 10% → sugestão R$ 13,90 (sempre terminando em ,90). Nunca abaixo do
-                  custo + 30%.
+                  Ex.: mercado em R$ 12,00 com 10% → sugestão R$ 13,90 (sempre terminando em ,90). Nunca abaixo do custo
+                  + 30%.
                 </p>
               </Field>
             </>

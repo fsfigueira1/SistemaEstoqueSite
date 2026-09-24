@@ -20,7 +20,7 @@ export default function ConfiguracoesPage() {
   const [loaded, setLoaded] = useState(false);
   // chave da IA: nunca vem do servidor; o campo só serve para trocar
   const [aiKey, setAiKey] = useState('');
-  const [cosmosKey, setCosmosKey] = useState('');
+  const [shoppingKey, setShoppingKey] = useState('');
 
   // PIN
   const [pinCur, setPinCur] = useState('');
@@ -42,11 +42,11 @@ export default function ConfiguracoesPage() {
   const save = async () => {
     const next = await saveSettings(form, {
       ...(aiKey.trim() ? { aiApiKey: aiKey.trim() } : {}),
-      ...(cosmosKey.trim() ? { cosmosToken: cosmosKey.trim() } : {}),
+      ...(shoppingKey.trim() ? { shoppingApiKey: shoppingKey.trim() } : {}),
     });
     setForm(next);
     setAiKey('');
-    setCosmosKey('');
+    setShoppingKey('');
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -56,9 +56,9 @@ export default function ConfiguracoesPage() {
     const next = await saveSettings(form, { aiApiKeyClear: true });
     setForm(next);
   };
-  const removeCosmos = async () => {
-    if (!window.confirm('Remover o token do Cosmos? A pesquisa de preço para até colar outro.')) return;
-    const next = await saveSettings(form, { cosmosTokenClear: true });
+  const removeShopping = async () => {
+    if (!window.confirm('Remover a chave da pesquisa de preço? Ela para até colar outra.')) return;
+    const next = await saveSettings(form, { shoppingApiKeyClear: true });
     setForm(next);
   };
 
@@ -118,13 +118,13 @@ export default function ConfiguracoesPage() {
             setAiKey(v);
             setSaved(false);
           }}
-          cosmosKey={cosmosKey}
-          onCosmosKey={(v) => {
-            setCosmosKey(v);
+          shoppingKey={shoppingKey}
+          onShoppingKey={(v) => {
+            setShoppingKey(v);
             setSaved(false);
           }}
           onRemoveAi={removeKey}
-          onRemoveCosmos={removeCosmos}
+          onRemoveShopping={removeShopping}
         />
 
         {/* Assistente do relatório do dia */}

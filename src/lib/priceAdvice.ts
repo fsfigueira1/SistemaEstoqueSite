@@ -1,10 +1,10 @@
-// Formato comum da pesquisa de preço (Cosmos ou Claude) e leitura da resposta
+// Formato comum da pesquisa de preço (Google Shopping ou Claude) e leitura da resposta
 // da IA. Sem acesso a banco/rede: usado pelo servidor e pela tela.
 
-/** fisica/online = loja achada pela IA; referencia = base de preços (Cosmos). */
+/** fisica = loja com retirada/estoque perto; online = loja na internet; referencia = base de preços. */
 export type PriceSource = { loja: string; preco: number; tipo: "fisica" | "online" | "referencia"; url: string | null }
 
-export type PriceProvider = "cosmos" | "claude"
+export type PriceProvider = "shopping" | "claude"
 
 export type PriceAdvice = {
   id?: string
@@ -24,7 +24,7 @@ export type PriceAdvice = {
   marketAbovePct: number | null
   checkedAt: string
   cached: boolean
-  /** Cosmos (grátis): consultas usadas hoje x limite diário. */
+  /** Google Shopping (grátis): buscas usadas no mês x limite do plano. */
   quota?: { used: number; limit: number }
 }
 

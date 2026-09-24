@@ -1,5 +1,5 @@
 // Atualização automática do banco para as funções novas (relatório do dia,
-// conferência do caixa e pesquisa de preço — Cosmos grátis ou Claude).
+// conferência do caixa e pesquisa de preço — Google Shopping grátis ou Claude).
 //
 // Por que existe: nas lojas, o schema é aplicado à mão no SQL Editor do
 // Supabase (o `prisma migrate` trava no Transaction pooler — ver RUNBOOK.md).
@@ -21,8 +21,8 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "reportReminderEnabled" BOOLEAN NOT NULL DEFAULT true`,
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "reportReminderTime" TEXT NOT NULL DEFAULT '18:00'`,
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "cashFloatDefault" DOUBLE PRECISION NOT NULL DEFAULT 0`,
-  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "priceProvider" TEXT NOT NULL DEFAULT 'cosmos'`,
-  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "cosmosToken" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "priceProvider" TEXT NOT NULL DEFAULT 'shopping'`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "shoppingApiKey" TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "priceMarkupPercent" DOUBLE PRECISION NOT NULL DEFAULT 10`,
 
   // --- Fechamento do dia ---

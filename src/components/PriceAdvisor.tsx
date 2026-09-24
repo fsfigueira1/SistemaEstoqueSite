@@ -2,8 +2,8 @@
 
 // Painel "Preço de mercado" do cadastro de produto.
 // Bipou o código (ou digitou o nome) → pesquisa o preço de mercado e sugere um
-// preço para esta loja. Fonte em Configurações: Cosmos (grátis, preço médio no
-// Brasil) ou Claude (IA paga, pesquisa lojas na web).
+// preço para esta loja. Fonte em Configurações: Google Shopping (grátis, via
+// SerpApi) ou Claude (IA paga, pesquisa lojas na web).
 //
 // - Produto novo com código de barras válido: pesquisa sozinho (uma vez por código).
 // - Produto existente: mostra a última pesquisa salva (grátis) e o aviso de
@@ -55,9 +55,9 @@ export default function PriceAdvisor({
   onUseName: (name: string) => void;
 }) {
   const readyOf = (s: ReturnType<typeof getSettings>) =>
-    s.priceProvider === 'claude' ? Boolean(s.aiKeySet) : Boolean(s.cosmosTokenSet);
+    s.priceProvider === 'claude' ? Boolean(s.aiKeySet) : Boolean(s.shoppingKeySet);
   const [keySet, setKeySet] = useState<boolean>(() => readyOf(getSettings()));
-  const [provider, setProvider] = useState<'cosmos' | 'claude'>(() => getSettings().priceProvider ?? 'cosmos');
+  const [provider, setProvider] = useState<'shopping' | 'claude'>(() => getSettings().priceProvider ?? 'shopping');
   const [alertPct, setAlertPct] = useState<number>(() => getSettings().priceAlertPercent ?? 10);
   const [advice, setAdvice] = useState<PriceAdvice | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,7 +70,7 @@ export default function PriceAdvisor({
   useEffect(() => {
     loadSettings().then((s) => {
       setKeySet(readyOf(s));
-      setProvider(s.priceProvider ?? 'cosmos');
+      setProvider(s.priceProvider ?? 'shopping');
       setAlertPct(s.priceAlertPercent ?? 10);
     });
   }, []);
@@ -154,7 +154,7 @@ export default function PriceAdvisor({
           <div className="leading-tight">
             <p className="text-sm font-semibold text-foreground">Preço de mercado</p>
             <p className="text-[11px] text-muted-foreground">
-              {provider === 'claude' ? 'Pesquisa com IA em papelarias e lojas' : 'Preço médio no Brasil (base Cosmos, grátis)'}
+              {provider === 'claude' ? 'Pesquisa com IA em papelarias e lojas' : 'Preços das lojas no Google Shopping (grátis)'}
             </p>
           </div>
         </div>
@@ -180,7 +180,7 @@ export default function PriceAdvisor({
       <div className="border-t border-bow/15 bg-card/70 px-4 py-3 text-sm">
         {!keySet ? (
           <p className="text-muted-foreground">
-            Para pesquisar preços, cole {provider === 'claude' ? 'a chave do Claude' : 'o token grátis do Cosmos'} em{' '}
+            Para pesquisar preços, cole {provider === 'claude' ? 'a chave do Claude' : 'a chave grátis da SerpApi'} em{' '}
             <Link href="/configuracoes#ia" className="font-medium text-primary hover:underline">
               Configurações → Pesquisa de preço
             </Link>
@@ -295,9 +295,9 @@ export default function PriceAdvisor({
 
             <p className="text-[11px] text-muted-foreground">
               Pesquisado {ago(advice.checkedAt)}
-              {advice.provider === 'claude' ? ' · IA' : ' · Cosmos'}
-              {advice.cached ? ' · resultado salvo, sem gastar consulta' : ''}
-              {advice.quota ? ` · cerca de ${advice.quota.used} de ${advice.quota.limit} consultas grátis usadas hoje` : ''}
+              {advice.provider === 'claude' ? ' · IA' : ' · Google Shopping'}
+              {advice.cached ? ' · resultado salvo, sem gastar busca' : ''}
+              {advice.quota ? ` · ${advice.quota.used} de ${advice.quota.limit} buscas grátis usadas no mês` : ''}
             </p>
           </div>
         )}

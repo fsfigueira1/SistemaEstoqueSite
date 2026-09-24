@@ -20,14 +20,14 @@ const hint = (k: string) => (k.length > 8 ? `…${k.slice(-4)}` : k ? "definida"
 
 /** Versão segura para o navegador: sem as chaves, só se existem e o final delas. */
 export function publicSettings(s: ServerSettings) {
-  const { aiApiKey, cosmosToken, ...rest } = s
+  const { aiApiKey, shoppingApiKey, ...rest } = s
   const key = (aiApiKey ?? "").trim()
-  const cosmos = (cosmosToken ?? "").trim()
+  const shopping = (shoppingApiKey ?? "").trim()
   return {
     ...rest,
     aiKeySet: key.length > 0,
     aiKeyHint: hint(key),
-    cosmosTokenSet: cosmos.length > 0,
-    cosmosTokenHint: hint(cosmos),
+    shoppingKeySet: shopping.length > 0,
+    shoppingKeyHint: hint(shopping),
   }
 }

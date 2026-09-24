@@ -1,7 +1,7 @@
 // Pesquisa de preço com o Claude (IA paga) + pesquisa na web.
 // Prioriza papelarias/lojas físicas e considera o perfil da loja.
 import { extractJson, normalizeAdvice, type PriceSource } from "@/lib/priceAdvice"
-import type { AdviceCore } from "@/lib/cosmosPricing"
+import type { AdviceCore } from "@/lib/shoppingPricing"
 
 // ANTHROPIC_BASE_URL permite apontar para um proxy da empresa (ou um simulador nos testes).
 const API_URL = `${(process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/$/, "")}/v1/messages`

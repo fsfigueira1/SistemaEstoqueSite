@@ -17,11 +17,11 @@ const GENERAL_MARK: Rule = { test: /$^/, title: "" }
 
 // A ordem importa: regras mais específicas primeiro.
 const RULES: Rule[] = [
-  // --- pesquisa de preço grátis (Cosmos) ---
-  { test: /cosmos token missing/i, title: "Pesquisa de preço não configurada" },
-  { test: /cosmos http 429/i, title: "Consultas grátis de hoje acabaram — amanhã volta" },
-  { test: /cosmos http 40[13]/i, title: "Token do Cosmos inválido" },
-  { test: /cosmos http 5\d\d/i, title: "Base de preços fora do ar — tente mais tarde" },
+  // --- pesquisa de preço grátis (Google Shopping via SerpApi) ---
+  { test: /shopping key missing/i, title: "Pesquisa de preço não configurada" },
+  { test: /serpapi http 429|run out of searches/i, title: "Buscas grátis do mês acabaram" },
+  { test: /serpapi http 40[13]|invalid api key/i, title: "Chave da pesquisa de preço inválida" },
+  { test: /serpapi http 5\d\d/i, title: "Pesquisa de preço fora do ar — tente mais tarde" },
 
   // --- IA de preços (antes das regras genéricas) ---
   { test: /timeout na pesquisa/i, title: "A pesquisa demorou — tente de novo" },

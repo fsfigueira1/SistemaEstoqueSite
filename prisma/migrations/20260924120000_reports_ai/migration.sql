@@ -1,4 +1,4 @@
--- Relatório do dia, conferência do caixa e pesquisa de preço (Cosmos grátis ou Claude).
+-- Relatório do dia, conferência do caixa e pesquisa de preço (Google Shopping grátis ou Claude).
 -- Idempotente: o app também aplica isto sozinho ao abrir (src/lib/schemaUpgrade.ts).
 -- Pode rodar no SQL Editor do Supabase quantas vezes quiser.
 
@@ -18,9 +18,9 @@ ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "reportReminderTime" TEXT NOT NU
 
 ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "cashFloatDefault" DOUBLE PRECISION NOT NULL DEFAULT 0;
 
-ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "priceProvider" TEXT NOT NULL DEFAULT 'cosmos';
+ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "priceProvider" TEXT NOT NULL DEFAULT 'shopping';
 
-ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "cosmosToken" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "shoppingApiKey" TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "priceMarkupPercent" DOUBLE PRECISION NOT NULL DEFAULT 10;
 

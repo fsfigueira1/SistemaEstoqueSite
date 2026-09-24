@@ -1,17 +1,17 @@
 // Pesquisa de preço de mercado — escolhe a fonte configurada:
-//   "cosmos" (padrão, grátis): base Bluesoft Cosmos, preço médio no Brasil
-//            pelo código de barras ou nome + regra do "toque da loja".
-//   "claude" (pago): IA com pesquisa na web, considerando o perfil da loja.
-// O resultado fica salvo em PriceCheck (cache) para não gastar consulta/crédito
-// com a mesma pesquisa: 30 dias no Cosmos, 7 no Claude.
+//   "shopping" (padrão, grátis): ofertas do Google Shopping no Brasil via
+//              SerpApi (250 buscas/mês) + regra do "toque da loja".
+//   "claude"   (pago): IA com pesquisa na web, considerando o perfil da loja.
+// O resultado fica salvo em PriceCheck (cache) para não gastar busca/crédito
+// com a mesma pesquisa: 30 dias no Google Shopping, 7 no Claude.
 import { prisma } from "@/lib/prisma"
 import { ensureSchema } from "@/lib/schemaUpgrade"
 import { getServerSettings } from "@/lib/serverSettings"
 import type { PriceAdvice, PriceProvider, PriceSource } from "@/lib/priceAdvice"
 import { claudeAdvice } from "@/services/pricing/claudeProvider"
-import { COSMOS_DAILY_LIMIT, cosmosAdvice } from "@/services/pricing/cosmosProvider"
+import { shoppingAdvice, shoppingQuota } from "@/services/pricing/shoppingProvider"
 
-const CACHE_DAYS: Record<PriceProvider, number> = { cosmos: 30, claude: 7 }
+const CACHE_DAYS: Record<PriceProvider, number> = { shopping: 30, claude: 7 }
 
 export type AdviceInput = {
   barcode?: string | null
@@ -46,10 +46,10 @@ function fromRow(row: NonNullable<CheckRow>, ctx: { currentPrice?: number | null
   const current = ctx.currentPrice && ctx.currentPrice > 0 ? ctx.currentPrice : null
   return {
     id: row.id,
-    provider: row.provider === "cosmos" ? "cosmos" : "claude",
+    provider: row.provider === "claude" ? "claude" : "shopping",
     productName: row.productName,
     brand: row.brand,
-    found: Boolean(row.productName),
+    found: Boolean(row.productName) || row.marketMedian != null,
     sources: (Array.isArray(row.sources) ? row.sources : []) as PriceSource[],
     market: { min: toNum(row.marketMin), median, max: toNum(row.marketMax) },
     suggested,
@@ -67,10 +67,10 @@ function fromRow(row: NonNullable<CheckRow>, ctx: { currentPrice?: number | null
 export async function getLatestAdvice(input: AdviceInput): Promise<PriceAdvice | null> {
   await ensureSchema()
   const barcode = input.barcode?.trim() || null
-  const query = normQuery(barcode || input.name || "")
+  const query = normQuery(input.name || barcode || "")
   if (!input.productId && !query) return null
   const row = await prisma.priceCheck.findFirst({
-    where: input.productId ? { productId: input.productId } : barcode ? { barcode } : { query },
+    where: input.productId ? { productId: input.productId } : { query },
     orderBy: { createdAt: "desc" },
   })
   return row ? fromRow(row, input, true) : null
@@ -83,18 +83,18 @@ export async function suggestPrice(input: AdviceInput): Promise<PriceAdvice> {
   if (!barcode && !name) throw new Error("Informe o código de barras ou o nome do produto (obrigatório)")
 
   const settings = await getServerSettings()
-  const provider: PriceProvider = settings.priceProvider === "claude" ? "claude" : "cosmos"
-  const query = normQuery(barcode || name || "")
+  const provider: PriceProvider = settings.priceProvider === "claude" ? "claude" : "shopping"
+  const quota = () => (provider === "shopping" ? shoppingQuota(settings.shoppingApiKey) : Promise.resolve(null))
+  // Chave do cache = o que foi pesquisado de fato (o nome, quando há; senão o
+  // código). Assim, se o código não achou nada e a pessoa digita o nome, a
+  // pesquisa pelo nome acontece de verdade.
+  const query = normQuery(name || barcode || "")
 
-  // cache: mesma pesquisa, mesma fonte, dentro do prazo
+  // cache: mesma pesquisa, mesma fonte, dentro do prazo — só resultados com preço
   if (!input.force) {
     const since = new Date(Date.now() - CACHE_DAYS[provider] * 86400000)
     const row = await prisma.priceCheck.findFirst({
-      where: {
-        createdAt: { gte: since },
-        provider,
-        ...(barcode ? { barcode } : { query }),
-      },
+      where: { createdAt: { gte: since }, provider, query, marketMedian: { not: null } },
       orderBy: { createdAt: "desc" },
     })
     if (row) {
@@ -102,16 +102,16 @@ export async function suggestPrice(input: AdviceInput): Promise<PriceAdvice> {
       if (input.productId && !row.productId) {
         await prisma.priceCheck.update({ where: { id: row.id }, data: { productId: input.productId } }).catch(() => {})
       }
-      return { ...fromRow(row, input, true), quota: provider === "cosmos" ? await cosmosQuota() : undefined }
+      return { ...fromRow(row, input, true), quota: (await quota()) ?? undefined }
     }
   }
 
   const advice =
     provider === "claude"
       ? await claudeAdvice({ barcode, name, costPrice: input.costPrice, currentPrice: input.currentPrice }, settings)
-      : await cosmosAdvice(
+      : await shoppingAdvice(
           { barcode, name, costPrice: input.costPrice, currentPrice: input.currentPrice },
-          { token: settings.cosmosToken, markupPct: settings.priceMarkupPercent ?? 10 },
+          { apiKey: settings.shoppingApiKey, markupPct: settings.priceMarkupPercent ?? 10 },
         )
 
   const row = await prisma.priceCheck.create({
@@ -140,16 +140,8 @@ export async function suggestPrice(input: AdviceInput): Promise<PriceAdvice> {
     id: row.id,
     checkedAt: row.createdAt.toISOString(),
     cached: false,
-    quota: provider === "cosmos" ? await cosmosQuota() : undefined,
+    quota: (await quota()) ?? undefined,
   }
-}
-
-/** Consultas ao Cosmos feitas hoje (todas as máquinas usam o mesmo token). */
-async function cosmosQuota(): Promise<{ used: number; limit: number }> {
-  const start = new Date()
-  start.setHours(0, 0, 0, 0)
-  const used = await prisma.priceCheck.count({ where: { provider: "cosmos", createdAt: { gte: start } } })
-  return { used, limit: COSMOS_DAILY_LIMIT }
 }
 
 /**

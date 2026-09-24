@@ -20,8 +20,8 @@ export type StoreSettings = {
   storeCity: string;
   aiModel: string;
   priceAlertPercent: number;
-  // fonte da pesquisa de preço: Cosmos (grátis) ou Claude (pago)
-  priceProvider: 'cosmos' | 'claude';
+  // fonte da pesquisa de preço: Google Shopping (grátis) ou Claude (pago)
+  priceProvider: 'shopping' | 'claude';
   priceMarkupPercent: number;
   // assistente do relatório do dia
   reportReminderEnabled: boolean;
@@ -30,8 +30,8 @@ export type StoreSettings = {
   // somente leitura (a chave nunca vem do servidor)
   aiKeySet?: boolean;
   aiKeyHint?: string;
-  cosmosTokenSet?: boolean;
-  cosmosTokenHint?: string;
+  shoppingKeySet?: boolean;
+  shoppingKeyHint?: string;
 };
 
 const CACHE_KEY = 'lacolaria_settings';
@@ -52,15 +52,15 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   storeCity: '',
   aiModel: 'claude-sonnet-5',
   priceAlertPercent: 10,
-  priceProvider: 'cosmos',
+  priceProvider: 'shopping',
   priceMarkupPercent: 10,
   reportReminderEnabled: true,
   reportReminderTime: '18:00',
   cashFloatDefault: 0,
   aiKeySet: false,
   aiKeyHint: '',
-  cosmosTokenSet: false,
-  cosmosTokenHint: '',
+  shoppingKeySet: false,
+  shoppingKeyHint: '',
 };
 
 function readCache(): StoreSettings {
@@ -108,7 +108,7 @@ export async function loadSettings(): Promise<StoreSettings> {
  */
 export async function saveSettings(
   patch: Partial<StoreSettings>,
-  extra?: { aiApiKey?: string; aiApiKeyClear?: boolean; cosmosToken?: string; cosmosTokenClear?: boolean },
+  extra?: { aiApiKey?: string; aiApiKeyClear?: boolean; shoppingApiKey?: string; shoppingApiKeyClear?: boolean },
 ): Promise<StoreSettings> {
   const next = { ...readCache(), ...patch };
   writeCache(next);

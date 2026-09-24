@@ -28,7 +28,7 @@ const ALLOWED = [
 const AI_MODELS = ["claude-sonnet-5", "claude-haiku-4-5-20251001", "claude-opus-5-5"]
 
 // GET /api/settings — configurações da loja (cria com padrões se não existir).
-// As chaves (IA e Cosmos) nunca saem daqui: só se existem e o final delas.
+// As chaves (IA e Google Shopping) nunca saem daqui: só se existem e o final delas.
 export async function GET() {
   try {
     const settings = await getServerSettings()
@@ -63,7 +63,7 @@ export async function PUT(request: Request) {
     if (typeof data.aiModel === "string" && !AI_MODELS.includes(data.aiModel)) {
       delete data.aiModel
     }
-    if (data.priceProvider !== undefined && !["cosmos", "claude"].includes(String(data.priceProvider))) {
+    if (data.priceProvider !== undefined && !["shopping", "claude"].includes(String(data.priceProvider))) {
       delete data.priceProvider
     }
     if (typeof data.priceMarkupPercent === "number") {
@@ -75,10 +75,10 @@ export async function PUT(request: Request) {
       data.aiApiKey = body.aiApiKey.trim()
     }
     if (body.aiApiKeyClear === true) data.aiApiKey = ""
-    if (typeof body.cosmosToken === "string" && body.cosmosToken.trim()) {
-      data.cosmosToken = body.cosmosToken.trim()
+    if (typeof body.shoppingApiKey === "string" && body.shoppingApiKey.trim()) {
+      data.shoppingApiKey = body.shoppingApiKey.trim()
     }
-    if (body.cosmosTokenClear === true) data.cosmosToken = ""
+    if (body.shoppingApiKeyClear === true) data.shoppingApiKey = ""
 
     const settings = await prisma.settings.update({ where: { id: SETTINGS_ID }, data })
     return NextResponse.json({ success: true, data: publicSettings(settings) })
