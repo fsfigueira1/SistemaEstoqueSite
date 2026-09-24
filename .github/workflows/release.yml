@@ -46,7 +46,8 @@ jobs:
       # versão e sobe os arquivos em paralelo, e às vezes duplica a versão ou
       # perde o latest.yml. Aqui a publicação é feita em ordem, logo abaixo.
       - name: Gerar o instalador
-        run: npx electron-builder --win nsis --publish never -c.directories.output=dist-release
+        shell: bash
+        run: npx electron-builder --win nsis --publish never --config.directories.output=dist-release
 
       - name: Publicar no GitHub Releases
         shell: bash
