@@ -1,4 +1,4 @@
--- Relatório do dia, conferência do caixa e sugestão de preço com IA.
+-- Relatório do dia, conferência do caixa e pesquisa de preço (Cosmos grátis ou Claude).
 -- Idempotente: o app também aplica isto sozinho ao abrir (src/lib/schemaUpgrade.ts).
 -- Pode rodar no SQL Editor do Supabase quantas vezes quiser.
 
@@ -17,6 +17,12 @@ ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "reportReminderEnabled" BOOLEAN 
 ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "reportReminderTime" TEXT NOT NULL DEFAULT '18:00';
 
 ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "cashFloatDefault" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "priceProvider" TEXT NOT NULL DEFAULT 'cosmos';
+
+ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "cosmosToken" TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "priceMarkupPercent" DOUBLE PRECISION NOT NULL DEFAULT 10;
 
 CREATE TABLE IF NOT EXISTS "DailyClosing" (
   "id" TEXT NOT NULL,
@@ -65,3 +71,5 @@ CREATE INDEX IF NOT EXISTS "PriceCheck_productId_idx" ON "PriceCheck"("productId
 CREATE INDEX IF NOT EXISTS "PriceCheck_barcode_idx" ON "PriceCheck"("barcode");
 
 CREATE INDEX IF NOT EXISTS "PriceCheck_createdAt_idx" ON "PriceCheck"("createdAt");
+
+ALTER TABLE "PriceCheck" ADD COLUMN IF NOT EXISTS "provider" TEXT;

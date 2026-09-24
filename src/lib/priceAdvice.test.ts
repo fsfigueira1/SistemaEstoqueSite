@@ -21,6 +21,11 @@ describe("shelfPriceAtLeast", () => {
     expect(shelfPriceAtLeast(13.95)).toBe(14.9)
     expect(shelfPriceAtLeast(14.9)).toBe(14.9)
     expect(shelfPriceAtLeast(0.42)).toBe(0.45)
+    expect(shelfPriceAtLeast(2.99)).toBe(3.5)
+    expect(shelfPriceAtLeast(2.75)).toBe(2.9)
+    expect(shelfPriceAtLeast(3.5)).toBe(3.5)
+    expect(shelfPriceAtLeast(9.95)).toBe(10.5)
+    expect(shelfPriceAtLeast(10)).toBe(10.9)
   })
 })
 

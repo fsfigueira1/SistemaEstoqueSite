@@ -394,6 +394,12 @@ model Settings {
   aiModel                      String   @default("claude-sonnet-5")
   /// % acima do preço atual que dispara o aviso de "mercado em alta".
   priceAlertPercent            Float    @default(10)
+  /// Fonte da pesquisa de preço: "cosmos" (grátis, Bluesoft) ou "claude" (IA paga).
+  priceProvider                String   @default("cosmos")
+  /// Token da API do Cosmos (Bluesoft). Nunca é devolvido pela API de configurações.
+  cosmosToken                  String   @default("")
+  /// "Toque da loja": quanto acima do preço médio de mercado sugerir (%).
+  priceMarkupPercent           Float    @default(10)
   /// Assistente do relatório do dia.
   reportReminderEnabled        Boolean  @default(true)
   reportReminderTime           String   @default("18:00")
@@ -424,6 +430,8 @@ model DailyClosing {
 /// Resultado de uma pesquisa de preço de mercado feita pela IA.
 model PriceCheck {
   id             String   @id @default(uuid())
+  /// "cosmos" ou "claude"
+  provider       String?
   /// Produto do catálogo (sem FK: pesquisa pode ser feita antes do cadastro).
   productId      String?
   barcode        String?

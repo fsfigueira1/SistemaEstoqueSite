@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Layout, { PageHeader } from '@/components/Layout';
-import { Store, Printer, KeyRound, CheckCircle, CreditCard, Users, Database, Sparkles, BellRing, Eye, EyeOff } from 'lucide-react';
+import PriceSearchSettings from '@/components/settings/PriceSearchSettings';
+import ReceiptWidthPreview from '@/components/settings/ReceiptWidthPreview';
+import { Store, Printer, KeyRound, CheckCircle, CreditCard, Users, Database, BellRing } from 'lucide-react';
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -18,7 +20,7 @@ export default function ConfiguracoesPage() {
   const [loaded, setLoaded] = useState(false);
   // chave da IA: nunca vem do servidor; o campo só serve para trocar
   const [aiKey, setAiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
+  const [cosmosKey, setCosmosKey] = useState('');
 
   // PIN
   const [pinCur, setPinCur] = useState('');
@@ -38,16 +40,25 @@ export default function ConfiguracoesPage() {
   };
 
   const save = async () => {
-    const next = await saveSettings(form, aiKey.trim() ? { aiApiKey: aiKey.trim() } : undefined);
+    const next = await saveSettings(form, {
+      ...(aiKey.trim() ? { aiApiKey: aiKey.trim() } : {}),
+      ...(cosmosKey.trim() ? { cosmosToken: cosmosKey.trim() } : {}),
+    });
     setForm(next);
     setAiKey('');
+    setCosmosKey('');
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
 
   const removeKey = async () => {
-    if (!window.confirm('Remover a chave da IA? A sugestão de preço para de funcionar até colar outra.')) return;
+    if (!window.confirm('Remover a chave do Claude?')) return;
     const next = await saveSettings(form, { aiApiKeyClear: true });
+    setForm(next);
+  };
+  const removeCosmos = async () => {
+    if (!window.confirm('Remover o token do Cosmos? A pesquisa de preço para até colar outro.')) return;
+    const next = await saveSettings(form, { cosmosTokenClear: true });
     setForm(next);
   };
 
@@ -98,104 +109,23 @@ export default function ConfiguracoesPage() {
           </div>
         </Section>
 
-        {/* IA de preços */}
-        <div id="ia" className="scroll-mt-6" />
-        <Section
-          icon={<Sparkles className="h-5 w-5" />}
-          title="Perfil da loja e IA de preços"
-          desc="A IA pesquisa o mercado e sugere preços pensando neste perfil"
-        >
-          <div className="space-y-4">
-            <Field label="Como é a sua loja">
-              <textarea
-                value={form.storeProfile}
-                onChange={(e) => set('storeProfile', e.target.value)}
-                rows={3}
-                className={inp}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Posicionamento, público, bairro. Ex.: &quot;papelaria nova, bem localizada, toque gourmet&quot;.
-              </p>
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Cidade / UF">
-                <input
-                  value={form.storeCity}
-                  onChange={(e) => set('storeCity', e.target.value)}
-                  className={inp}
-                  placeholder="Ex.: São Paulo/SP"
-                />
-              </Field>
-              <Field label="Avisar quando o mercado passar do meu preço em">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={form.priceAlertPercent}
-                    onChange={(e) => set('priceAlertPercent', Number(e.target.value) || 10)}
-                    className={inp}
-                  />
-                  <span className="text-sm text-muted-foreground">%</span>
-                </div>
-              </Field>
-            </div>
-
-            <div className="rounded-xl border border-border bg-muted/40 p-4">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-foreground">Chave do Claude (Anthropic)</p>
-                {form.aiKeySet ? (
-                  <span className="pill pill-ok">
-                    <CheckCircle className="h-3 w-3" /> Configurada {form.aiKeyHint}
-                  </span>
-                ) : (
-                  <span className="pill pill-muted">Não configurada</span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type={showKey ? 'text' : 'password'}
-                    value={aiKey}
-                    onChange={(e) => {
-                      setAiKey(e.target.value);
-                      setSaved(false);
-                    }}
-                    placeholder={form.aiKeySet ? 'Cole outra chave para trocar' : 'sk-ant-…'}
-                    autoComplete="off"
-                    className={`${inp} pr-10`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
-                    aria-label={showKey ? 'Esconder chave' : 'Mostrar chave'}
-                  >
-                    {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                {form.aiKeySet && (
-                  <button type="button" onClick={removeKey} className="rounded-lg border border-border px-3 text-sm text-danger hover:bg-danger/10">
-                    Remover
-                  </button>
-                )}
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Crie em console.anthropic.com (é cobrada à parte do plano Pro, por uso). A chave fica guardada no banco da loja
-                e não aparece de novo nesta tela.
-              </p>
-              <div className="mt-3">
-                <Field label="Qualidade da pesquisa">
-                  <select value={form.aiModel} onChange={(e) => set('aiModel', e.target.value)} className={inp}>
-                    <option value="claude-sonnet-5">Equilibrada — Claude Sonnet 5 (recomendado)</option>
-                    <option value="claude-haiku-4-5-20251001">Econômica — Claude Haiku 4.5</option>
-                    <option value="claude-opus-5-5">Máxima — Claude Opus 5.5</option>
-                  </select>
-                </Field>
-              </div>
-            </div>
-          </div>
-        </Section>
+        {/* Pesquisa de preço */}
+        <PriceSearchSettings
+          form={form}
+          set={set}
+          aiKey={aiKey}
+          onAiKey={(v) => {
+            setAiKey(v);
+            setSaved(false);
+          }}
+          cosmosKey={cosmosKey}
+          onCosmosKey={(v) => {
+            setCosmosKey(v);
+            setSaved(false);
+          }}
+          onRemoveAi={removeKey}
+          onRemoveCosmos={removeCosmos}
+        />
 
         {/* Assistente do relatório do dia */}
         <Section
@@ -383,46 +313,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="mb-1 block text-sm font-medium text-foreground/90">{label}</label>
       {children}
-    </div>
-  );
-}
-
-// Espelha as margens cegas reais usadas na impressão (ver @media print em
-// globals.css / ReceiptPrint.tsx): 80mm tem folga assimétrica pela zona não
-// imprimível da Epson TM-T20X; 58mm usa recuo simétrico.
-function ReceiptWidthPreview({
-  width,
-  storeName,
-}: {
-  width: StoreSettings['receiptWidth'];
-  storeName: string;
-}) {
-  const isNarrow = width === '58mm';
-  const padRight = isNarrow ? '5mm' : '2mm';
-  const printable = isNarrow ? '48mm' : '73mm';
-
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-muted/40 p-4">
-      <p className="mb-3 text-center text-xs text-muted-foreground">
-        Pré-visualização — bobina de {width === '58mm' ? '58 mm' : '80 mm'} (área imprimível ≈ {printable}, sempre
-        centralizada)
-      </p>
-      <div
-        className="mx-auto rounded-sm border border-border bg-white shadow-sm transition-[width] duration-200"
-        style={{ width, boxSizing: 'border-box', padding: `3mm ${padRight} 3mm 5mm` }}
-      >
-        <div className="text-center text-[11px] font-bold text-black">{storeName || 'LAÇOLARIA'}</div>
-        <div className="my-1.5 border-t border-dashed border-black/40" />
-        <div className="flex justify-between gap-2 text-[9px] text-black">
-          <span>2 x R$ 11,50</span>
-          <span>R$ 23,00</span>
-        </div>
-        <div className="my-1.5 border-t border-dashed border-black/40" />
-        <div className="flex justify-between gap-2 text-[11px] font-bold text-black">
-          <span>TOTAL</span>
-          <span>R$ 23,00</span>
-        </div>
-      </div>
     </div>
   );
 }

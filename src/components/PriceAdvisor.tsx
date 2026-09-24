@@ -1,8 +1,9 @@
 'use client';
 
 // Painel "Preço de mercado" do cadastro de produto.
-// Bipou o código (ou digitou o nome) → a IA pesquisa o produto em papelarias e
-// lojas do Brasil e devolve uma direção de preço para esta loja.
+// Bipou o código (ou digitou o nome) → pesquisa o preço de mercado e sugere um
+// preço para esta loja. Fonte em Configurações: Cosmos (grátis, preço médio no
+// Brasil) ou Claude (IA paga, pesquisa lojas na web).
 //
 // - Produto novo com código de barras válido: pesquisa sozinho (uma vez por código).
 // - Produto existente: mostra a última pesquisa salva (grátis) e o aviso de
@@ -10,7 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Sparkles, Loader2, RotateCcw, ExternalLink, TrendingUp, Store, Globe, Check } from 'lucide-react';
+import { Sparkles, Loader2, RotateCcw, ExternalLink, TrendingUp, Store, Globe, Check, BarChart3 } from 'lucide-react';
 import type { PriceAdvice } from '@/lib/priceAdvice';
 import { isValidGtin } from '@/lib/priceAdvice';
 import { getSettings, loadSettings } from '@/lib/settings';
@@ -53,7 +54,10 @@ export default function PriceAdvisor({
   onUsePrice: (price: number) => void;
   onUseName: (name: string) => void;
 }) {
-  const [keySet, setKeySet] = useState<boolean>(() => Boolean(getSettings().aiKeySet));
+  const readyOf = (s: ReturnType<typeof getSettings>) =>
+    s.priceProvider === 'claude' ? Boolean(s.aiKeySet) : Boolean(s.cosmosTokenSet);
+  const [keySet, setKeySet] = useState<boolean>(() => readyOf(getSettings()));
+  const [provider, setProvider] = useState<'cosmos' | 'claude'>(() => getSettings().priceProvider ?? 'cosmos');
   const [alertPct, setAlertPct] = useState<number>(() => getSettings().priceAlertPercent ?? 10);
   const [advice, setAdvice] = useState<PriceAdvice | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,7 +69,8 @@ export default function PriceAdvisor({
 
   useEffect(() => {
     loadSettings().then((s) => {
-      setKeySet(Boolean(s.aiKeySet));
+      setKeySet(readyOf(s));
+      setProvider(s.priceProvider ?? 'cosmos');
       setAlertPct(s.priceAlertPercent ?? 10);
     });
   }, []);
@@ -148,7 +153,9 @@ export default function PriceAdvisor({
           </span>
           <div className="leading-tight">
             <p className="text-sm font-semibold text-foreground">Preço de mercado</p>
-            <p className="text-[11px] text-muted-foreground">Pesquisa com IA em papelarias e lojas</p>
+            <p className="text-[11px] text-muted-foreground">
+              {provider === 'claude' ? 'Pesquisa com IA em papelarias e lojas' : 'Preço médio no Brasil (base Cosmos, grátis)'}
+            </p>
           </div>
         </div>
         {keySet && (
@@ -173,23 +180,24 @@ export default function PriceAdvisor({
       <div className="border-t border-bow/15 bg-card/70 px-4 py-3 text-sm">
         {!keySet ? (
           <p className="text-muted-foreground">
-            Para a IA sugerir preços, cole a chave do Claude em{' '}
+            Para pesquisar preços, cole {provider === 'claude' ? 'a chave do Claude' : 'o token grátis do Cosmos'} em{' '}
             <Link href="/configuracoes#ia" className="font-medium text-primary hover:underline">
-              Configurações
+              Configurações → Pesquisa de preço
             </Link>
             .
           </p>
         ) : loading ? (
           <p className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin text-bow" />
-            Pesquisando {code ? `o código ${code}` : `“${name.trim()}”`} no mercado… pode levar até 1 minuto.
+            Pesquisando {code ? `o código ${code}` : `“${name.trim()}”`} no mercado…
+            {provider === 'claude' ? ' pode levar até 1 minuto.' : ''}
           </p>
         ) : err ? (
           <p className="font-medium text-danger">{err}</p>
         ) : !advice ? (
           <p className="text-muted-foreground">
             {canSearch
-              ? 'Toque em “Sugerir preço” para ver quanto as lojas cobram e um preço para a sua loja.'
+              ? 'Toque em “Sugerir preço” para ver o preço de mercado e uma sugestão para a sua loja.'
               : 'Bipe o código de barras ou digite o nome do produto.'}
           </p>
         ) : (
@@ -267,6 +275,8 @@ export default function PriceAdvisor({
                     <li key={i} className="flex items-center gap-2 px-3 py-1.5 text-xs">
                       {s.tipo === 'fisica' ? (
                         <Store className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Loja física" />
+                      ) : s.tipo === 'referencia' ? (
+                        <BarChart3 className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Base de preços" />
                       ) : (
                         <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Loja online" />
                       )}
@@ -285,7 +295,9 @@ export default function PriceAdvisor({
 
             <p className="text-[11px] text-muted-foreground">
               Pesquisado {ago(advice.checkedAt)}
-              {advice.cached ? ' · resultado salvo, sem custo' : ''}
+              {advice.provider === 'claude' ? ' · IA' : ' · Cosmos'}
+              {advice.cached ? ' · resultado salvo, sem gastar consulta' : ''}
+              {advice.quota ? ` · cerca de ${advice.quota.used} de ${advice.quota.limit} consultas grátis usadas hoje` : ''}
             </p>
           </div>
         )}

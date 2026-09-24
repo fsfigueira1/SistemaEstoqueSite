@@ -16,13 +16,18 @@ export async function getServerSettings() {
 
 export type ServerSettings = Awaited<ReturnType<typeof getServerSettings>>
 
-/** Versão segura para o navegador: sem a chave, só se ela existe e o final dela. */
+const hint = (k: string) => (k.length > 8 ? `…${k.slice(-4)}` : k ? "definida" : "")
+
+/** Versão segura para o navegador: sem as chaves, só se existem e o final delas. */
 export function publicSettings(s: ServerSettings) {
-  const { aiApiKey, ...rest } = s
+  const { aiApiKey, cosmosToken, ...rest } = s
   const key = (aiApiKey ?? "").trim()
+  const cosmos = (cosmosToken ?? "").trim()
   return {
     ...rest,
     aiKeySet: key.length > 0,
-    aiKeyHint: key.length > 8 ? `…${key.slice(-4)}` : key ? "definida" : "",
+    aiKeyHint: hint(key),
+    cosmosTokenSet: cosmos.length > 0,
+    cosmosTokenHint: hint(cosmos),
   }
 }

@@ -24,7 +24,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, data: advice })
   } catch (error) {
     const e = friendlyError(error)
-    const status = e.message === "IA não configurada" ? 412 : e.message === "Falta preencher um campo" ? 400 : 502
+    const notConfigured = e.message === "IA não configurada" || e.message === "Pesquisa de preço não configurada"
+    const status = notConfigured ? 412 : e.message === "Falta preencher um campo" ? 400 : 502
     return NextResponse.json({ success: false, error: e }, { status })
   }
 }

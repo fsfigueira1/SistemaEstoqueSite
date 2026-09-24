@@ -24,26 +24,35 @@ Branch `feat/relatorios-ia-assistente`.
 - **Assistente do dia** (`src/components/DailyAssistant.tsx`): aparece no
   horário configurado (padrão 18:00) se houve venda e o caixa não foi conferido.
   "30 min" adia; fechar dispensa até amanhã (preferência local do PC).
-- **Sugestão de preço com IA** (`src/services/priceAdvisorService.ts`,
-  `src/components/PriceAdvisor.tsx`): Claude + pesquisa na web
-  (`web_search_20250305`), por código de barras ou nome. No cadastro novo, um
-  EAN válido dispara a pesquisa sozinho e preenche o nome. Resultado salvo em
-  `PriceCheck` (cache de 7 dias). Aviso "abaixo do mercado" em Produtos e no
-  relatório. Chave/modelo/perfil da loja em Configurações → "Perfil da loja e IA".
-  A chave fica no banco e **nunca** volta pela API (`publicSettings`).
-  `ANTHROPIC_BASE_URL` permite apontar para proxy/simulador.
+- **Pesquisa de preço no cadastro** (`src/services/priceAdvisorService.ts`,
+  `src/components/PriceAdvisor.tsx`). Duas fontes, escolhidas em
+  Configurações → "Pesquisa de preço":
+  - **Cosmos (Bluesoft) — padrão, grátis** (~25 consultas/dia com token da conta
+    grátis em cosmos.bluesoft.com.br). Pelo código de barras traz nome, marca e
+    preço médio/mín/máx no Brasil; pelo nome, a mediana dos parecidos. Sugestão =
+    preço médio + "toque da loja" (padrão 10%), final ",50/,90", nunca abaixo de
+    custo + 30%. Regras puras em `src/lib/cosmosPricing.ts`, chamada HTTP em
+    `src/services/pricing/cosmosProvider.ts`. Cache de 30 dias.
+  - **Claude — pago** (`src/services/pricing/claudeProvider.ts`): IA com
+    `web_search_20250305`, considera o perfil da loja. Cache de 7 dias.
+  No cadastro novo, um EAN válido dispara a pesquisa sozinho e preenche o nome.
+  Resultados em `PriceCheck` (coluna `provider`). Aviso "abaixo do mercado" em
+  Produtos e no relatório. Token do Cosmos e chave do Claude ficam no banco e
+  **nunca** voltam pela API (`publicSettings`). `COSMOS_BASE_URL` e
+  `ANTHROPIC_BASE_URL` permitem apontar para simuladores nos testes.
 - **Erros simples**: `src/lib/friendlyError.ts` transforma qualquer erro
   (Prisma, rede, serviços em inglês) em nome curto ("Estoque insuficiente",
   "Sem conexão"). Usado no `errorHandler`, nas rotas e nas telas (`errorText`).
 - **Visual**: Fraunces + Inter locais, trilho escuro, `PageHeader`, tela de PIN
   nova — ver `DESIGN.md`.
 
-**Banco**: colunas novas em `Settings` + tabelas `DailyClosing` e `PriceCheck`.
+**Banco**: colunas novas em `Settings` (inclui `priceProvider`, `cosmosToken`,
+`priceMarkupPercent`) + tabelas `DailyClosing` e `PriceCheck`.
 Cada PC aplica sozinho ao abrir (`src/lib/schemaUpgrade.ts`, tudo `IF NOT EXISTS`).
 O mesmo SQL está em `prisma/migrations/20260924120000_reports_ai/migration.sql`
 se quiser rodar no SQL Editor do Supabase antes.
 
-**Testes**: `src/lib/*.test.ts` (39 testes). A suíte antiga tem 47 falhas
+**Testes**: `src/lib/*.test.ts` (52 testes). A suíte antiga tem 47 falhas
 pré-existentes (stock/payment/productApi/integração) — iguais antes e depois.
 
 ## Rodada anterior (13 commits sobre `f9d3e9b`)

@@ -17,6 +17,12 @@ const GENERAL_MARK: Rule = { test: /$^/, title: "" }
 
 // A ordem importa: regras mais específicas primeiro.
 const RULES: Rule[] = [
+  // --- pesquisa de preço grátis (Cosmos) ---
+  { test: /cosmos token missing/i, title: "Pesquisa de preço não configurada" },
+  { test: /cosmos http 429/i, title: "Consultas grátis de hoje acabaram — amanhã volta" },
+  { test: /cosmos http 40[13]/i, title: "Token do Cosmos inválido" },
+  { test: /cosmos http 5\d\d/i, title: "Base de preços fora do ar — tente mais tarde" },
+
   // --- IA de preços (antes das regras genéricas) ---
   { test: /timeout na pesquisa/i, title: "A pesquisa demorou — tente de novo" },
   { test: /formato inesperado/i, title: "A IA não respondeu direito — tente de novo" },

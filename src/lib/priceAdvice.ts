@@ -1,10 +1,14 @@
-// Formato e leitura da resposta da IA de preços. Sem acesso a banco/rede:
-// usado pelo servidor (para validar o que o Claude devolveu) e pela tela.
+// Formato comum da pesquisa de preço (Cosmos ou Claude) e leitura da resposta
+// da IA. Sem acesso a banco/rede: usado pelo servidor e pela tela.
 
-export type PriceSource = { loja: string; preco: number; tipo: "fisica" | "online"; url: string | null }
+/** fisica/online = loja achada pela IA; referencia = base de preços (Cosmos). */
+export type PriceSource = { loja: string; preco: number; tipo: "fisica" | "online" | "referencia"; url: string | null }
+
+export type PriceProvider = "cosmos" | "claude"
 
 export type PriceAdvice = {
   id?: string
+  provider: PriceProvider
   productName: string | null
   brand: string | null
   found: boolean
@@ -20,6 +24,8 @@ export type PriceAdvice = {
   marketAbovePct: number | null
   checkedAt: string
   cached: boolean
+  /** Cosmos (grátis): consultas usadas hoje x limite diário. */
+  quota?: { used: number; limit: number }
 }
 
 const num = (v: unknown): number | null => {
@@ -65,12 +71,25 @@ export function extractJson(text: string): unknown {
   return null
 }
 
-/** Menor preço de etiqueta terminado em ",90" que seja >= v (abaixo de R$ 1: múltiplo de 5 centavos). */
+/**
+ * Menor preço de etiqueta >= v:
+ *  - abaixo de R$ 1: múltiplo de 5 centavos
+ *  - de R$ 1 a R$ 10: final ",50" ou ",90" (item barato não pula R$ 1 inteiro)
+ *  - a partir de R$ 10: final ",90"
+ */
 export function shelfPriceAtLeast(v: number): number {
   if (v <= 0) return 0
-  if (v < 1) return Math.ceil(Math.round(v * 100) / 5) * 5 / 100
-  const whole = Math.ceil(Math.round((v - 0.9) * 100) / 100)
-  return Math.round((whole + 0.9) * 100) / 100
+  const cents = Math.round(v * 100)
+  if (cents < 100) return (Math.ceil(cents / 5) * 5) / 100
+  if (cents < 1000) {
+    const whole = Math.floor(cents / 100)
+    const frac = cents - whole * 100
+    if (frac <= 50) return (whole * 100 + 50) / 100
+    if (frac <= 90) return (whole * 100 + 90) / 100
+    return (whole * 100 + 150) / 100
+  }
+  const whole = Math.ceil((cents - 90) / 100)
+  return (whole * 100 + 90) / 100
 }
 
 /**
@@ -128,6 +147,7 @@ export function normalizeAdvice(
   const current = ctx.currentPrice && ctx.currentPrice > 0 ? ctx.currentPrice : null
 
   return {
+    provider: "claude",
     productName: typeof produto.nome === "string" && produto.nome.trim() ? produto.nome.trim().slice(0, 160) : null,
     brand: typeof produto.marca === "string" && produto.marca.trim() ? produto.marca.trim().slice(0, 60) : null,
     found: produto.encontrado === true,

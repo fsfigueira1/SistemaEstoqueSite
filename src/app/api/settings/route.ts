@@ -21,12 +21,14 @@ const ALLOWED = [
   "reportReminderEnabled",
   "reportReminderTime",
   "cashFloatDefault",
+  "priceProvider",
+  "priceMarkupPercent",
 ] as const
 
 const AI_MODELS = ["claude-sonnet-5", "claude-haiku-4-5-20251001", "claude-opus-5-5"]
 
 // GET /api/settings — configurações da loja (cria com padrões se não existir).
-// A chave da IA nunca sai daqui: só `aiKeySet` e o final dela.
+// As chaves (IA e Cosmos) nunca saem daqui: só se existem e o final delas.
 export async function GET() {
   try {
     const settings = await getServerSettings()
@@ -61,12 +63,22 @@ export async function PUT(request: Request) {
     if (typeof data.aiModel === "string" && !AI_MODELS.includes(data.aiModel)) {
       delete data.aiModel
     }
+    if (data.priceProvider !== undefined && !["cosmos", "claude"].includes(String(data.priceProvider))) {
+      delete data.priceProvider
+    }
+    if (typeof data.priceMarkupPercent === "number") {
+      data.priceMarkupPercent = Math.min(100, Math.max(0, data.priceMarkupPercent))
+    }
     // Chave da IA: só grava quando vem preenchida (o formulário não recebe a
     // chave atual de volta, então campo vazio = "manter a que já está").
     if (typeof body.aiApiKey === "string" && body.aiApiKey.trim()) {
       data.aiApiKey = body.aiApiKey.trim()
     }
     if (body.aiApiKeyClear === true) data.aiApiKey = ""
+    if (typeof body.cosmosToken === "string" && body.cosmosToken.trim()) {
+      data.cosmosToken = body.cosmosToken.trim()
+    }
+    if (body.cosmosTokenClear === true) data.cosmosToken = ""
 
     const settings = await prisma.settings.update({ where: { id: SETTINGS_ID }, data })
     return NextResponse.json({ success: true, data: publicSettings(settings) })
