@@ -82,3 +82,6 @@ debug_*.mjs
 # electron-builder
 /release/
 /server-bundle/
+
+# instalador gerado pelo CI
+/dist-release
