@@ -42,7 +42,25 @@ jobs:
 
       - run: node scripts/prepare-standalone.cjs
 
-      - name: Gerar e publicar o instalador
-        run: npx electron-builder --win nsis --publish always
+      # Gera sem publicar: o "--publish always" do electron-builder cria a
+      # versão e sobe os arquivos em paralelo, e às vezes duplica a versão ou
+      # perde o latest.yml. Aqui a publicação é feita em ordem, logo abaixo.
+      - name: Gerar o instalador
+        run: npx electron-builder --win nsis --publish never -c.directories.output=dist-release
+
+      - name: Publicar no GitHub Releases
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v=$(node -p "require('./package.json').version")
+          tag="v$v"
+          ls -la dist-release
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$v" --notes "Laçolaria $v" --target "$GITHUB_SHA"
+          fi
+          # latest.yml por último: os PCs só enxergam a versão nova quando o
+          # instalador certo já está lá.
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber \
+            dist-release/Lacolaria-Setup.exe dist-release/Lacolaria-Setup.exe.blockmap
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber dist-release/latest.yml
