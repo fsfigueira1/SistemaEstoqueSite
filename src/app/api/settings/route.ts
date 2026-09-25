@@ -23,6 +23,7 @@ const ALLOWED = [
   "cashFloatDefault",
   "priceProvider",
   "priceMarkupPercent",
+  "profitTargetPercent",
   "feeDebitPercent",
   "feeCreditPercent",
   "feeCreditInstallmentPercent",
@@ -71,6 +72,10 @@ export async function PUT(request: Request) {
     }
     if (data.priceProvider !== undefined && !["shopping", "claude"].includes(String(data.priceProvider))) {
       delete data.priceProvider
+    }
+    if (data.profitTargetPercent !== undefined) {
+      const n = Number(data.profitTargetPercent)
+      data.profitTargetPercent = Number.isFinite(n) ? Math.min(1000, Math.max(0, Math.round(n))) : 110
     }
     if (typeof data.priceMarkupPercent === "number") {
       data.priceMarkupPercent = Math.min(100, Math.max(0, data.priceMarkupPercent))

@@ -135,6 +135,23 @@ export default function PriceSearchSettings({
             </>
           )}
 
+          <Field label="Meta de lucro sobre o custo">
+            <div className="flex items-center gap-2 sm:w-1/2">
+              <input
+                type="number"
+                min="0"
+                max="1000"
+                value={form.profitTargetPercent}
+                onChange={(e) => set('profitTargetPercent', Math.max(0, Number(e.target.value) || 0))}
+                className={inp}
+              />
+              <span className="text-sm text-muted-foreground">%</span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ex.: 110% = custo R$ 10,00 → vender a partir de R$ 21,00. O cadastro e a importação avisam quando o preço fica abaixo.
+            </p>
+          </Field>
+
           <Field label="Avisar quando o mercado passar do meu preço em">
             <div className="flex items-center gap-2 sm:w-1/2">
               <input

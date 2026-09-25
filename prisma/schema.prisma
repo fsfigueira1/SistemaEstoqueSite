@@ -400,6 +400,8 @@ model Settings {
   shoppingApiKey               String   @default("")
   /// "Toque da loja": quanto acima do preço médio de mercado sugerir (%).
   priceMarkupPercent           Float    @default(10)
+  /// Meta de lucro sobre o custo (%), usada no cadastro e na importação.
+  profitTargetPercent          Float    @default(110)
   /// Taxas da maquininha/banco (%), para mostrar quanto cai na conta.
   feeDebitPercent              Float    @default(0)
   feeCreditPercent             Float    @default(0)
