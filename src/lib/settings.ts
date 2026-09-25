@@ -23,6 +23,14 @@ export type StoreSettings = {
   // fonte da pesquisa de preço: Google Shopping (grátis) ou Claude (pago)
   priceProvider: 'shopping' | 'claude';
   priceMarkupPercent: number;
+  // taxas da maquininha e do Pix (%)
+  feeDebitPercent: number;
+  feeCreditPercent: number;
+  feeCreditInstallmentPercent: number;
+  feePixPercent: number;
+  // backup automático
+  backupEnabled: boolean;
+  backupKeep: number;
   // assistente do relatório do dia
   reportReminderEnabled: boolean;
   reportReminderTime: string;
@@ -54,6 +62,12 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   priceAlertPercent: 10,
   priceProvider: 'shopping',
   priceMarkupPercent: 10,
+  feeDebitPercent: 0,
+  feeCreditPercent: 0,
+  feeCreditInstallmentPercent: 0,
+  feePixPercent: 0,
+  backupEnabled: true,
+  backupKeep: 30,
   reportReminderEnabled: true,
   reportReminderTime: '18:00',
   cashFloatDefault: 0,

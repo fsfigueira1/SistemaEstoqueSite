@@ -37,6 +37,10 @@ contextBridge.exposeInMainWorld(
     listPrinters: () => ipcRenderer.invoke('list-printers'),
     getReceiptPrinter: () => ipcRenderer.invoke('get-receipt-printer'),
     setReceiptPrinter: (name) => ipcRenderer.invoke('set-receipt-printer', name),
+
+    // Backup automático: abrir a pasta no Explorer / escolher outra pasta.
+    openBackupFolder: () => ipcRenderer.invoke('open-backup-folder'),
+    chooseBackupFolder: () => ipcRenderer.invoke('choose-backup-folder'),
   }
 );
 

@@ -13,7 +13,7 @@
 import { prisma } from "@/lib/prisma"
 import { ensureSchema } from "@/lib/schemaUpgrade"
 import { getServerSettings } from "@/lib/serverSettings"
-import { round2, type MethodKey, type MethodTotals } from "@/lib/closing"
+import { feeAmount, feeRatesOf, hasFees, round2, type MethodKey, type MethodTotals } from "@/lib/closing"
 import { buildInsights } from "@/lib/reportInsights"
 import { getPriceAlerts } from "@/services/priceAdvisorService"
 
@@ -73,6 +73,9 @@ export type DailyReport = {
   /** Líquido = entradas − estornos. */
   net: MethodTotals
   netTotal: number
+  /** Taxas da maquininha/Pix (configuradas em Configurações) e o que cai na conta. */
+  fees: { card: number; pix: number; total: number; configured: boolean }
+  deposit: { card: number; pix: number }
   card: { credit: number; debit: number; installmentSales: number }
   refunds: { count: number; total: number }
   byHour: Array<{ hour: number; total: number; count: number }>
@@ -134,7 +137,6 @@ export function closingView(c: {
   }
 }
 
-
 // ---------- relatório ----------
 export async function getDailyReport(key: string): Promise<DailyReport> {
   await ensureSchema()
@@ -166,7 +168,7 @@ export async function getDailyReport(key: string): Promise<DailyReport> {
           { refundedAt: null, updatedAt: { gte: start, lt: end } },
         ],
       },
-      select: { method: true, amount: true },
+      select: { method: true, amount: true, installmentCount: true },
     }),
     prisma.dailyClosing.findUnique({ where: { date: key } }),
     prisma.sale.findMany({
@@ -184,6 +186,13 @@ export async function getDailyReport(key: string): Promise<DailyReport> {
 
   const received = emptyTotals()
   const refunded = emptyTotals()
+  const rates = feeRatesOf(settings)
+  const fees = { card: 0, pix: 0 }
+  const addFee = (method: string, amount: number, installments: number | null, sign: 1 | -1) => {
+    const f = feeAmount(method, amount, installments, rates) * sign
+    if (method === "PIX") fees.pix += f
+    else if (method === "CREDIT_CARD" || method === "DEBIT_CARD") fees.card += f
+  }
   const card = { credit: 0, debit: 0, installmentSales: 0 }
   const hours = new Map<number, { total: number; count: number }>()
   const products = new Map<string, { name: string; quantity: number; total: number }>()
@@ -204,6 +213,7 @@ export async function getDailyReport(key: string): Promise<DailyReport> {
       if (p.method === "CREDIT_CARD") card.credit += amount
       if (p.method === "DEBIT_CARD") card.debit += amount
       if ((p.installmentCount ?? 1) > 1) card.installmentSales += 1
+      addFee(p.method, amount, p.installmentCount, 1)
     }
 
     if (s.status === "REFUNDED") {
@@ -237,6 +247,7 @@ export async function getDailyReport(key: string): Promise<DailyReport> {
 
   for (const p of refundedPayments) {
     refunded[METHOD_OF[p.method] ?? "cash"] += toNum(p.amount)
+    addFee(p.method, toNum(p.amount), p.installmentCount, -1)
   }
 
   const net: MethodTotals = {
@@ -269,6 +280,7 @@ export async function getDailyReport(key: string): Promise<DailyReport> {
     topByQuantity: [...products.values()].sort((x, y) => y.quantity - x.quantity)[0] ?? null,
     last7Avg,
     refunds,
+    feesTotal: hasFees(rates) ? fees.card + fees.pix : 0,
   })
 
   // ---------- avisos ----------
@@ -305,6 +317,13 @@ export async function getDailyReport(key: string): Promise<DailyReport> {
     refunded: { cash: round2(refunded.cash), card: round2(refunded.card), pix: round2(refunded.pix) },
     net,
     netTotal,
+    fees: {
+      card: round2(fees.card),
+      pix: round2(fees.pix),
+      total: round2(fees.card + fees.pix),
+      configured: hasFees(rates),
+    },
+    deposit: { card: round2(net.card - fees.card), pix: round2(net.pix - fees.pix) },
     card: { credit: round2(card.credit), debit: round2(card.debit), installmentSales: card.installmentSales },
     refunds: { count: refunds.count, total: round2(refunds.total) },
     byHour,

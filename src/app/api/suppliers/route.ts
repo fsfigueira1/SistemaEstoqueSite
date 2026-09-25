@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { SupplierService } from "@/services/supplierService"
+import { friendlyError } from "@/lib/friendlyError"
 
 // GET /api/suppliers - List suppliers with filters and pagination
 export async function GET(request: Request) {
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
       data: result
     })
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ success: false, error: friendlyError(error) }, { status: 500 })
   }
 }
 
@@ -54,6 +55,6 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ success: false, error: friendlyError(error) }, { status: 500 })
   }
 }

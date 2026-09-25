@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       unit: data.unit,
       description: data.description,
       barcode,
-      supplierId: data.supplierId,
+      supplierId: (data.supplierId ?? data.fornecedorId) || null,
       status: data.status,
       isFeatured: data.isFeatured,
     }

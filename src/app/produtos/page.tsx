@@ -5,6 +5,7 @@ import { ProductStatus } from '@/generated/prisma/enums';
 import Layout, { PageHeader } from '@/components/Layout';
 import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, XCircle, Loader2, TrendingUp } from 'lucide-react';
 import { errorText } from '@/lib/friendlyError';
+import SupplierSelect from '@/components/SupplierSelect';
 import PriceAdvisor from '@/components/PriceAdvisor';
 
 // ---------- helpers ----------
@@ -40,6 +41,7 @@ interface Product {
   sku: string;
   barcode: string | null;
   categoryId: string;
+  supplierId?: string | null;
   category?: { id: string; name: string } | null;
   salePrice: number | string;
   costPrice: number | string;
@@ -59,6 +61,7 @@ type FormState = {
   codigoBarras: string;
   sku: string;
   categoriaId: string;
+  fornecedorId: string;
   preco: string;
   custo: string;
   estoque: string;
@@ -71,6 +74,7 @@ const EMPTY_FORM: FormState = {
   codigoBarras: '',
   sku: '',
   categoriaId: '',
+  fornecedorId: '',
   preco: '',
   custo: '',
   estoque: '0',
@@ -187,6 +191,7 @@ export default function ProdutosPage() {
       codigoBarras: p.barcode ?? '',
       sku: p.sku,
       categoriaId: p.categoryId,
+      fornecedorId: p.supplierId ?? '',
       preco: String(toNumber(p.salePrice)),
       custo: String(toNumber(p.costPrice)),
       estoque: String(toNumber(p.stockQuantity)),
@@ -238,6 +243,7 @@ export default function ProdutosPage() {
         codigoBarras: form.codigoBarras.trim() || null,
         sku: form.sku.trim() || form.codigoBarras.trim(),
         categoriaId: form.categoriaId,
+        fornecedorId: form.fornecedorId || null,
         preco: toNumber(form.preco),
         custo: toNumber(form.custo),
         estoque: toNumber(form.estoque),
@@ -513,20 +519,29 @@ export default function ProdutosPage() {
                 </Field>
               </div>
 
-              <Field label="Categoria" required error={errors.categoriaId}>
-                <select
-                  value={form.categoriaId}
-                  onChange={(e) => set('categoriaId', e.target.value)}
-                  className={inputCls(errors.categoriaId)}
-                >
-                  <option value="">Selecione…</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Categoria" required error={errors.categoriaId}>
+                  <select
+                    value={form.categoriaId}
+                    onChange={(e) => set('categoriaId', e.target.value)}
+                    className={inputCls(errors.categoriaId)}
+                  >
+                    <option value="">Selecione…</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Fornecedor" hint="Usado na sugestão de compra">
+                  <SupplierSelect
+                    value={form.fornecedorId}
+                    onChange={(id) => set('fornecedorId', id)}
+                    className={inputCls()}
+                  />
+                </Field>
+              </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Preço de venda" required error={errors.preco}>

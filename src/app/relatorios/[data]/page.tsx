@@ -22,15 +22,8 @@ import Layout, { PageHeader } from '@/components/Layout';
 import type { DailyReport } from '@/services/reportService';
 import { computeDifference, computeExpected, parseMoney } from '@/lib/closing';
 import { errorText } from '@/lib/friendlyError';
-import {
-  AssistantSummary,
-  CountTable,
-  DaySidebar,
-  MethodCard,
-  MoneyField,
-  ResultBanner,
-  brl,
-} from '@/components/reports/DayReportParts';
+import { AssistantSummary, DaySidebar, FeeLine, MethodCard, MoneyField, brl } from '@/components/reports/DayReportParts';
+import { CountTable, ResultBanner } from '@/components/reports/CountTable';
 
 const moneyInput = (v: number | null | undefined) =>
   v == null ? '' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -241,12 +234,25 @@ export default function RelatorioDiaPage() {
                   value={report.net.card}
                   refunded={report.refunded.card}
                   detail={`Crédito ${brl(report.card.credit)} · Débito ${brl(report.card.debit)}`}
+                  extra={
+                    <FeeLine
+                      configured={report.fees.configured}
+                      value={report.net.card}
+                      fee={report.fees.card}
+                      deposit={report.deposit.card}
+                    />
+                  }
                 />
                 <MethodCard
                   icon={<QrCode className="h-5 w-5" />}
                   label="Pix"
                   value={report.net.pix}
                   refunded={report.refunded.pix}
+                  extra={
+                    report.fees.configured ? (
+                      <FeeLine configured value={report.net.pix} fee={report.fees.pix} deposit={report.deposit.pix} />
+                    ) : null
+                  }
                 />
               </div>
             </section>

@@ -200,8 +200,8 @@ export default function DashboardPage() {
               <div className="rounded-xl border border-border bg-card shadow-sm">
                 <div className="flex items-center justify-between border-b border-border px-5 py-3">
                   <h2 className="text-lg text-foreground">Repor estoque</h2>
-                  <Link href="/estoque" className="flex items-center gap-1 text-sm text-primary hover:underline">
-                    Estoque <ArrowRight className="h-3.5 w-3.5" />
+                  <Link href="/compras" className="flex items-center gap-1 text-sm text-primary hover:underline">
+                    Sugestão de compra <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
                 {stats.lowStockList.length === 0 ? (

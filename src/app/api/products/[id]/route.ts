@@ -47,8 +47,14 @@ export async function PUT(
     const data = await request.json()
 
     // "codigo" do formulário = código de barras escaneável; SKU separado é opcional.
-    const barcode =
-      (data.barcode ?? data.codigoBarras ?? data.codigo ?? '').toString().trim() || null
+    // Só mexe no código de barras quando ele vem no corpo (edição parcial, como
+    // "trocar o fornecedor", não pode apagar o código).
+    const hasBarcode = ['barcode', 'codigoBarras', 'codigo'].some((k) => k in data)
+    const barcode = hasBarcode
+      ? (data.barcode ?? data.codigoBarras ?? data.codigo ?? '').toString().trim() || null
+      : undefined
+    const supplierRaw = data.supplierId ?? data.fornecedorId
+    const supplierId = supplierRaw === undefined ? undefined : supplierRaw ? String(supplierRaw) : null
     const sku =
       (data.sku ?? data.codigoInterno ?? data.codigo ?? barcode ?? '').toString().trim() || undefined
 
@@ -64,7 +70,7 @@ export async function PUT(
       unit: data.unit,
       description: data.description,
       barcode,
-      supplierId: data.supplierId,
+      supplierId,
       status: data.status,
       isFeatured: data.isFeatured,
     }

@@ -15,6 +15,8 @@ export type InsightInput = {
   topByQuantity: { name: string; quantity: number } | null
   last7Avg: number
   refunds: { count: number; total: number }
+  /** Taxas de cartão/Pix do dia (0 se não configuradas). */
+  feesTotal?: number
 }
 
 export function buildInsights(d: InsightInput): string[] {
@@ -45,6 +47,10 @@ export function buildInsights(d: InsightInput): string[] {
       else if (diff > 0) out.push(`Dia ${pct(diff)} acima da média dos últimos 7 dias (${brl(d.last7Avg)}).`)
       else out.push(`Dia ${pct(-diff)} abaixo da média dos últimos 7 dias (${brl(d.last7Avg)}).`)
     }
+  }
+  if (d.feesTotal && d.feesTotal > 0.004) {
+    const deposit = d.net.card + d.net.pix - d.feesTotal
+    out.push(`Taxas de cartão e Pix: ${brl(d.feesTotal)}. Do cartão e Pix, caem na conta ${brl(deposit)}.`)
   }
   if (d.refunds.count > 0) {
     out.push(`${d.refunds.count} ${d.refunds.count === 1 ? "venda estornada" : "vendas estornadas"} (${brl(d.refunds.total)}).`)

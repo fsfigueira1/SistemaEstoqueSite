@@ -16,6 +16,7 @@
     "seed": "node --experimental-strip-types prisma/seed.ts",
     "seed:demo": "node --experimental-strip-types src/seed/seed.ts",
     "db:migrate": "prisma migrate deploy",
+    "backup:restore": "node scripts/backup-restore.mjs",
     "db:from-sqlite": "node --experimental-strip-types scripts/migrate-sqlite-to-postgres.ts",
     "electron": "electron .",
     "electron:dev": "electron .",

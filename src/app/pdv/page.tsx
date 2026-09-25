@@ -28,6 +28,8 @@ import {
 import { enqueueSale } from '@/lib/offline/saleQueue';
 import { useOfflineStatus } from '@/components/OfflineSync';
 import { errorText } from '@/lib/friendlyError';
+import PaymentPanel from '@/components/pdv/PaymentPanel';
+import { planPayments, toCheckoutPayments, type PartInput, type PlannedPart } from '@/lib/payments';
 
 const CASH_KEY = 'lacolaria:lastCashSessionId';
 
@@ -98,10 +100,12 @@ function adhocId(nome: string, preco: number): string {
 
 type PaymentMethodUI = 'dinheiro' | 'pix' | 'cartao';
 
-const METHOD_MAP: Record<PaymentMethodUI, string> = {
-  dinheiro: 'CASH',
-  pix: 'PIX',
-  cartao: 'CREDIT_CARD',
+// forma no formato antigo do comprovante (o novo usa a lista `payments`)
+const RECEIPT_METHOD: Record<string, PaymentMethodUI> = {
+  CASH: 'dinheiro',
+  PIX: 'pix',
+  DEBIT_CARD: 'cartao',
+  CREDIT_CARD: 'cartao',
 };
 
 function cachedToApi(p: CachedProduct): ApiProduct {
@@ -132,8 +136,7 @@ export default function PDVPage() {
   const [avulsoNome, setAvulsoNome] = useState('');
   const [avulsoPreco, setAvulsoPreco] = useState('');
 
-  const [metodo, setMetodo] = useState<PaymentMethodUI>('dinheiro');
-  const [parcelas, setParcelas] = useState(1);
+  const [parts, setParts] = useState<PartInput[]>([{ method: 'CASH' }]);
   const [valorRecebido, setValorRecebido] = useState('');
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -150,9 +153,7 @@ export default function PDVPage() {
     subtotal: number;
     interest: number;
     total: number;
-    method: PaymentMethodUI;
-    installments: number;
-    installmentValue: number;
+    payments: PlannedPart[];
     received: number;
     change: number;
   }>(null);
@@ -364,15 +365,21 @@ export default function PDVPage() {
   };
 
   // ---------- Totais ----------
-  const subtotal = carrinho.reduce((s, i) => s + i.preco * i.quantidade, 0);
-  const juros =
-    metodo === 'cartao' && parcelas >= (cfg.cardInterestFromInstallments || 2)
-      ? Math.round(subtotal * (cfg.cardInterestPercent || 0)) / 100
-      : 0;
-  const total = subtotal + juros;
-  const valorParcela = metodo === 'cartao' && parcelas > 1 ? total / parcelas : 0;
+  const subtotal = Math.round(carrinho.reduce((s, i) => s + i.preco * i.quantidade, 0) * 100) / 100;
   const recebido = toNumber(valorRecebido);
-  const troco = metodo === 'dinheiro' && recebido > total ? recebido - total : 0;
+  // pagamento: uma forma ou dividido (contas em src/lib/payments.ts)
+  const plan = planPayments(
+    subtotal,
+    parts,
+    {
+      cardInterestPercent: cfg.cardInterestPercent || 0,
+      cardInterestFromInstallments: cfg.cardInterestFromInstallments || 2,
+    },
+    recebido || null,
+  );
+  const juros = plan.interest;
+  const total = plan.total;
+  const troco = plan.change;
 
   // ---------- Sessão de caixa ----------
   // Online: resolve/abre a sessão e guarda o id. Offline: devolve o último id
@@ -420,8 +427,7 @@ export default function PDVPage() {
     setCarrinho([]);
     setBarcode('');
     setValorRecebido('');
-    setMetodo('dinheiro');
-    setParcelas(1);
+    setParts([{ method: 'CASH' }]);
     setScanStatus('ready');
   };
 
@@ -431,8 +437,8 @@ export default function PDVPage() {
       setError('O carrinho está vazio');
       return;
     }
-    if (metodo === 'dinheiro' && valorRecebido !== '' && recebido < total) {
-      setError('Valor recebido menor que o total da venda');
+    if (plan.error) {
+      setError(plan.error);
       return;
     }
     setIsProcessing(true);
@@ -457,18 +463,16 @@ export default function PDVPage() {
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const occurredAt = new Date().toISOString();
-    const payment = {
-      method: METHOD_MAP[metodo],
-      installments: metodo === 'cartao' ? parcelas : 1,
-      changeAmount: 0,
-    };
+    const payments = toCheckoutPayments(plan);
+    const changeAmount = troco > 0 ? troco : undefined;
+    const received = plan.cashPart > 0 ? recebido || plan.cashPart : 0;
 
     // Salva na fila local e mostra o comprovante (dados 100% locais).
     const queueIt = async (cashSessionId: string | null) => {
       await enqueueSale({
         clientId,
         occurredAt,
-        payload: { cashSessionId, items, surchargeAmount: juros || undefined, payment },
+        payload: { cashSessionId, items, surchargeAmount: juros || undefined, payments, changeAmount },
       });
       // Produto avulso não existe no cache de catálogo — nada a abater.
       await applyLocalStockDelta(
@@ -484,10 +488,8 @@ export default function PDVPage() {
         subtotal,
         interest: juros,
         total,
-        method: metodo,
-        installments: metodo === 'cartao' ? parcelas : 1,
-        installmentValue: metodo === 'cartao' && parcelas > 1 ? total / parcelas : 0,
-        received: metodo === 'dinheiro' ? recebido || total : total,
+        payments: plan.parts,
+        received,
         change: troco,
       });
       setSavedOffline(true);
@@ -524,7 +526,8 @@ export default function PDVPage() {
               cashSessionId,
               items,
               surchargeAmount: juros || undefined,
-              payment,
+              payments,
+              changeAmount,
             }),
           },
           12000,
@@ -557,10 +560,8 @@ export default function PDVPage() {
         subtotal: Math.max(0, serverTotal - juros),
         interest: juros,
         total: serverTotal,
-        method: metodo,
-        installments: metodo === 'cartao' ? parcelas : 1,
-        installmentValue: metodo === 'cartao' && parcelas > 1 ? serverTotal / parcelas : 0,
-        received: metodo === 'dinheiro' ? recebido || serverTotal : serverTotal,
+        payments: plan.parts,
+        received,
         change: troco,
       });
       resetAfterSale();
@@ -860,87 +861,15 @@ export default function PDVPage() {
                   <CreditCard className="h-5 w-5 text-primary" />
                   <h2 className="text-lg font-semibold text-foreground">Pagamento</h2>
                 </div>
-                <label className="mb-1 block text-sm font-medium text-foreground">Forma de pagamento</label>
-                <select
-                  value={metodo}
-                  onChange={(e) => {
-                    const v = e.target.value as PaymentMethodUI;
-                    setMetodo(v);
-                    if (v !== 'cartao') setParcelas(1);
-                    if (v !== 'dinheiro') setValorRecebido('');
-                  }}
-                  className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
-                >
-                  <option value="dinheiro">Dinheiro</option>
-                  <option value="pix">PIX</option>
-                  <option value="cartao">Cartão de crédito</option>
-                </select>
-
-                {metodo === 'cartao' && (
-                  <div className="mt-3">
-                    <label className="mb-1 block text-sm font-medium text-foreground">Parcelas</label>
-                    <select
-                      value={parcelas}
-                      onChange={(e) => setParcelas(parseInt(e.target.value, 10) || 1)}
-                      className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
-                    >
-                      {[1, 2, 3, 4, 5, 6, 10, 12].map((n) => (
-                        <option key={n} value={n}>
-                          {n}x
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {metodo === 'dinheiro' && (
-                  <div className="mt-3">
-                    <label className="mb-1 block text-sm font-medium text-foreground">Valor recebido (opcional)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={valorRecebido}
-                      onChange={(e) => setValorRecebido(e.target.value)}
-                      placeholder="0,00"
-                      className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
-                    />
-                  </div>
-                )}
-
-                <div className="mt-4 rounded-xl border-2 border-primary/25 bg-accent-soft/50 p-4">
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Subtotal</span>
-                      <span className="tabular-nums">{formatCurrency(subtotal)}</span>
-                    </div>
-                    {juros > 0 && (
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Juros do cartão ({cfg.cardInterestPercent}%)</span>
-                        <span className="tabular-nums">{formatCurrency(juros)}</span>
-                      </div>
-                    )}
-                    {troco > 0 && (
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Troco</span>
-                        <span className="tabular-nums">{formatCurrency(troco)}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-2 flex items-end justify-between border-t border-primary/20 pt-2">
-                    <span className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                      Total
-                    </span>
-                    <span className="font-heading text-2xl font-bold tabular-nums text-primary">
-                      {formatCurrency(total)}
-                    </span>
-                  </div>
-                  {valorParcela > 0 && (
-                    <div className="mt-1 text-right text-xs text-muted-foreground">
-                      {parcelas}× de {formatCurrency(valorParcela)}
-                    </div>
-                  )}
-                </div>
+                <PaymentPanel
+                  parts={parts}
+                  setParts={setParts}
+                  received={valorRecebido}
+                  setReceived={setValorRecebido}
+                  plan={plan}
+                  subtotal={subtotal}
+                  interestPercent={cfg.cardInterestPercent || 0}
+                />
 
                 <button
                   type="button"
@@ -1052,11 +981,15 @@ export default function PDVPage() {
                       date: finishedSale.date,
                       items: finishedSale.items,
                       subtotal: finishedSale.subtotal,
-                      paymentMethod: finishedSale.method,
+                      paymentMethod: RECEIPT_METHOD[finishedSale.payments[0]?.method ?? 'CASH'] ?? 'dinheiro',
+                      payments: finishedSale.payments.map((p) => ({
+                        method: p.method,
+                        amount: p.amount,
+                        installments: p.installments,
+                        installmentValue: p.installmentValue,
+                      })),
                       interest: finishedSale.interest,
                       total: finishedSale.total,
-                      installments: finishedSale.installments,
-                      installmentValue: finishedSale.installmentValue,
                       received: finishedSale.received,
                       change: finishedSale.change,
                     }}

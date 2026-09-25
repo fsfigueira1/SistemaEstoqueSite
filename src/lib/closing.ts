@@ -49,3 +49,53 @@ export function parseMoney(v: unknown): number | null {
   if (!Number.isFinite(n) || n < 0) return null
   return round2(n)
 }
+
+// ---------- taxas da maquininha / Pix ----------
+export type FeeRates = {
+  debit: number
+  credit: number
+  /** crédito parcelado (2x ou mais) */
+  creditInstallment: number
+  pix: number
+}
+
+export const NO_FEES: FeeRates = { debit: 0, credit: 0, creditInstallment: 0, pix: 0 }
+
+export function hasFees(r: FeeRates): boolean {
+  return r.debit > 0 || r.credit > 0 || r.creditInstallment > 0 || r.pix > 0
+}
+
+/** % de taxa de um pagamento (dinheiro não tem taxa). */
+export function feePercent(method: string, installments: number | null | undefined, r: FeeRates): number {
+  switch (method) {
+    case "DEBIT_CARD":
+      return r.debit
+    case "CREDIT_CARD":
+      return (installments ?? 1) > 1 ? r.creditInstallment : r.credit
+    case "PIX":
+      return r.pix
+    default:
+      return 0
+  }
+}
+
+/** Valor da taxa de um pagamento, em reais. */
+export function feeAmount(method: string, amount: number, installments: number | null | undefined, r: FeeRates): number {
+  return round2((amount * feePercent(method, installments, r)) / 100)
+}
+
+/** Taxas configuradas (Configurações → Taxas da maquininha). */
+export function feeRatesOf(s: {
+  feeDebitPercent?: number | null
+  feeCreditPercent?: number | null
+  feeCreditInstallmentPercent?: number | null
+  feePixPercent?: number | null
+}): FeeRates {
+  return {
+    debit: s.feeDebitPercent ?? 0,
+    credit: s.feeCreditPercent ?? 0,
+    // parcelado em branco (0) = usa a taxa do crédito à vista
+    creditInstallment: s.feeCreditInstallmentPercent || s.feeCreditPercent || 0,
+    pix: s.feePixPercent ?? 0,
+  }
+}
