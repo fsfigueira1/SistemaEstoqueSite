@@ -605,7 +605,10 @@ export class SaleService {
     }
   }
 
-  // Complete sale (process payment and finalize sale)
+  // Complete sale (process payment and finalize sale).
+  // Aceita um pagamento (formato antigo) ou vários: `payments` = pagamento
+  // dividido (ex.: parte em dinheiro e o resto no Pix). No dividido, a soma
+  // das partes tem de ser igual ao total; o troco é só informativo.
   static async completeSale(id: string, paymentData: {
     amount: number | Prisma.Decimal
     method: PaymentMethod
@@ -615,7 +618,22 @@ export class SaleService {
     changeAmount?: number | Prisma.Decimal | null
     processedById: string
     notes?: string | null
+  } | {
+    payments: Array<{ amount: number; method: PaymentMethod; installmentCount?: number | null }>
+    changeAmount?: number | null
+    processedById: string
+    notes?: string | null
   }, opts: { queued?: boolean } = {}) {
+    const split = 'payments' in paymentData
+    const parts = split
+      ? paymentData.payments.map((p) => ({
+          amount: p.amount,
+          method: p.method,
+          installmentCount: p.installmentCount ?? null,
+          transactionId: null,
+          processingFee: null,
+        }))
+      : [paymentData]
     // Use transaction to ensure consistency
     return prisma.$transaction(async (tx: any) => {
       // 1. Buscar Sale.
@@ -665,38 +683,43 @@ export class SaleService {
       }
 
       // 5. Validar pagamento.
-      // Validate payment amount matches total amount (considering change amount)
-      const paymentAmount = Number(paymentData.amount)
       const changeAmount = Number(paymentData.changeAmount ?? 0)
-      const effectivePayment = paymentAmount - changeAmount
-
-      // Convert sale total to number for comparison
       const saleTotal = Number(sale.totalAmount)
-
-      if (Math.abs(effectivePayment - saleTotal) > 0.01) { // Allow for small floating point differences
-        throw new Error(`Payment amount cannot exceed sale total`)
-      }
-
-      // Validate payment method
-      if (!Object.values(PaymentMethod).includes(paymentData.method)) {
-        throw new Error('Invalid payment method')
-      }
-
-      // Validate installment count if provided
-      if (paymentData.installmentCount !== null && paymentData.installmentCount !== undefined) {
-        if (Number(paymentData.installmentCount) <= 0) {
-          throw new Error('Installment count must be positive')
-        }
-        // In a real system, only certain methods might allow installments
-        if (paymentData.method !== PaymentMethod.CREDIT_CARD) {
-          throw new Error('Only credit card payments can have installments')
+      if (split) {
+        if (parts.length === 0 || parts.length > 4) throw new Error('Use de 1 a 4 formas de pagamento')
+        if (parts.some((p) => !(Number(p.amount) > 0))) throw new Error('Cada parte do pagamento precisa de valor')
+        const sum = parts.reduce((acc, p) => acc + Number(p.amount), 0)
+        if (Math.abs(sum - saleTotal) > 0.01) throw new Error('A soma dos pagamentos não bate com o total')
+      } else {
+        // Validate payment amount matches total amount (considering change amount)
+        const effectivePayment = Number(parts[0].amount) - changeAmount
+        if (Math.abs(effectivePayment - saleTotal) > 0.01) { // Allow for small floating point differences
+          throw new Error(`Payment amount cannot exceed sale total`)
         }
       }
 
-      // Validate processing fee if provided
-      if (paymentData.processingFee !== null && paymentData.processingFee !== undefined) {
-        if (Number(paymentData.processingFee) < 0) {
-          throw new Error('Processing fee cannot be negative')
+      for (const part of parts) {
+        // Validate payment method
+        if (!Object.values(PaymentMethod).includes(part.method)) {
+          throw new Error('Invalid payment method')
+        }
+
+        // Validate installment count if provided
+        if (part.installmentCount !== null && part.installmentCount !== undefined) {
+          if (Number(part.installmentCount) <= 0) {
+            throw new Error('Installment count must be positive')
+          }
+          // In a real system, only certain methods might allow installments
+          if (part.method !== PaymentMethod.CREDIT_CARD) {
+            throw new Error('Only credit card payments can have installments')
+          }
+        }
+
+        // Validate processing fee if provided
+        if (part.processingFee !== null && part.processingFee !== undefined) {
+          if (Number(part.processingFee) < 0) {
+            throw new Error('Processing fee cannot be negative')
+          }
         }
       }
 
@@ -729,20 +752,26 @@ export class SaleService {
         })
       }
 
-      // 7. Criar SalePayment PAID.
-      const salePayment = await tx.salePayment.create({
-        data: {
-          sale: { connect: { id: sale.id } },
-          amount: paymentData.amount,
-          method: paymentData.method,
-          transactionId: paymentData.transactionId ?? null,
-          processingFee: paymentData.processingFee ?? null,
-          installmentCount: paymentData.installmentCount ?? null,
-          changeAmount: paymentData.changeAmount ?? null,
-          status: PaymentStatus.PAID,
-          processedBy: { connect: { id: paymentData.processedById } },
-        }
-      })
+      // 7. Criar SalePayment PAID (um por forma de pagamento). O troco fica
+      // na parte em dinheiro.
+      let changeLeft = changeAmount
+      for (const part of parts) {
+        const isCash = part.method === PaymentMethod.CASH
+        await tx.salePayment.create({
+          data: {
+            sale: { connect: { id: sale.id } },
+            amount: part.amount,
+            method: part.method,
+            transactionId: part.transactionId ?? null,
+            processingFee: part.processingFee ?? null,
+            installmentCount: part.installmentCount ?? null,
+            changeAmount: split ? (isCash && changeLeft ? changeLeft : null) : paymentData.changeAmount ?? null,
+            status: PaymentStatus.PAID,
+            processedBy: { connect: { id: paymentData.processedById } },
+          }
+        })
+        if (isCash) changeLeft = 0
+      }
 
       // 8. Baixar estoque e 9. Criar StockMovement SALE.
       for (const itemWithStock of itemsWithStockUpdate) {
@@ -802,7 +831,10 @@ export class SaleService {
           metadata: {
             saleNumber: sale.saleNumber,
             totalAmount: saleTotal,
-            paymentMethod: paymentData.method
+            paymentMethod: parts.length > 1 ? 'SPLIT' : parts[0].method,
+            ...(parts.length > 1
+              ? { payments: parts.map((p) => ({ method: p.method, amount: Number(p.amount) })) }
+              : {})
           }
         }
       })
@@ -855,8 +887,10 @@ export class SaleService {
         throw new Error('Only completed sales can be refunded')
       }
 
-      // 4. Verificar que a venda tem pagamentos confirmados
-      const paidPayment = sale.payments.find((p: SalePayment) => p.status === PaymentStatus.PAID)
+      // 4. Verificar que a venda tem pagamentos confirmados (pagamento
+      // dividido = vários; todos são estornados)
+      const paidPayments = sale.payments.filter((p: SalePayment) => p.status === PaymentStatus.PAID)
+      const paidPayment = paidPayments[0]
       if (!paidPayment) {
         throw new Error('Sale has no paid payment to refund')
       }
@@ -866,15 +900,18 @@ export class SaleService {
 
       // 6. Atualizar o pagamento existente para REFUNDED (em vez de criar novo)
       // Follow the exact same pattern as salePaymentService.refundPayment
-      const updatedPayment = await tx.salePayment.update({
-        where: { id: paidPayment.id },
-        data: {
-          status: PaymentStatus.REFUNDED,
-          // o fechamento do dia usa esta data para descontar o estorno do dia certo
-          refundedAt: new Date(),
-          processedById: paidPayment.processedById
-        }
-      })
+      const refundedAt = new Date()
+      for (const pay of paidPayments) {
+        await tx.salePayment.update({
+          where: { id: pay.id },
+          data: {
+            status: PaymentStatus.REFUNDED,
+            // o fechamento do dia usa esta data para descontar o estorno do dia certo
+            refundedAt,
+            processedById: pay.processedById
+          }
+        })
+      }
 
       // 7. Devolver estoque (aumentar quantidade dos produtos)
       for (const item of sale.items) {

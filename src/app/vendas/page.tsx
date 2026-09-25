@@ -19,7 +19,7 @@ function saleToReceipt(sale: any): ReceiptData {
   const pay = sale.payments?.[0];
   const subtotal = Number(sale.subtotal) - Number(sale.discountAmount || 0);
   const total = Number(sale.totalAmount);
-  return {
+  const data: ReceiptData = {
     saleId: sale.saleNumber,
     date: sale.createdAt,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,7 +37,18 @@ function saleToReceipt(sale: any): ReceiptData {
     installmentValue: pay?.installmentCount > 1 ? total / pay.installmentCount : 0,
     received: Number(sale.paidAmount) || total,
     change: Number(sale.changeAmount) || 0,
+    // todas as formas (pagamento dividido); estornadas também, para reimpressão
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    payments: (sale.payments ?? []).map((p: any) => {
+      const amount = Number(p.amount);
+      const inst = p.installmentCount ?? 1;
+      return { method: p.method, amount, installments: inst, installmentValue: inst > 1 ? amount / inst : 0 };
+    }),
   };
+  // recebido em dinheiro = parte em dinheiro + troco
+  const cash = (data.payments ?? []).filter((p) => p.method === 'CASH').reduce((n, p) => n + p.amount, 0);
+  if (cash > 0) data.received = cash + (data.change ?? 0);
+  return data;
 }
 
 const brl = (v: unknown) => {
@@ -217,7 +228,9 @@ export default function VendasPage() {
                       </td>
                       <td className="px-4 py-3 text-center text-muted-foreground">{r._count?.items ?? '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {r.payments?.[0] ? METHOD_PT[r.payments[0].method] ?? r.payments[0].method : '—'}
+                        {r.payments?.length
+                          ? [...new Set(r.payments.map((pm) => METHOD_PT[pm.method] ?? pm.method))].join(' + ')
+                          : '—'}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{r.createdBy?.name ?? '—'}</td>
                       <td className="px-4 py-3">

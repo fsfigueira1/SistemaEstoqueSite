@@ -20,6 +20,8 @@ export async function POST(request: Request) {
       customerId,
       notes,
       payment,
+      // pagamento dividido: [{ method, amount, installments }]
+      payments,
       // PDV offline: idempotência + venda que veio da fila local
       clientId,
       occurredAt,
@@ -29,8 +31,18 @@ export async function POST(request: Request) {
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "A venda precisa de ao menos um item" }, { status: 400 })
     }
-    const method: PaymentMethod = payment?.method
-    if (!method) {
+    const METHODS = ["CASH", "PIX", "CREDIT_CARD", "DEBIT_CARD"]
+    const parts: Array<{ method: PaymentMethod; amount: number; installmentCount: number | null }> | null =
+      Array.isArray(payments) && payments.length > 0
+        ? payments.map((p: { method?: string; amount?: unknown; installments?: unknown }) => ({
+            method: String(p?.method) as PaymentMethod,
+            amount: Math.round(Number(p?.amount) * 100) / 100,
+            installmentCount:
+              p?.method === "CREDIT_CARD" && Number(p?.installments) > 1 ? Number(p.installments) : null,
+          }))
+        : null
+    const method: PaymentMethod = parts ? parts[0].method : payment?.method
+    if (!method || (parts && parts.some((p) => !METHODS.includes(p.method)))) {
       return NextResponse.json({ error: "Forma de pagamento é obrigatória" }, { status: 400 })
     }
 
@@ -80,16 +92,22 @@ export async function POST(request: Request) {
 
     // 2. conclui — baixa estoque + registra pagamento, tudo numa transação
     try {
-      const completed = await SaleService.completeSale(sale.id, {
-        amount: sale.totalAmount,
-        method,
-        installmentCount:
-          payment?.installments && Number(payment.installments) > 1
-            ? Number(payment.installments)
-            : null,
-        changeAmount: payment?.changeAmount ?? 0,
-        processedById: userId,
-      }, { queued: Boolean(queued) })
+      // formato novo (`payments`, mesmo com uma forma só) → soma das partes =
+      // total e o troco fica gravado; formato antigo (`payment`) → como antes
+      const completed = parts
+        ? await SaleService.completeSale(sale.id, {
+            payments: parts,
+            changeAmount: Number(body?.changeAmount) > 0 ? Number(body.changeAmount) : null,
+            processedById: userId,
+          }, { queued: Boolean(queued) })
+        : await SaleService.completeSale(sale.id, {
+            amount: sale.totalAmount,
+            method,
+            installmentCount:
+              payment?.installments && Number(payment.installments) > 1 ? Number(payment.installments) : null,
+            changeAmount: payment?.changeAmount ?? 0,
+            processedById: userId,
+          }, { queued: Boolean(queued) })
 
       // dados completos p/ o comprovante
       const full = await SaleService.getSale(sale.id)

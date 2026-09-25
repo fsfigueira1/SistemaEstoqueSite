@@ -60,6 +60,12 @@ function writeConfig(cfg) {
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
 }
+// Pasta do backup automático diário (Configurações → Backup). Dá para trocar
+// por uma pasta do Google Drive/OneDrive para ter cópia fora da loja.
+function backupDir() {
+  return readConfig().BACKUP_DIR || path.join(app.getPath("documents"), "Lacolaria Backups");
+}
+
 function getEnvForServer() {
   const cfg = readConfig();
   return {
@@ -70,6 +76,7 @@ function getEnvForServer() {
     DATABASE_URL: cfg.DATABASE_URL || process.env.DATABASE_URL || "",
     OWNER_PASSWORD: cfg.OWNER_PASSWORD || process.env.OWNER_PASSWORD || "owner123",
     EMPLOYEE_PASSWORD: cfg.EMPLOYEE_PASSWORD || process.env.EMPLOYEE_PASSWORD || "emp123",
+    LACOLARIA_BACKUP_DIR: backupDir(),
   };
 }
 
@@ -91,7 +98,7 @@ function startServer() {
       cwd: path.join(__dirname, ".."),
       stdio: "inherit",
       shell: process.platform === "win32",
-      env: { ...process.env, PORT: String(PORT) },
+      env: { ...process.env, PORT: String(PORT), LACOLARIA_BACKUP_DIR: backupDir() },
     });
   } else {
     const entry = serverEntry();
@@ -541,6 +548,36 @@ ipcMain.on("toggle-maximize-window", (e) => {
   w.isMaximized() ? w.unmaximize() : w.maximize();
 });
 ipcMain.on("close-window", (e) => BrowserWindow.fromWebContents(e.sender)?.close());
+
+// ---------------- backup ----------------
+ipcMain.handle("open-backup-folder", async () => {
+  const dir = backupDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const err = await shell.openPath(dir);
+  return { ok: !err, dir };
+});
+
+// Troca a pasta e reinicia o servidor interno (ele lê a pasta ao subir).
+ipcMain.handle("choose-backup-folder", async () => {
+  if (!mainWindow) return { ok: false };
+  const r = await dialog.showOpenDialog(mainWindow, {
+    title: "Pasta do backup",
+    defaultPath: backupDir(),
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (r.canceled || !r.filePaths[0]) return { ok: false };
+  const c = readConfig();
+  c.BACKUP_DIR = r.filePaths[0];
+  writeConfig(c);
+  if (serverProc) {
+    try {
+      serverProc.kill(); // sobe de novo sozinho e recarrega a janela
+    } catch {
+      /* ignore */
+    }
+  }
+  return { ok: true, dir: c.BACKUP_DIR };
+});
 
 // ---------------- impressão do comprovante ----------------
 ipcMain.handle("list-printers", async () => {

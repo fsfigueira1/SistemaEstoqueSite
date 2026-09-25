@@ -129,9 +129,29 @@ bobina (58/80 mm) em Configurações.
 | Nova migração após mudar o schema | `npx prisma migrate dev --name <nome>` (dev, com banco local) |
 | Aplicar mudança de schema no Supabase | Rode o SQL do `migration.sql` no **Supabase → SQL Editor**. O `npm run db:migrate` (Prisma Migrate) **trava pelo Transaction pooler** — só funciona com conexão direta (porta 5432). |
 | Novo instalador após mudar o código | `npm run electron:build` e reinstalar |
-| Backup | Supabase faz automático; ou `pg_dump` da connection string |
+| Backup | Automático: cada PC grava 1 arquivo por dia em Documentos\\Lacolaria Backups (Configurações → Backup automático: fazer agora, baixar, trocar a pasta). Também dá `pg_dump` da connection string |
+| Restaurar backup | Ver "Restaurar um backup" abaixo |
 | Ver/editar dados | Supabase → Table editor, ou `npx prisma studio` |
 | Erro "max clients reached / EMAXCONNSESSION" | Supabase → Database → Connection Pooling → aumente o **Pool Size**; ou baixe `DB_POOL_MAX` (env) pra 1 em cada PC |
+
+## Restaurar um backup
+
+Os arquivos `lacolaria-backup-AAAA-MM-DD-HHMM.json.gz` têm todas as tabelas
+(menos as chaves de API — cadastre de novo em Configurações).
+
+1. Num computador com o código do projeto e `npm install` feito, aponte a
+   `DATABASE_URL` para o banco que vai receber os dados (um Supabase novo, por
+   exemplo). O banco precisa ter as tabelas: rode `npm run db:migrate` com a
+   conexão direta (porta 5432) e depois abra o app uma vez apontando para ele.
+2. Veja o que será restaurado (não grava nada):
+   `npm run backup:restore -- "C:\caminho\lacolaria-backup-2026-09-25-1830.json.gz"`
+3. Grave de verdade: o mesmo comando com `--yes` no fim.
+
+A restauração só **insere o que falta** (linhas com o mesmo id ficam como
+estão), em ordem (pais antes dos filhos) e numa transação — se algo falhar,
+nada é gravado. Serve para montar um banco novo ou recuperar registros apagados.
+O arquivo tem senhas (em hash) e dados de clientes: se a pasta for um Google
+Drive/OneDrive, deixe-a só na conta da loja.
 
 ## Observações
 

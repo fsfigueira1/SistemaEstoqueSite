@@ -13,6 +13,8 @@ import {
   Menu,
   X,
   NotebookPen,
+  ClipboardList,
+  GraduationCap,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import DailyAssistant, { openDailyAssistant } from '@/components/DailyAssistant';
@@ -25,6 +27,7 @@ const groups: Array<{ title: string; items: Array<{ name: string; href: string; 
       { name: 'Painel', href: '/dashboard', icon: LayoutDashboard },
       { name: 'PDV', href: '/pdv', icon: ShoppingCart },
       { name: 'Vendas', href: '/vendas', icon: Receipt },
+      { name: 'Lista escolar', href: '/lista-escolar', icon: GraduationCap },
     ],
   },
   {
@@ -32,6 +35,7 @@ const groups: Array<{ title: string; items: Array<{ name: string; href: string; 
     items: [
       { name: 'Produtos', href: '/produtos', icon: List },
       { name: 'Estoque', href: '/estoque', icon: Package },
+      { name: 'Compras', href: '/compras', icon: ClipboardList },
       { name: 'Relatórios', href: '/relatorios', icon: NotebookPen },
       { name: 'Configurações', href: '/configuracoes', icon: Settings },
     ],

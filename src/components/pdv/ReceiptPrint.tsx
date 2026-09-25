@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { getSettings } from '@/lib/settings';
+import type { PayMethod } from '@/lib/payments';
+import { ReceiptPayments } from '@/components/pdv/ReceiptPayments';
 
 function formatCurrency(value: unknown): string {
   const n =
@@ -34,6 +36,8 @@ export interface ReceiptData {
   installmentValue?: number;
   received?: number;
   change?: number;
+  /** Formas de pagamento (pagamento dividido tem mais de uma). */
+  payments?: Array<{ method: PayMethod; amount: number; installments?: number; installmentValue?: number }>;
 }
 
 interface ReceiptPrintProps {
@@ -55,11 +59,6 @@ type ElectronReceiptAPI = {
 // físico da tela — é o que o Chromium usa internamente pra layout.
 const MM_PER_PX = 25.4 / 96;
 
-const METHOD_LABEL: Record<string, string> = {
-  dinheiro: 'DINHEIRO',
-  pix: 'PIX',
-  cartao: 'CARTAO CREDITO',
-};
 
 /**
  * Comprovante de compra (NÃO fiscal) formatado para impressora térmica
@@ -212,38 +211,7 @@ export function ReceiptPrint({
         </div>
 
         <div className="sep" />
-        <div className="row small">
-          <span>Pagamento</span>
-          <span>
-            {METHOD_LABEL[data.paymentMethod] ?? data.paymentMethod}
-            {data.paymentMethod === 'cartao' && data.installments && data.installments > 1
-              ? ` ${data.installments}x`
-              : ''}
-          </span>
-        </div>
-        {data.paymentMethod === 'cartao' &&
-          data.installments &&
-          data.installments > 1 &&
-          data.installmentValue && data.installmentValue > 0 && (
-            <div className="row small">
-              <span>Parcela</span>
-              <span>
-                {data.installments}x {formatCurrency(data.installmentValue)}
-              </span>
-            </div>
-          )}
-        {data.paymentMethod === 'dinheiro' && typeof data.received === 'number' && data.received > 0 && (
-          <>
-            <div className="row small">
-              <span>Recebido</span>
-              <span>{formatCurrency(data.received)}</span>
-            </div>
-            <div className="row small">
-              <span>Troco</span>
-              <span>{formatCurrency(data.change ?? 0)}</span>
-            </div>
-          </>
-        )}
+        <ReceiptPayments data={data} brl={formatCurrency} />
 
         <div className="sep" />
         {cfg.receiptFooter

@@ -67,7 +67,7 @@ describe('Supplier Service', () => {
         SupplierService.createSupplier({
           name: ''
         })
-      ).rejects.toThrow('Supplier name is required');
+      ).rejects.toThrow('Informe o nome do fornecedor');
     });
 
     it('should throw error for duplicate name', async () => {
@@ -81,7 +81,7 @@ describe('Supplier Service', () => {
         SupplierService.createSupplier({
           name: 'TechSupply Inc.'
         })
-      ).rejects.toThrow('Supplier with this name already exists');
+      ).rejects.toThrow('Já existe um fornecedor com esse nome');
     });
   });
 
@@ -102,7 +102,7 @@ describe('Supplier Service', () => {
     it('should throw error for non-existent supplier ID', async () => {
       await expect(
         SupplierService.getSupplierById('non-existent-id')
-      ).rejects.toThrow('Supplier not found');
+      ).rejects.toThrow('Fornecedor não encontrado');
     });
   });
 
@@ -146,7 +146,7 @@ describe('Supplier Service', () => {
         SupplierService.updateSupplier(supplier2.id, {
           name: 'TechSupply Inc.'
         })
-      ).rejects.toThrow('Supplier with this name already exists');
+      ).rejects.toThrow('Já existe um fornecedor com esse nome');
     });
 
     it('should allow setting contactName to null', async () => {
@@ -213,7 +213,7 @@ describe('Supplier Service', () => {
       // Verify supplier is deleted
       await expect(
         SupplierService.getSupplierById(supplier.id)
-      ).rejects.toThrow('Supplier not found');
+      ).rejects.toThrow('Fornecedor não encontrado');
     });
 
     it('should prevent deletion of supplier with associated products', async () => {
@@ -236,7 +236,7 @@ describe('Supplier Service', () => {
       // Try to delete supplier - should fail
       await expect(
         SupplierService.deleteSupplier(supplier.id)
-      ).rejects.toThrow(/Cannot delete supplier because \d+ record\(s\) are associated with this supplier/);
+      ).rejects.toThrow('Fornecedor tem produtos ou pedidos ligados');
     });
 
     it('should prevent deletion of supplier with associated purchase orders', async () => {
@@ -263,7 +263,7 @@ describe('Supplier Service', () => {
       // Try to delete supplier - should fail
       await expect(
         SupplierService.deleteSupplier(supplier.id)
-      ).rejects.toThrow(/Cannot delete supplier because \d+ record\(s\) are associated with this supplier/);
+      ).rejects.toThrow('Fornecedor tem produtos ou pedidos ligados');
     });
 
     it('should allow deletion after removing associated dependencies', async () => {
@@ -294,7 +294,7 @@ describe('Supplier Service', () => {
       // Verify supplier2 is deleted
       await expect(
         SupplierService.getSupplierById(supplier2.id)
-      ).rejects.toThrow('Supplier not found');
+      ).rejects.toThrow('Fornecedor não encontrado');
     });
   });
 

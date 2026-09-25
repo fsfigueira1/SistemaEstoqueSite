@@ -23,6 +23,12 @@ const ALLOWED = [
   "cashFloatDefault",
   "priceProvider",
   "priceMarkupPercent",
+  "feeDebitPercent",
+  "feeCreditPercent",
+  "feeCreditInstallmentPercent",
+  "feePixPercent",
+  "backupEnabled",
+  "backupKeep",
 ] as const
 
 const AI_MODELS = ["claude-sonnet-5", "claude-haiku-4-5-20251001", "claude-opus-5-5"]
@@ -69,6 +75,17 @@ export async function PUT(request: Request) {
     if (typeof data.priceMarkupPercent === "number") {
       data.priceMarkupPercent = Math.min(100, Math.max(0, data.priceMarkupPercent))
     }
+    for (const k of ["feeDebitPercent", "feeCreditPercent", "feeCreditInstallmentPercent", "feePixPercent"] as const) {
+      if (data[k] !== undefined) {
+        const n = Number(data[k])
+        data[k] = Number.isFinite(n) ? Math.min(30, Math.max(0, Math.round(n * 100) / 100)) : 0
+      }
+    }
+    if (data.backupKeep !== undefined) {
+      const n = Math.round(Number(data.backupKeep))
+      data.backupKeep = Number.isFinite(n) ? Math.min(365, Math.max(3, n)) : 30
+    }
+    if (data.backupEnabled !== undefined) data.backupEnabled = data.backupEnabled === true
     // Chave da IA: só grava quando vem preenchida (o formulário não recebe a
     // chave atual de volta, então campo vazio = "manter a que já está").
     if (typeof body.aiApiKey === "string" && body.aiApiKey.trim()) {

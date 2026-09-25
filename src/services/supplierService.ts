@@ -67,7 +67,7 @@ export class SupplierService {
     })
 
     if (!supplier) {
-      throw new Error('Supplier not found')
+      throw new Error('Fornecedor não encontrado')
     }
 
     return supplier
@@ -77,22 +77,22 @@ export class SupplierService {
   static async createSupplier(data: SupplierCreateInput) {
     // Validate required fields
     if (!data.name) {
-      throw new Error('Supplier name is required')
+      throw new Error('Informe o nome do fornecedor')
     }
 
     // Validate name uniqueness if provided
     if (data.name !== null && data.name !== undefined && data.name !== '') {
       const existingSupplier = await prisma.supplier.findFirst({
-        where: { name: data.name }
+        where: { name: { equals: data.name.trim(), mode: "insensitive" } }
       })
 
       if (existingSupplier) {
-        throw new Error('Supplier with this name already exists')
+        throw new Error('Já existe um fornecedor com esse nome')
       }
     }
 
     const supplier = await prisma.supplier.create({
-      data
+      data: { ...data, name: data.name.trim() }
     })
 
     return supplier
@@ -106,7 +106,7 @@ export class SupplierService {
     })
 
     if (!existingSupplier) {
-      throw new Error('Supplier not found')
+      throw new Error('Fornecedor não encontrado')
     }
 
     // Validate name uniqueness if provided
@@ -119,7 +119,7 @@ export class SupplierService {
       })
 
       if (nameConflict) {
-        throw new Error('Supplier with this name already exists')
+        throw new Error('Já existe um fornecedor com esse nome')
       }
     }
 
@@ -142,7 +142,7 @@ export class SupplierService {
     })
 
     if (!supplier) {
-      throw new Error('Supplier not found')
+      throw new Error('Fornecedor não encontrado')
     }
 
     // Check for dependent products
@@ -158,7 +158,7 @@ export class SupplierService {
     const totalDependencies = dependentProductsCount + dependentPurchaseOrdersCount
 
     if (totalDependencies > 0) {
-      throw new Error(`Cannot delete supplier because ${totalDependencies} record(s) are associated with this supplier (${dependentProductsCount} product(s) and ${dependentPurchaseOrdersCount} purchase order(s))`)
+      throw new Error('Fornecedor tem produtos ou pedidos ligados')
     }
 
     await prisma.supplier.delete({

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { computeDifference, computeExpected, differenceLabel, parseMoney } from "./closing"
+import { computeDifference, computeExpected, differenceLabel, feeAmount, feePercent, feeRatesOf, hasFees, NO_FEES, parseMoney } from "./closing"
 import { buildInsights } from "./reportInsights"
 
 const brl = (v: number) => `R$ ${v.toFixed(2)}`
@@ -63,5 +63,43 @@ describe("falas da assistente", () => {
       topByQuantity: null, last7Avg: 0, refunds: { count: 0, total: 0 },
     })
     expect(t).toEqual(["Nenhuma venda registrada neste dia."])
+  })
+})
+
+describe("taxas da maquininha", () => {
+  const rates = { debit: 1.37, credit: 3.15, creditInstallment: 4.99, pix: 0.99 }
+
+  it("escolhe o % pela forma e pelas parcelas", () => {
+    expect(feePercent("DEBIT_CARD", 1, rates)).toBe(1.37)
+    expect(feePercent("CREDIT_CARD", 1, rates)).toBe(3.15)
+    expect(feePercent("CREDIT_CARD", null, rates)).toBe(3.15)
+    expect(feePercent("CREDIT_CARD", 3, rates)).toBe(4.99)
+    expect(feePercent("PIX", 1, rates)).toBe(0.99)
+    expect(feePercent("CASH", 1, rates)).toBe(0)
+  })
+
+  it("calcula a taxa em reais, com centavos", () => {
+    expect(feeAmount("CREDIT_CARD", 100, 1, rates)).toBe(3.15)
+    expect(feeAmount("DEBIT_CARD", 89.9, 1, rates)).toBe(1.23)
+    expect(feeAmount("PIX", 15, 1, rates)).toBe(0.15)
+    expect(feeAmount("CASH", 50, 1, rates)).toBe(0)
+  })
+
+  it("parcelado em branco usa a taxa do crédito à vista", () => {
+    expect(feeRatesOf({ feeCreditPercent: 3, feeCreditInstallmentPercent: 0 }).creditInstallment).toBe(3)
+    expect(feeRatesOf({ feeCreditPercent: 3, feeCreditInstallmentPercent: 5 }).creditInstallment).toBe(5)
+  })
+
+  it("sabe quando não há taxa cadastrada", () => {
+    expect(hasFees(NO_FEES)).toBe(false)
+    expect(hasFees({ ...NO_FEES, pix: 0.5 })).toBe(true)
+  })
+
+  it("a assistente fala das taxas quando existem", () => {
+    const t = buildInsights({
+      salesCount: 2, revenue: 115, net: { cash: 0, card: 100, pix: 15 }, netTotal: 115, byHour: [], topProducts: [],
+      topByQuantity: null, last7Avg: 0, refunds: { count: 0, total: 0 }, feesTotal: 3.3,
+    })
+    expect(t.join(" ")).toMatch(/Taxas de cartão e Pix/)
   })
 })

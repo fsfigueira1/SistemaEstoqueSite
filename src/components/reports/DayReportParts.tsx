@@ -3,18 +3,8 @@
 // Peças da página do relatório do dia (/relatorios/AAAA-MM-DD).
 
 import Link from 'next/link';
-import {
-  AlertTriangle,
-  ArrowRight,
-  Banknote,
-  CheckCircle2,
-  CreditCard,
-  PackageSearch,
-  QrCode,
-  TrendingUp,
-} from 'lucide-react';
+import { AlertTriangle, ArrowRight, PackageSearch, Percent, TrendingUp } from 'lucide-react';
 import type { DailyReport } from '@/services/reportService';
-import { differenceLabel } from '@/lib/closing';
 
 export const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -136,12 +126,14 @@ export function MethodCard({
   value,
   refunded,
   detail,
+  extra,
 }: {
   icon: React.ReactNode;
   label: string;
   value: number;
   refunded: number;
   detail?: string;
+  extra?: React.ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -152,7 +144,26 @@ export function MethodCard({
       <div className="mt-3 font-heading text-3xl font-semibold tabular-nums text-foreground">{brl(value)}</div>
       {detail && <p className="mt-1 text-xs text-muted-foreground">{detail}</p>}
       {refunded > 0 && <p className="mt-1 text-xs text-danger">Inclui estorno de {brl(refunded)}</p>}
+      {extra}
     </div>
+  );
+}
+
+/** "Cai na conta R$ X · taxa R$ Y" — ou convite para cadastrar as taxas. */
+export function FeeLine({ configured, value, fee, deposit }: { configured: boolean; value: number; fee: number; deposit: number }) {
+  if (!value) return null;
+  if (!configured) {
+    return (
+      <Link href="/configuracoes#taxas" className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline">
+        <Percent className="h-3 w-3" /> Cadastrar taxas para ver o que cai na conta
+      </Link>
+    );
+  }
+  return (
+    <p className="mt-2 border-t border-border pt-2 text-xs text-muted-foreground">
+      Cai na conta <strong className="font-semibold tabular-nums text-foreground">{brl(deposit)}</strong>
+      {fee > 0 && <span className="tabular-nums"> · taxa {brl(fee)}</span>}
+    </p>
   );
 }
 
@@ -187,158 +198,12 @@ export function MoneyField({
   );
 }
 
-function CountRow({
-  icon,
-  label,
-  sub,
-  expected,
-  value,
-  counted,
-  onChange,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  sub?: string;
-  expected: number;
-  value: string;
-  counted: number | null;
-  onChange: (v: string) => void;
-}) {
-  const d = counted == null ? null : differenceLabel(counted - expected, brl);
-  return (
-    <tr>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2 font-medium text-foreground">
-          <span className="text-primary">{icon}</span>
-          {label}
-        </div>
-        {sub && <div className="mt-0.5 pl-6 text-[11px] tabular-nums text-muted-foreground">{sub}</div>}
-      </td>
-      <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">{brl(expected)}</td>
-      <td className="px-4 py-3">
-        <div className="relative w-32">
-          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-            R$
-          </span>
-          <input
-            inputMode="decimal"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="0,00"
-            aria-label={`Valor contado — ${label}`}
-            className="w-full rounded-lg border border-border bg-card py-1.5 pl-8 pr-2 text-right tabular-nums focus:border-ring focus:ring-2 focus:ring-ring/40"
-          />
-        </div>
-      </td>
-      <td className="px-4 py-3 text-right">
-        {d ? (
-          <span className={`pill ${d.tone === 'ok' ? 'pill-ok' : d.tone === 'short' ? 'pill-danger' : 'pill-warn'}`}>
-            {d.tone === 'ok' && <CheckCircle2 className="h-3 w-3" />}
-            {d.text}
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        )}
-      </td>
-    </tr>
-  );
-}
-
-export function ResultBanner({ diff }: { diff: number }) {
-  const d = differenceLabel(diff, brl);
-  const cls =
-    d.tone === 'ok'
-      ? 'border-success/30 bg-success/10 text-success'
-      : d.tone === 'short'
-        ? 'border-danger/30 bg-danger/10 text-danger'
-        : 'border-warning/40 bg-warning/15 text-warning-foreground';
-  return (
-    <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${cls}`}>
-      {d.tone === 'ok' ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
-      <div>
-        <p className="font-heading text-lg font-semibold">{d.tone === 'ok' ? 'Bateu certinho' : d.text}</p>
-        <p className="text-xs opacity-80">
-          {d.tone === 'ok'
-            ? 'O que foi contado é igual ao que o sistema registrou.'
-            : 'Diferença somando as formas que você contou. Confira troco, vendas não lançadas e estornos.'}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <p className="eyebrow">{label}</p>
       <p className="mt-1 font-heading text-xl font-semibold tabular-nums text-foreground">{value}</p>
       {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
-    </div>
-  );
-}
-
-type CountKey = 'countedCash' | 'countedCard' | 'countedPix';
-
-/** Tabela Sistema x Contei x Resultado da conferência. */
-export function CountTable({
-  report,
-  calc,
-  form,
-  onChange,
-}: {
-  report: DailyReport;
-  calc: {
-    expected: { expectedCash: number; expectedCard: number; expectedPix: number };
-    counted: { countedCash: number | null; countedCard: number | null; countedPix: number | null };
-    cashFloat: number;
-    withdrawals: number;
-  };
-  form: Record<CountKey, string>;
-  onChange: (k: CountKey, v: string) => void;
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-border">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-            <th className="px-4 py-2.5 font-semibold">Forma</th>
-            <th className="px-4 py-2.5 text-right font-semibold">Sistema</th>
-            <th className="px-4 py-2.5 font-semibold">Contei</th>
-            <th className="px-4 py-2.5 text-right font-semibold">Resultado</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          <CountRow
-            icon={<Banknote className="h-4 w-4" />}
-            label="Dinheiro na gaveta"
-            sub={
-              calc.cashFloat || calc.withdrawals
-                ? `${brl(calc.cashFloat)} + ${brl(report.net.cash)}${calc.withdrawals ? ` − ${brl(calc.withdrawals)}` : ''}`
-                : undefined
-            }
-            expected={calc.expected.expectedCash}
-            value={form.countedCash}
-            counted={calc.counted.countedCash}
-            onChange={(v) => onChange('countedCash', v)}
-          />
-          <CountRow
-            icon={<CreditCard className="h-4 w-4" />}
-            label="Cartão (maquininha)"
-            expected={calc.expected.expectedCard}
-            value={form.countedCard}
-            counted={calc.counted.countedCard}
-            onChange={(v) => onChange('countedCard', v)}
-          />
-          <CountRow
-            icon={<QrCode className="h-4 w-4" />}
-            label="Pix (extrato)"
-            expected={calc.expected.expectedPix}
-            value={form.countedPix}
-            counted={calc.counted.countedPix}
-            onChange={(v) => onChange('countedPix', v)}
-          />
-        </tbody>
-      </table>
     </div>
   );
 }

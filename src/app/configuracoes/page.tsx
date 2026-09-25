@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import Layout, { PageHeader } from '@/components/Layout';
 import PriceSearchSettings from '@/components/settings/PriceSearchSettings';
 import ReceiptWidthPreview from '@/components/settings/ReceiptWidthPreview';
-import { Store, Printer, KeyRound, CheckCircle, CreditCard, Users, Database, BellRing } from 'lucide-react';
+import FeeSettings from '@/components/settings/FeeSettings';
+import BackupSettings from '@/components/settings/BackupSettings';
+import { Store, Printer, KeyRound, CheckCircle, CreditCard, Users, BellRing } from 'lucide-react';
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -126,6 +128,9 @@ export default function ConfiguracoesPage() {
           onRemoveAi={removeKey}
           onRemoveShopping={removeShopping}
         />
+
+        {/* Taxas da maquininha */}
+        <FeeSettings form={form} set={set} />
 
         {/* Assistente do relatório do dia */}
         <Section
@@ -269,12 +274,7 @@ export default function ConfiguracoesPage() {
           </p>
         </Section>
 
-        <Section icon={<Database className="h-5 w-5" />} title="Backup e restauração" desc="Manual">
-          <p className="text-sm text-muted-foreground">
-            Os dados ficam no banco da loja no Supabase, compartilhado pelos computadores. O Supabase faz cópias
-            automáticas; restauração pela interface ainda não está disponível.
-          </p>
-        </Section>
+        <BackupSettings form={form} set={set} />
       </div>
     </Layout>
   );

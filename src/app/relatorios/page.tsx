@@ -43,13 +43,14 @@ export default function RelatoriosPage() {
   }, [range]);
 
   const totals = useMemo(() => {
-    const t = { revenue: 0, cash: 0, card: 0, pix: 0, sales: 0, pending: 0 };
+    const t = { revenue: 0, cash: 0, card: 0, pix: 0, sales: 0, pending: 0, fees: 0 };
     for (const d of days) {
       t.revenue += d.revenue;
       t.cash += d.net.cash;
       t.card += d.net.card;
       t.pix += d.net.pix;
       t.sales += d.salesCount;
+      t.fees += d.fees ?? 0;
       if (d.salesCount > 0 && !d.closing && d.date !== today) t.pending += 1;
     }
     return t;
@@ -102,6 +103,11 @@ export default function RelatoriosPage() {
                 <p className="eyebrow !text-accent-soft-foreground">Faturamento</p>
                 <p className="mt-2 font-heading text-3xl font-semibold tabular-nums text-foreground">{brl(totals.revenue)}</p>
                 <p className="text-xs text-muted-foreground">{totals.sales} vendas no período</p>
+                {totals.fees > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Taxas de cartão e Pix: <span className="tabular-nums">{brl(totals.fees)}</span>
+                  </p>
+                )}
               </div>
               <Share icon={<Banknote className="h-4 w-4" />} label="Dinheiro" value={totals.cash} pct={share(totals.cash)} />
               <Share icon={<CreditCard className="h-4 w-4" />} label="Cartão" value={totals.card} pct={share(totals.card)} />
