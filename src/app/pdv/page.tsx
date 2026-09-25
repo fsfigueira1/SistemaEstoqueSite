@@ -29,6 +29,7 @@ import { enqueueSale } from '@/lib/offline/saleQueue';
 import { useOfflineStatus } from '@/components/OfflineSync';
 import { errorText } from '@/lib/friendlyError';
 import PaymentPanel from '@/components/pdv/PaymentPanel';
+import { takePdvPrefill } from '@/lib/pdvPrefill';
 import { planPayments, toCheckoutPayments, type PartInput, type PlannedPart } from '@/lib/payments';
 
 const CASH_KEY = 'lacolaria:lastCashSessionId';
@@ -167,6 +168,20 @@ export default function PDVPage() {
   const offlineUntilRef = useRef(0);
 
   useEffect(() => {
+    // itens vindos da Lista escolar (Levar para o PDV)
+    const prefill = takePdvPrefill();
+    if (prefill.length) {
+      setCarrinho(
+        prefill.map((i) => ({
+          id: i.id,
+          nome: i.name,
+          codigo: i.code,
+          preco: i.price,
+          estoque: i.stock,
+          quantidade: Math.max(1, Math.min(i.qty, i.stock)),
+        })),
+      );
+    }
     barcodeRef.current?.focus();
     loadSettings().then(setCfg);
     // garante o catálogo em cache pro PDV funcionar se a internet cair

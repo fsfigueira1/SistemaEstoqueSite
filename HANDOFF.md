@@ -11,6 +11,56 @@ Auth por usuário está **desligada de propósito**: acesso só por PIN
 (tela `/senha`, PINs no `.env`; e um cadeado local por navegador via
 `PinLock`, padrão `1234`, trocável em Configurações).
 
+## Rodada 0.3.0 — compras, taxas, backup, pagamento dividido, lista escolar
+
+Branch `feat/compras-taxas-backup`.
+
+**Novo**
+- **Taxas da maquininha e Pix** (Configurações → `#taxas`): % de débito,
+  crédito à vista, crédito parcelado (0 = usa o do à vista) e Pix. O relatório
+  do dia mostra "Cai na conta R$ X · taxa R$ Y" no Cartão e no Pix, e a
+  assistente fala do total de taxas. Regras em `src/lib/closing.ts`
+  (`feePercent`, `feeAmount`, `feeRatesOf`); estorno devolve a taxa.
+  A conferência continua comparando o valor bruto (o que a maquininha mostra).
+- **Backup automático diário** (`src/services/backupService.ts`, ligado em
+  `src/instrumentation.ts`): em cada PC, 3 min depois de abrir e depois de hora
+  em hora, se ainda não tem arquivo do dia, grava
+  `lacolaria-backup-AAAA-MM-DD-HHMM.json.gz` (todas as tabelas do schema
+  `public`, numa transação só, **sem** `aiApiKey`/`shoppingApiKey`) em
+  Documentos\Lacolaria Backups (ou a pasta escolhida em Configurações →
+  Backup; dá para usar Google Drive/OneDrive). Guarda os N mais novos (padrão 30).
+  Tela: fazer agora, baixar, abrir/trocar pasta (IPC `open-backup-folder` /
+  `choose-backup-folder` no Electron). Restaurar: `npm run backup:restore` (ver
+  RUNBOOK). Regras puras em `src/lib/backupFormat.ts`.
+- **Sugestão de compra** (`/compras`): soma o que vendeu nos últimos N dias
+  (vendas concluídas) e sugere `venda/dia × dias a cobrir + mínimo − estoque`
+  (limitado ao máximo), agrupado por fornecedor, urgentes primeiro. Quantidade
+  editável, "Copiar pedido" e WhatsApp (wa.me) por fornecedor; produtos sem
+  fornecedor ganham o seletor ali mesmo. Regras em `src/lib/restock.ts`.
+  Cadastro de produto ganhou o campo **Fornecedor** (`SupplierSelect`, com
+  "+ Novo fornecedor…"). `PUT /api/products/[id]` não apaga mais o código de
+  barras numa edição parcial.
+- **Pagamento dividido + Débito no PDV** (`src/components/pdv/PaymentPanel.tsx`,
+  regras em `src/lib/payments.ts`): Dinheiro / Pix / Débito / Crédito, e
+  "Dividir pagamento" (até 4 partes; a última fica com o restante). Juros do
+  cartão só na parte de crédito parcelado. `POST /api/sales/checkout` aceita
+  `payments: [{ method, amount, installments }]` (e ainda o `payment` antigo,
+  para a fila offline); cada parte vira um `SalePayment`. Estorno devolve
+  todas as partes. Comprovante lista cada forma (`ReceiptPayments.tsx`).
+- **Lista escolar** (`/lista-escolar`): cola o texto ou tira foto da lista.
+  A foto é lida no próprio PC (tesseract.js, português, arquivos em
+  `public/ocr`, copiados por `scripts/copy-ocr-assets.cjs` no build — fora do
+  git) ou com o Claude se houver chave ("Ler com IA", bom para letra de mão).
+  O app acha quantidade e casa cada item com os produtos
+  (`src/lib/schoolList.ts`), mostra estoque, total do que tem, e manda por
+  WhatsApp ou "Levar para o PDV" (carrinho preenchido via `src/lib/pdvPrefill.ts`).
+
+**Banco**: 6 colunas novas em `Settings` (taxas e backup) — `schemaUpgrade`
+aplica sozinho; SQL em `prisma/migrations/20260925030000_fees_backup/`.
+
+**Testes**: `src/lib/*.test.ts` (backup, compras, pagamentos, lista escolar,
+taxas). A suíte antiga segue com as falhas pré-existentes.
+
 ## Rodada 0.2.0 — relatórios, assistente, IA de preços, erros simples, visual "gourmet"
 
 Branch `feat/relatorios-ia-assistente`.
@@ -109,7 +159,7 @@ Login: tela `/senha` PIN `owner123`; cadeado `1234`.
 2. Ligar os 3 computadores conforme `RUNBOOK.md` (1 servidor + 2 navegadores).
 3. Impressora Epson TM-T20X: `window.print()`, escolher a Epson, "sem margens".
 4. Opcional: acabamento fino de design (`/impeccable polish`), TEF/conciliação
-   de pagamento, backup automático pela interface.
+   de pagamento, restauração de backup pela interface.
 
 ## Arquivos-guia
 

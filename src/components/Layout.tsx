@@ -14,6 +14,7 @@ import {
   X,
   NotebookPen,
   ClipboardList,
+  GraduationCap,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import DailyAssistant, { openDailyAssistant } from '@/components/DailyAssistant';
@@ -26,6 +27,7 @@ const groups: Array<{ title: string; items: Array<{ name: string; href: string; 
       { name: 'Painel', href: '/dashboard', icon: LayoutDashboard },
       { name: 'PDV', href: '/pdv', icon: ShoppingCart },
       { name: 'Vendas', href: '/vendas', icon: Receipt },
+      { name: 'Lista escolar', href: '/lista-escolar', icon: GraduationCap },
     ],
   },
   {
