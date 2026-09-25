@@ -295,7 +295,7 @@ export default function PriceAdvisor({
 
             <p className="text-[11px] text-muted-foreground">
               Pesquisado {ago(advice.checkedAt)}
-              {advice.provider === 'claude' ? ' · IA' : ' · Google Shopping'}
+              {advice.source === 'planilha' ? ' · planilha importada' : advice.provider === 'claude' ? ' · IA' : ' · Google Shopping'}
               {advice.cached ? ' · resultado salvo, sem gastar busca' : ''}
               {advice.quota ? ` · ${advice.quota.used} de ${advice.quota.limit} buscas grátis usadas no mês` : ''}
             </p>

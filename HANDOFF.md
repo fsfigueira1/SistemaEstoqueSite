@@ -11,6 +11,21 @@ Auth por usuário está **desligada de propósito**: acesso só por PIN
 (tela `/senha`, PINs no `.env`; e um cadeado local por navegador via
 `PinLock`, padrão `1234`, trocável em Configurações).
 
+## Rodada 0.3.1 — importar planilha de produtos + meta de lucro
+
+- **Produtos → Importar planilha** (`/produtos/importar`): CSV do Excel/Google
+  Planilhas (`;` ou `,`, vírgula decimal, colunas em português — ver
+  `src/lib/productImport.ts`). Prévia mostra novo / já existe, custo, mercado,
+  preço editável e lucro sobre o custo x meta. Grava por
+  `POST /api/products/import` (`src/services/productImportService.ts`): cria ou
+  atualiza pelo código de barras, cria categoria/fornecedor que faltar, lança
+  `StockMovement` PURCHASE com `reference = IMPORT:<chave>` — a mesma planilha
+  importada de novo **não soma o estoque de novo**. Colunas `mercado_*`/`fontes`
+  viram `PriceCheck` (provider `planilha`), alimentando o aviso "abaixo do mercado".
+- **Meta de lucro** (`Settings.profitTargetPercent`, padrão 110%, em
+  Configurações → Pesquisa de preço). O cadastro de produto mostra "Lucro de X%
+  sobre o custo" e oferece o preço mínimo para a meta (`src/lib/profit.ts`).
+
 ## Rodada 0.3.0 — compras, taxas, backup, pagamento dividido, lista escolar
 
 Branch `feat/compras-taxas-backup`.

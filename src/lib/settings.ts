@@ -23,6 +23,8 @@ export type StoreSettings = {
   // fonte da pesquisa de preço: Google Shopping (grátis) ou Claude (pago)
   priceProvider: 'shopping' | 'claude';
   priceMarkupPercent: number;
+  /** meta de lucro sobre o custo (%) */
+  profitTargetPercent: number;
   // taxas da maquininha e do Pix (%)
   feeDebitPercent: number;
   feeCreditPercent: number;
@@ -62,6 +64,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   priceAlertPercent: 10,
   priceProvider: 'shopping',
   priceMarkupPercent: 10,
+  profitTargetPercent: 110,
   feeDebitPercent: 0,
   feeCreditPercent: 0,
   feeCreditInstallmentPercent: 0,

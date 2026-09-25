@@ -9,6 +9,8 @@ export type PriceProvider = "shopping" | "claude"
 export type PriceAdvice = {
   id?: string
   provider: PriceProvider
+  /** "planilha" quando a pesquisa veio de uma importação de produtos. */
+  source?: "planilha"
   productName: string | null
   brand: string | null
   found: boolean

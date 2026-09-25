@@ -31,6 +31,8 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "feePixPercent" DOUBLE PRECISION NOT NULL DEFAULT 0`,
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "backupEnabled" BOOLEAN NOT NULL DEFAULT true`,
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "backupKeep" INTEGER NOT NULL DEFAULT 30`,
+  // --- 0.3.1: meta de lucro ---
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "profitTargetPercent" DOUBLE PRECISION NOT NULL DEFAULT 110`,
 
   // --- Fechamento do dia ---
   `CREATE TABLE IF NOT EXISTS "DailyClosing" (

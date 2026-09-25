@@ -47,6 +47,7 @@ function fromRow(row: NonNullable<CheckRow>, ctx: { currentPrice?: number | null
   return {
     id: row.id,
     provider: row.provider === "claude" ? "claude" : "shopping",
+    ...(row.provider === "planilha" ? { source: "planilha" as const } : {}),
     productName: row.productName,
     brand: row.brand,
     found: Boolean(row.productName) || row.marketMedian != null,
