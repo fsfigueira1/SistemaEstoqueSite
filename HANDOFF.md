@@ -22,6 +22,8 @@ Branch `feat/compras-taxas-backup`.
   assistente fala do total de taxas. Regras em `src/lib/closing.ts`
   (`feePercent`, `feeAmount`, `feeRatesOf`); estorno devolve a taxa.
   A conferência continua comparando o valor bruto (o que a maquininha mostra).
+  Decisões: dias antigos são recalculados com as taxas atuais; estorno devolve
+  a taxa (a venda some do cálculo).
 - **Backup automático diário** (`src/services/backupService.ts`, ligado em
   `src/instrumentation.ts`): em cada PC, 3 min depois de abrir e depois de hora
   em hora, se ainda não tem arquivo do dia, grava
@@ -47,6 +49,8 @@ Branch `feat/compras-taxas-backup`.
   `payments: [{ method, amount, installments }]` (e ainda o `payment` antigo,
   para a fila offline); cada parte vira um `SalePayment`. Estorno devolve
   todas as partes. Comprovante lista cada forma (`ReceiptPayments.tsx`).
+  Se um PC ainda na 0.2.0 estornar uma venda dividida (o código antigo só
+  estorna a 1ª parte), `src/services/paymentHeal.ts` conserta ao abrir os relatórios.
 - **Lista escolar** (`/lista-escolar`): cola o texto ou tira foto da lista.
   A foto é lida no próprio PC (tesseract.js, português, arquivos em
   `public/ocr`, copiados por `scripts/copy-ocr-assets.cjs` no build — fora do

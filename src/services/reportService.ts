@@ -12,6 +12,7 @@
 // roda dentro do app Electron em cada PC).
 import { prisma } from "@/lib/prisma"
 import { ensureSchema } from "@/lib/schemaUpgrade"
+import { healRefundedPayments } from "@/services/paymentHeal"
 import { getServerSettings } from "@/lib/serverSettings"
 import { feeAmount, feeRatesOf, hasFees, round2, type MethodKey, type MethodTotals } from "@/lib/closing"
 import { buildInsights } from "@/lib/reportInsights"
@@ -140,6 +141,7 @@ export function closingView(c: {
 // ---------- relatório ----------
 export async function getDailyReport(key: string): Promise<DailyReport> {
   await ensureSchema()
+  await healRefundedPayments()
   const { start, end } = dayRange(key)
   const settings = await getServerSettings()
 

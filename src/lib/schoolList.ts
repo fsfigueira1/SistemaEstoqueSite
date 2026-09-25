@@ -195,6 +195,21 @@ export function buildQuote(text: string, catalog: CatalogProduct[]): QuoteLine[]
 
 export type QuoteTotals = { total: number; items: number; missing: number; short: number }
 
+/**
+ * Quanto de cada linha dá para atender, dividindo o estoque entre linhas que
+ * caíram no mesmo produto (ex.: "2 colas" e "1 cola bastão" → mesma cola).
+ */
+export function allocate<T extends { qty: number; product: CatalogProduct | null; skip?: boolean }>(lines: T[]): number[] {
+  const left = new Map<string, number>()
+  return lines.map((l) => {
+    if (l.skip || !l.product) return 0
+    const have = left.get(l.product.id) ?? Math.max(0, l.product.stock)
+    const take = Math.min(l.qty, have)
+    left.set(l.product.id, have - take)
+    return take
+  })
+}
+
 /** Totais do orçamento: só o que tem na loja entra no valor. */
 export function quoteTotals(
   lines: Array<{ qty: number; product: CatalogProduct | null; skip?: boolean }>,
@@ -203,13 +218,14 @@ export function quoteTotals(
   let items = 0
   let missing = 0
   let short = 0
-  for (const l of lines) {
+  const takes = allocate(lines)
+  for (const [i, l] of lines.entries()) {
     if (l.skip) continue
     if (!l.product) {
       missing++
       continue
     }
-    const take = Math.min(l.qty, Math.max(0, l.product.stock))
+    const take = takes[i]
     if (take < l.qty) short++
     total += take * l.product.salePrice
     items += take
@@ -227,13 +243,14 @@ export function quoteMessage(
   const ok: string[] = []
   const miss: string[] = []
   let total = 0
-  for (const l of lines) {
+  const takes = allocate(lines)
+  for (const [i, l] of lines.entries()) {
     if (l.skip) continue
-    if (!l.product || l.product.stock <= 0) {
+    const take = takes[i]
+    if (!l.product || take <= 0) {
       miss.push(`• ${l.qty} × ${l.text}`)
       continue
     }
-    const take = Math.min(l.qty, l.product.stock)
     total += take * l.product.salePrice
     ok.push(`• ${take} × ${l.product.name} — ${brl(take * l.product.salePrice)}`)
     if (take < l.qty) miss.push(`• ${l.qty - take} × ${l.text} (faltou)`)

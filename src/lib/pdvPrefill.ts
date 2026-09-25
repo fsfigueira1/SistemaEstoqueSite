@@ -21,7 +21,16 @@ export function takePdvPrefill(): PrefillItem[] {
     const raw = localStorage.getItem(KEY);
     localStorage.removeItem(KEY);
     const list = raw ? (JSON.parse(raw) as PrefillItem[]) : [];
-    return Array.isArray(list) ? list.filter((i) => i && i.id && i.qty > 0) : [];
+    if (!Array.isArray(list)) return [];
+    // um produto = uma linha no carrinho
+    const byId = new Map<string, PrefillItem>();
+    for (const i of list) {
+      if (!i || !i.id || !(i.qty > 0)) continue;
+      const cur = byId.get(i.id);
+      if (cur) cur.qty = Math.min(cur.stock, cur.qty + i.qty);
+      else byId.set(i.id, { ...i, qty: Math.min(i.stock, i.qty) });
+    }
+    return [...byId.values()].filter((i) => i.qty > 0);
   } catch {
     return [];
   }

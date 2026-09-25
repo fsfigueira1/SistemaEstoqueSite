@@ -39,11 +39,11 @@ const toCatalog = (p: ApiProduct): CatalogProduct => ({
   category: p.category?.name ?? null,
 });
 
-function StockPill({ row }: { row: Row }) {
+function StockPill({ row, take }: { row: Row; take: number }) {
   if (row.skip) return <span className="pill pill-muted">Fora</span>;
   if (!row.product) return <span className="pill pill-danger">Não achei</span>;
-  if (row.product.stock <= 0) return <span className="pill pill-danger">Sem estoque</span>;
-  if (row.product.stock < row.qty) return <span className="pill pill-warn">Só tem {row.product.stock}</span>;
+  if (take <= 0) return <span className="pill pill-danger">Sem estoque</span>;
+  if (take < row.qty) return <span className="pill pill-warn">Só tem {take}</span>;
   return <span className="pill pill-ok">Tem</span>;
 }
 
@@ -103,9 +103,17 @@ function ProductSearch({ initial, onPick, onClose }: { initial: string; onPick: 
   );
 }
 
-export default function QuoteRow({ row, onChange }: { row: Row; onChange: (patch: Partial<Row>) => void }) {
+export default function QuoteRow({
+  row,
+  take,
+  onChange,
+}: {
+  row: Row;
+  /** Quanto dá para atender (o estoque é dividido entre linhas do mesmo produto). */
+  take: number;
+  onChange: (patch: Partial<Row>) => void;
+}) {
   const [searching, setSearching] = useState(false);
-  const take = row.product ? Math.min(row.qty, Math.max(0, row.product.stock)) : 0;
   return (
     <tr className={row.skip ? 'opacity-45' : ''}>
       <td className="px-3 py-2.5 align-top">
@@ -164,7 +172,7 @@ export default function QuoteRow({ row, onChange }: { row: Row; onChange: (patch
       </td>
       <td className="px-2 py-2.5 text-center align-top">
         <div className="mt-1.5">
-          <StockPill row={row} />
+          <StockPill row={row} take={take} />
         </div>
       </td>
       <td className="px-3 py-2.5 text-right align-top tabular-nums">

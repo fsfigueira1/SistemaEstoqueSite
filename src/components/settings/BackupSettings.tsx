@@ -115,7 +115,7 @@ export default function BackupSettings({
             className="w-20 rounded-lg border border-border bg-card px-2 py-1 text-right tabular-nums"
             aria-label="Quantos backups guardar"
           />
-          <span className="text-sm text-muted-foreground">arquivos</span>
+          <span className="text-sm text-muted-foreground">dias</span>
         </div>
       </div>
 

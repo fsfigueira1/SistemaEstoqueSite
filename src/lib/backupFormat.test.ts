@@ -47,6 +47,17 @@ describe("backup", () => {
     expect(filesToPrune(names, 0)).toHaveLength(2)
   })
 
+  it("guarda por dia: backup manual no mesmo dia não empurra um dia para fora", () => {
+    const names = [
+      "lacolaria-backup-2026-09-01-1000.json.gz",
+      "lacolaria-backup-2026-09-02-1000.json.gz",
+      "lacolaria-backup-2026-09-02-1500.json.gz",
+      "lacolaria-backup-2026-09-02-1700.json.gz",
+    ]
+    expect(filesToPrune(names, 2)).toEqual([])
+    expect(filesToPrune(names, 1)).toEqual(["lacolaria-backup-2026-09-01-1000.json.gz"])
+  })
+
   it("dois backups no mesmo minuto: o de sufixo é o mais novo", () => {
     expect(
       newestFirst([

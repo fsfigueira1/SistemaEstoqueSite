@@ -2,6 +2,7 @@
 // Ver as regras de dinheiro no topo de reportService.ts.
 import { prisma } from "@/lib/prisma"
 import { ensureSchema } from "@/lib/schemaUpgrade"
+import { healRefundedPayments } from "@/services/paymentHeal"
 import { computeDifference, computeExpected, feeAmount, feeRatesOf, parseMoney, round2, type MethodTotals } from "@/lib/closing"
 import { closingView, dateKey, emptyTotals, getDailyReport, METHOD_OF, toNum, type ClosingView } from "@/services/reportService"
 import { getServerSettings } from "@/lib/serverSettings"
@@ -51,6 +52,7 @@ export type HistoryDay = {
 
 export async function getHistory(days = 30): Promise<HistoryDay[]> {
   await ensureSchema()
+  await healRefundedPayments()
   const rates = feeRatesOf(await getServerSettings())
   const today = new Date()
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1))

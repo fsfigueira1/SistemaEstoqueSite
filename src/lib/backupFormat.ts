@@ -93,7 +93,13 @@ export function newestFirst(names: string[]): string[] {
     .sort((a, b) => (sortKey(a) < sortKey(b) ? 1 : sortKey(a) > sortKey(b) ? -1 : 0))
 }
 
-/** Quais arquivos apagar para manter só os `keep` mais novos. */
+/**
+ * Quais arquivos apagar para manter só os `keep` dias mais recentes (backup
+ * manual no mesmo dia não empurra um dia antigo para fora).
+ */
 export function filesToPrune(names: string[], keep: number): string[] {
-  return newestFirst(names).slice(Math.max(1, keep))
+  const sorted = newestFirst(names)
+  const days = [...new Set(sorted.map((n) => n.slice(BACKUP_PREFIX.length, BACKUP_PREFIX.length + 10)))]
+  const keepDays = new Set(days.slice(0, Math.max(1, keep)))
+  return sorted.filter((n) => !keepDays.has(n.slice(BACKUP_PREFIX.length, BACKUP_PREFIX.length + 10)))
 }

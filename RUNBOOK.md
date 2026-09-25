@@ -141,8 +141,8 @@ Os arquivos `lacolaria-backup-AAAA-MM-DD-HHMM.json.gz` têm todas as tabelas
 
 1. Num computador com o código do projeto e `npm install` feito, aponte a
    `DATABASE_URL` para o banco que vai receber os dados (um Supabase novo, por
-   exemplo). O banco precisa ter as tabelas: abra o app uma vez nele, ou rode
-   `npm run db:migrate` com a conexão direta (porta 5432).
+   exemplo). O banco precisa ter as tabelas: rode `npm run db:migrate` com a
+   conexão direta (porta 5432) e depois abra o app uma vez apontando para ele.
 2. Veja o que será restaurado (não grava nada):
    `npm run backup:restore -- "C:\caminho\lacolaria-backup-2026-09-25-1830.json.gz"`
 3. Grave de verdade: o mesmo comando com `--yes` no fim.
@@ -150,6 +150,8 @@ Os arquivos `lacolaria-backup-AAAA-MM-DD-HHMM.json.gz` têm todas as tabelas
 A restauração só **insere o que falta** (linhas com o mesmo id ficam como
 estão), em ordem (pais antes dos filhos) e numa transação — se algo falhar,
 nada é gravado. Serve para montar um banco novo ou recuperar registros apagados.
+O arquivo tem senhas (em hash) e dados de clientes: se a pasta for um Google
+Drive/OneDrive, deixe-a só na conta da loja.
 
 ## Observações
 

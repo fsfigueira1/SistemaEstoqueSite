@@ -10,11 +10,11 @@ import { Check, Copy, GraduationCap, MessageCircle, ShoppingCart } from 'lucide-
 import Layout, { PageHeader } from '@/components/Layout';
 import ListInput from '@/components/lista/ListInput';
 import QuoteRow, { type Row } from '@/components/lista/QuoteRow';
-import { quoteMessage, quoteTotals, type QuoteLine } from '@/lib/schoolList';
+import { allocate, quoteMessage, quoteTotals, type QuoteLine } from '@/lib/schoolList';
 import { whatsappNumber } from '@/lib/restock';
 import { errorText } from '@/lib/friendlyError';
 import { loadSettings } from '@/lib/settings';
-import { sendToPdv } from '@/lib/pdvPrefill';
+import { sendToPdv, type PrefillItem } from '@/lib/pdvPrefill';
 
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 const DRAFT_KEY = 'lacolaria:listaEscolar';
@@ -89,6 +89,7 @@ export default function ListaEscolarPage() {
   };
 
   const totals = useMemo(() => quoteTotals(rows), [rows]);
+  const takes = useMemo(() => allocate(rows), [rows]);
   const message = () => quoteMessage(store, title.trim(), rows, brl);
 
   const copy = async () => {
@@ -102,19 +103,16 @@ export default function ListaEscolarPage() {
   };
 
   const toPdv = () => {
-    const items = rows
-      .filter((r) => !r.skip && r.product && r.product.stock > 0)
-      .map((r) => {
-        const p = r.product as NonNullable<Row['product']>;
-        return {
-          id: p.id,
-          name: p.name,
-          code: p.barcode || p.sku || '',
-          price: p.salePrice,
-          stock: p.stock,
-          qty: Math.min(r.qty, p.stock),
-        };
-      });
+    // junta linhas que caíram no mesmo produto (uma linha só no carrinho)
+    const byId = new Map<string, PrefillItem>();
+    rows.forEach((r, i) => {
+      if (!r.product || takes[i] <= 0) return;
+      const p = r.product;
+      const cur = byId.get(p.id);
+      if (cur) cur.qty += takes[i];
+      else byId.set(p.id, { id: p.id, name: p.name, code: p.barcode || p.sku || '', price: p.salePrice, stock: p.stock, qty: takes[i] });
+    });
+    const items = [...byId.values()];
     if (!items.length) {
       setErr('Nenhum item com estoque para levar ao PDV');
       return;
@@ -167,6 +165,7 @@ export default function ListaEscolarPage() {
                     <QuoteRow
                       key={r.key}
                       row={r}
+                      take={takes[i] ?? 0}
                       onChange={(patch) => setRows((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)))}
                     />
                   ))}

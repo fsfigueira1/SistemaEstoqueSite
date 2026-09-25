@@ -92,7 +92,9 @@ export async function POST(request: Request) {
 
     // 2. conclui — baixa estoque + registra pagamento, tudo numa transação
     try {
-      const completed = parts && parts.length > 1
+      // formato novo (`payments`, mesmo com uma forma só) → soma das partes =
+      // total e o troco fica gravado; formato antigo (`payment`) → como antes
+      const completed = parts
         ? await SaleService.completeSale(sale.id, {
             payments: parts,
             changeAmount: Number(body?.changeAmount) > 0 ? Number(body.changeAmount) : null,
@@ -101,11 +103,8 @@ export async function POST(request: Request) {
         : await SaleService.completeSale(sale.id, {
             amount: sale.totalAmount,
             method,
-            installmentCount: parts
-              ? parts[0].installmentCount
-              : payment?.installments && Number(payment.installments) > 1
-                ? Number(payment.installments)
-                : null,
+            installmentCount:
+              payment?.installments && Number(payment.installments) > 1 ? Number(payment.installments) : null,
             changeAmount: payment?.changeAmount ?? 0,
             processedById: userId,
           }, { queued: Boolean(queued) })

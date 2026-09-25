@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildQuote, matchScore, parseList, quoteMessage, quoteTotals, stem, tokens, type CatalogProduct } from "./schoolList"
+import { allocate, buildQuote, matchScore, parseList, quoteMessage, quoteTotals, stem, tokens, type CatalogProduct } from "./schoolList"
 
 const P = (id: string, name: string, salePrice: number, stock: number, category = ""): CatalogProduct => ({
   id, name, salePrice, stock, category, barcode: null, sku: null,
@@ -87,5 +87,15 @@ describe("lista escolar — orçamento", () => {
     expect(msg).toContain("Total: R$ 83.50")
     expect(msg).toContain("• 2 × cola (faltou)")
     expect(msg).toContain("• 1 × compasso")
+  })
+
+  it("duas linhas no mesmo produto dividem o estoque", () => {
+    const cola = catalog.find((p) => p.id === "col") ?? null // estoque 3
+    const lines = [
+      { qty: 2, product: cola, text: "cola branca" },
+      { qty: 2, product: cola, text: "cola" },
+    ]
+    expect(allocate(lines)).toEqual([2, 1])
+    expect(quoteTotals(lines)).toMatchObject({ items: 3, short: 1 })
   })
 })

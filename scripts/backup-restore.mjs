@@ -8,8 +8,9 @@
 // Só INSERE o que falta (linhas com o mesmo id são mantidas como estão), na
 // ordem certa (pais antes dos filhos), tudo numa transação: se algo falhar,
 // nada é gravado. Serve para montar um banco novo a partir do arquivo ou para
-// recuperar registros apagados. As tabelas precisam existir (abra o app uma
-// vez apontando para o banco novo, ou rode `npm run db:migrate`).
+// recuperar registros apagados. As tabelas precisam existir: num banco novo,
+// rode antes `npm run db:migrate` (conexão direta, porta 5432) e abra o app
+// uma vez (ele cria as colunas das versões novas).
 // As chaves de API não vão no backup: cadastre de novo em Configurações.
 import fs from "node:fs"
 import zlib from "node:zlib"
@@ -52,12 +53,15 @@ try {
   }
 
   const plan = []
+  const missing = backup.order.filter((t) => (backup.tables[t] ?? []).length > 0 && !existing.has(t))
+  if (missing.length) {
+    console.error(`\nFaltam tabelas neste banco: ${missing.join(", ")}.`)
+    console.error("Rode `npm run db:migrate` (conexão direta, porta 5432) e abra o app uma vez nesse banco. Nada foi gravado.")
+    process.exitCode = 1
+    throw Object.assign(new Error("tabelas faltando"), { quiet: true })
+  }
   for (const table of backup.order) {
     const rows = backup.tables[table] ?? []
-    if (!existing.has(table)) {
-      console.log(`  ! ${table}: tabela não existe neste banco — pulando ${rows.length} linha(s)`)
-      continue
-    }
     if (!rows.length) continue
     const keys = Object.keys(rows[0]).filter((k) => existing.get(table).has(k))
     plan.push({ table, rows, keys })
@@ -67,6 +71,7 @@ try {
     for (const p of plan) console.log(`  ${p.table}: ${p.rows.length} linha(s) no arquivo`)
     console.log("\nNada foi gravado. Para restaurar de verdade, rode de novo com --yes.")
   } else {
+    let skipped = 0
     await sql.begin(async (tx) => {
       for (const { table, rows, keys } of plan) {
         const list = keys.map(qi).join(", ")
@@ -81,13 +86,19 @@ try {
           )
           inserted += r.count
         }
+        skipped += rows.length - inserted
         console.log(`  ${table}: ${inserted} de ${rows.length} restaurada(s)`)
       }
     })
-    console.log("\nPronto. Linhas que já existiam foram mantidas como estavam.")
+    console.log("\nPronto.")
+    if (skipped) {
+      console.log(
+        `${skipped} linha(s) não entraram porque já existiam (mesmo id, ou mesmo SKU/código/e-mail de outro registro) — foram mantidas como estavam.`,
+      )
+    }
   }
 } catch (e) {
-  console.error("\nFalhou — nada foi gravado:", e.message ?? e)
+  if (!e?.quiet) console.error("\nFalhou — nada foi gravado:", e?.message ?? e)
   process.exitCode = 1
 } finally {
   await sql.end({ timeout: 5 })
