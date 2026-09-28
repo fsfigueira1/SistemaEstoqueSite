@@ -19,7 +19,7 @@ const {
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const { autoUpdater } = require("electron-updater");
 
 app.disableHardwareAcceleration();
@@ -44,7 +44,6 @@ let serverProc = null;
 let serverRestartTimer = null;
 let quitting = false;
 let updateReady = null; // { version } quando um update já foi baixado
-let manualUpdateCheck = false;
 
 // ---------------- configuração (DATABASE_URL etc.) ----------------
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
@@ -128,8 +127,16 @@ function stopServer() {
   quitting = true;
   clearTimeout(serverRestartTimer);
   if (serverProc) {
+    const pid = serverProc.pid;
     try {
-      serverProc.kill();
+      if (process.platform === "win32" && pid) {
+        // mata o servidor e tudo que ele abriu — senão sobra um Laçolaria.exe
+        // segurando os arquivos e o instalador da atualização falha no meio
+        // (desinstala a versão velha e não consegue pôr a nova)
+        spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { windowsHide: true });
+      } else {
+        serverProc.kill();
+      }
     } catch {
       /* ignore */
     }
@@ -285,14 +292,13 @@ function buildTrayMenu() {
 
   if (updateReady) {
     items.push({
-      label: `Reiniciar e instalar a versão ${updateReady.version}`,
-      click: () => {
-        quitting = true;
-        autoUpdater.quitAndInstall(true, true);
-      },
+      label: `Instalar a versão ${updateReady.version}`,
+      click: () => askInstall(),
     });
+  } else if (updateDownloading) {
+    items.push({ label: "Baixando atualização…", enabled: false });
   } else {
-    items.push({ label: "Verificar atualizações", click: () => checkForUpdates(true) });
+    items.push({ label: "Verificar atualizações", click: () => checkForUpdates() });
   }
 
   items.push({ type: "separator" });
@@ -308,97 +314,113 @@ function buildTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate(items));
 }
 
-// ---------------- atualização automática (GitHub Releases) ----------------
-function checkForUpdates(manual = false) {
-  if (isDev) {
-    if (manual) {
-      dialog.showMessageBox(mainWindow || null, {
-        type: "info",
-        message: "Atualização automática só funciona no app instalado.",
-        buttons: ["OK"],
-      });
+// ---------------- atualização (GitHub Releases) — só quando o usuário pede ----------------
+// Nada é verificado, baixado ou instalado sozinho: só pelo "Verificar atualizações"
+// da bandeja, e sempre perguntando antes.
+let updateDownloading = false;
+
+function installUpdateNow() {
+  quitting = true;
+  // derruba o servidor (e filhos) antes de chamar o instalador, e dá um tempo
+  // para o Windows soltar os arquivos
+  stopServer();
+  for (const w of BrowserWindow.getAllWindows()) {
+    try {
+      w.destroy();
+    } catch {
+      /* ignore */
     }
+  }
+  setTimeout(() => autoUpdater.quitAndInstall(true, true), 2000);
+}
+
+function askInstall() {
+  dialog
+    .showMessageBox(mainWindow || null, {
+      type: "info",
+      buttons: ["Instalar agora", "Depois"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Atualização pronta",
+      message: `A versão ${updateReady.version} foi baixada.`,
+      detail: "O Laçolaria fecha, instala e abre sozinho (leva menos de um minuto). Se escolher Depois, instale pela bandeja quando quiser.",
+    })
+    .then(({ response }) => {
+      if (response === 0) installUpdateNow();
+    })
+    .catch(() => {});
+}
+
+function checkForUpdates() {
+  if (isDev) {
+    dialog.showMessageBox(mainWindow || null, {
+      type: "info",
+      message: "Atualização só funciona no app instalado.",
+      buttons: ["OK"],
+    });
     return;
   }
-  manualUpdateCheck = manual;
-  autoUpdater.checkForUpdates().catch((err) => {
-    console.error("[update] falha ao verificar:", err && err.message);
-    if (manual) {
+  if (updateReady) return askInstall();
+  if (updateDownloading) {
+    dialog.showMessageBox(mainWindow || null, { type: "info", message: "A atualização já está sendo baixada.", buttons: ["OK"] });
+    return;
+  }
+  autoUpdater
+    .checkForUpdates()
+    .then((res) => {
+      const info = res && res.updateInfo;
+      const newer = info && res.isUpdateAvailable !== false && info.version !== app.getVersion();
+      if (!newer) {
+        return dialog.showMessageBox(mainWindow || null, {
+          type: "info",
+          title: "Atualização",
+          message: `Você já está na última versão (${app.getVersion()}).`,
+          buttons: ["OK"],
+        });
+      }
+      return dialog
+        .showMessageBox(mainWindow || null, {
+          type: "question",
+          title: "Atualização",
+          buttons: ["Baixar", "Agora não"],
+          defaultId: 0,
+          cancelId: 1,
+          message: `Versão ${info.version} disponível (você usa a ${app.getVersion()}).`,
+          detail: "Baixa em segundo plano; você continua usando e escolhe quando instalar.",
+        })
+        .then(({ response }) => {
+          if (response !== 0) return;
+          updateDownloading = true;
+          buildTrayMenu();
+          return autoUpdater.downloadUpdate();
+        });
+    })
+    .catch((err) => {
+      updateDownloading = false;
+      buildTrayMenu();
+      console.error("[update] falha:", err && err.message);
       dialog.showMessageBox(mainWindow || null, {
         type: "error",
         title: "Atualização",
-        message: "Não consegui verificar agora.",
+        message: "Não consegui atualizar agora.",
         detail: String((err && err.message) || err),
         buttons: ["OK"],
       });
-    }
-    manualUpdateCheck = false;
-  });
+    });
 }
 
 function setupAutoUpdate() {
   if (isDev) return;
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true; // aplica sozinho no próximo "Sair"
-
-  autoUpdater.on("update-available", (info) => {
-    console.log("[update] versão nova:", info && info.version, "— baixando…");
-    if (manualUpdateCheck) {
-      manualUpdateCheck = false;
-      dialog.showMessageBox(mainWindow || null, {
-        type: "info",
-        title: "Atualização",
-        message: `Versão ${info && info.version} encontrada. Baixando em segundo plano.`,
-        detail: "Você será avisado quando estiver pronta para instalar.",
-        buttons: ["OK"],
-      });
-    }
-  });
-
-  autoUpdater.on("update-not-available", () => {
-    if (manualUpdateCheck) {
-      manualUpdateCheck = false;
-      dialog.showMessageBox(mainWindow || null, {
-        type: "info",
-        title: "Atualização",
-        message: "Você já está na última versão.",
-        buttons: ["OK"],
-      });
-    }
-  });
-
-  autoUpdater.on("error", (err) => {
-    console.error("[update] erro:", err && err.message);
-    manualUpdateCheck = false;
-  });
-
+  autoUpdater.autoDownload = false; // nunca baixa sem pedir
+  autoUpdater.autoInstallOnAppQuit = false; // nunca instala escondido ao sair/desligar
+  autoUpdater.on("error", (err) => console.error("[update] erro:", err && err.message));
   autoUpdater.on("update-downloaded", (info) => {
+    updateDownloading = false;
     updateReady = { version: info && info.version };
     buildTrayMenu();
-    if (tray) tray.setToolTip(`Laçolaria — versão ${updateReady.version} pronta (reinicie para aplicar)`);
-    dialog
-      .showMessageBox(mainWindow || null, {
-        type: "info",
-        buttons: ["Reiniciar agora", "Depois"],
-        defaultId: 1,
-        cancelId: 1,
-        title: "Atualização pronta",
-        message: `A versão ${updateReady.version} foi baixada.`,
-        detail:
-          "Ela é aplicada ao reiniciar o Laçolaria. Reinicie agora, ou continue usando — " +
-          "será instalada automaticamente da próxima vez que o app for fechado pela bandeja.",
-      })
-      .then(({ response }) => {
-        if (response === 0) {
-          quitting = true;
-          autoUpdater.quitAndInstall(true, true);
-        }
-      })
-      .catch(() => {});
+    if (tray) tray.setToolTip(`Laçolaria — versão ${updateReady.version} pronta para instalar`);
+    askInstall();
   });
-
-  checkForUpdates(false); // ao abrir
-  setInterval(() => checkForUpdates(false), 6 * 60 * 60 * 1000); // e a cada 6h
 }
 
 function showWindow() {
