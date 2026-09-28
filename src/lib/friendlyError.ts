@@ -35,7 +35,7 @@ const RULES: Rule[] = [
     test: /fetch failed|failed to fetch|networkerror|network request failed|load failed|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|can't reach database|P1001|P1002|P1008|P1017|connection terminated|timeout|timed out|aborted|offline|sem internet|erro de rede/i,
     title: "Sem conexão",
   },
-  { test: /too many (clients|connections)|remaining connection slots|circuit breaker|P2024/i, title: "Sistema ocupado — tente de novo" },
+  { test: /too many (clients|connections)|remaining connection slots|circuit breaker|P2024|P2028|unable to start a transaction/i, title: "Sistema ocupado — tente de novo" },
 
   // --- IA ---
   { test: /invalid x-api-key|authentication_error|invalid api key|chave da ia inválida/i, title: "Chave da IA inválida" },

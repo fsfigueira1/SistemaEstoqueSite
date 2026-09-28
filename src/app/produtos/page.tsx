@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ProductStatus } from '@/generated/prisma/enums';
 import Layout, { PageHeader } from '@/components/Layout';
 import Link from 'next/link';
@@ -99,6 +99,7 @@ export default function ProdutosPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const originalStockRef = useRef(0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'base', string>>>({});
   const [saving, setSaving] = useState(false);
@@ -188,6 +189,7 @@ export default function ProdutosPage() {
   };
   const openEdit = (p: Product) => {
     setEditingId(p.id);
+    originalStockRef.current = toNumber(p.stockQuantity);
     setForm({
       nome: p.name,
       codigoBarras: p.barcode ?? '',
@@ -249,6 +251,8 @@ export default function ProdutosPage() {
         preco: toNumber(form.preco),
         custo: toNumber(form.custo),
         estoque: toNumber(form.estoque),
+        // o servidor aplica só a diferença — não desfaz vendas de outro PC
+        ...(editingId ? { estoqueOriginal: originalStockRef.current } : {}),
         estoqueMinimo: toNumber(form.estoqueMinimo),
         status: form.status,
       };
@@ -262,9 +266,10 @@ export default function ProdutosPage() {
         setErrors({ base: errorText(data, 'Não foi possível salvar') });
         return;
       }
-      await reload();
-      loadAlerts();
+      // já salvou: fecha primeiro (reenviar somaria o ajuste de estoque de novo)
       closeModal();
+      reload().catch(() => {});
+      loadAlerts();
     } catch {
       setErrors({ base: 'Sem conexão' });
     } finally {

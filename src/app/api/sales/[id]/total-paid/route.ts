@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError"
 import { NextResponse } from "next/server"
 import { SalePaymentService } from "@/services/salePaymentService"
 
@@ -19,5 +20,5 @@ export async function GET(
       success: true,
       data: { totalPaid: result }
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }

@@ -104,6 +104,7 @@ export default function EstoquePage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const originalStockRef = useRef(0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'base', string>>>({});
   const [saving, setSaving] = useState(false);
@@ -158,6 +159,7 @@ export default function EstoquePage() {
 
   const openEdit = useCallback((p: Product) => {
     setEditingId(p.id);
+    originalStockRef.current = toNumber(p.stockQuantity);
     setForm({
       codigoBarras: p.barcode ?? '',
       sku: p.sku ?? '',
@@ -253,6 +255,8 @@ export default function EstoquePage() {
         preco: toNumber(form.preco),
         custo: toNumber(form.custo),
         estoque: toNumber(form.estoque),
+        // o servidor aplica só a diferença — não desfaz vendas de outro PC
+        ...(editingId ? { estoqueOriginal: originalStockRef.current } : {}),
         estoqueMinimo: toNumber(form.estoqueMinimo),
         status: form.status,
       };
@@ -266,8 +270,9 @@ export default function EstoquePage() {
         setErrors({ base: errorText(data, 'Não foi possível salvar') });
         return;
       }
-      await reload();
+      // já salvou: fecha primeiro (reenviar somaria o ajuste de estoque de novo)
       closeModal();
+      reload().catch(() => {});
     } catch {
       setErrors({ base: 'Sem conexão' });
     } finally {
@@ -376,8 +381,10 @@ export default function EstoquePage() {
         setStockErr(errorText(data, 'Não foi possível ajustar o estoque'));
         return;
       }
-      await reload();
+      // já gravou: fecha antes de recarregar a lista (se a recarga falhar,
+      // ninguém reenvia o ajuste achando que não foi)
       closeStockAdjust();
+      reload().catch(() => {});
     } catch {
       setStockErr('Sem conexão');
     } finally {

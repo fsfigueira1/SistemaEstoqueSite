@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { errorText } from '@/lib/friendlyError';
 import Layout, { PageHeader } from '@/components/Layout';
 import PriceSearchSettings from '@/components/settings/PriceSearchSettings';
 import ReceiptWidthPreview from '@/components/settings/ReceiptWidthPreview';
@@ -19,6 +20,7 @@ import {
 export default function ConfiguracoesPage() {
   const [form, setForm] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   // chave da IA: nunca vem do servidor; o campo só serve para trocar
   const [aiKey, setAiKey] = useState('');
@@ -42,26 +44,38 @@ export default function ConfiguracoesPage() {
   };
 
   const save = async () => {
-    const next = await saveSettings(form, {
-      ...(aiKey.trim() ? { aiApiKey: aiKey.trim() } : {}),
-      ...(shoppingKey.trim() ? { shoppingApiKey: shoppingKey.trim() } : {}),
-    });
-    setForm(next);
-    setAiKey('');
-    setShoppingKey('');
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSaveErr(null);
+    try {
+      const next = await saveSettings(form, {
+        ...(aiKey.trim() ? { aiApiKey: aiKey.trim() } : {}),
+        ...(shoppingKey.trim() ? { shoppingApiKey: shoppingKey.trim() } : {}),
+      });
+      setForm(next);
+      setAiKey('');
+      setShoppingKey('');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      // mantém o que foi digitado (inclusive as chaves) para tentar de novo
+      setSaveErr(errorText(e, 'Não foi possível salvar'));
+    }
   };
 
   const removeKey = async () => {
     if (!window.confirm('Remover a chave do Claude?')) return;
-    const next = await saveSettings(form, { aiApiKeyClear: true });
-    setForm(next);
+    try {
+      setForm(await saveSettings(form, { aiApiKeyClear: true }));
+    } catch (e) {
+      setSaveErr(errorText(e, 'Não foi possível salvar'));
+    }
   };
   const removeShopping = async () => {
     if (!window.confirm('Remover a chave da pesquisa de preço? Ela para até colar outra.')) return;
-    const next = await saveSettings(form, { shoppingApiKeyClear: true });
-    setForm(next);
+    try {
+      setForm(await saveSettings(form, { shoppingApiKeyClear: true }));
+    } catch (e) {
+      setSaveErr(errorText(e, 'Não foi possível salvar'));
+    }
   };
 
   const changePin = () => {
@@ -238,6 +252,7 @@ export default function ConfiguracoesPage() {
               <CheckCircle className="h-4 w-4" /> Salvo
             </span>
           )}
+          {saveErr && <span className="text-sm text-danger">{saveErr}</span>}
         </div>
 
         {/* PIN */}

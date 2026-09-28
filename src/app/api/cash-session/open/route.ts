@@ -8,30 +8,26 @@ import { friendlyError } from "@/lib/friendlyError"
 export async function GET() {
   try {
     // Get all active cash registers
+    const select = { id: true, name: true, description: true }
     let cashRegisters = await prisma.cashRegister.findMany({
       where: { isActive: true },
-      select: {
-        id: true,
-        name: true,
-        description: true
-      }
+      select,
+      orderBy: { createdAt: 'asc' },
     });
 
-    // If no cash registers exist, create a default one
+    // If no cash registers exist, create a default one — com trava, para 3 PCs
+    // abrindo pela primeira vez não criarem 3 "Caixa Principal".
     if (cashRegisters.length === 0) {
-      const defaultCashRegister = await prisma.cashRegister.create({
-        data: {
-          name: 'Caixa Principal',
-          description: 'Caixa padrão do sistema',
-          isActive: true,
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true
-        }
-      });
-      cashRegisters = [defaultCashRegister];
+      cashRegisters = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('cash-register-default'))`
+        const again = await tx.cashRegister.findMany({ where: { isActive: true }, select, orderBy: { createdAt: 'asc' } })
+        if (again.length) return again
+        const created = await tx.cashRegister.create({
+          data: { name: 'Caixa Principal', description: 'Caixa padrão do sistema', isActive: true },
+          select,
+        })
+        return [created]
+      })
     }
 
     return NextResponse.json({
@@ -54,7 +50,7 @@ export async function POST(request: Request) {
     const userId = await getSystemUserId()
 
     const body = await request.json()
-    const { cashRegisterId, openingAmount } = body
+    const { cashRegisterId, openingAmount, reuseIfOpen } = body
 
     // Validate required fields
     if (!cashRegisterId) {
@@ -117,6 +113,11 @@ export async function POST(request: Request) {
     // Check if there's already an open session for this cash register
     const existingOpenSession = await CashSessionService.getOpenCashSession(cashRegisterId)
 
+    // PDV: só precisa de uma sessão aberta — se outro PC abriu antes, usa a dele
+    if (existingOpenSession && reuseIfOpen) {
+      return NextResponse.json({ success: true, data: { id: existingOpenSession.id, cashRegisterId: existingOpenSession.cashRegisterId, status: existingOpenSession.status } }, { status: 200 })
+    }
+
     if (existingOpenSession) {
       return NextResponse.json(
         {
@@ -131,11 +132,19 @@ export async function POST(request: Request) {
     }
 
     // Open the cash session
-    const openSession = await CashSessionService.openCashSession({
-      cashRegisterId,
-      openedById: userId,
-      openingAmount: Number(openingAmount)
-    })
+    let openSession
+    try {
+      openSession = await CashSessionService.openCashSession({
+        cashRegisterId,
+        openedById: userId,
+        openingAmount: Number(openingAmount)
+      })
+    } catch (err) {
+      // outro PC abriu no mesmo instante
+      const other = reuseIfOpen ? await CashSessionService.getOpenCashSession(cashRegisterId) : null
+      if (!other) throw err
+      return NextResponse.json({ success: true, data: { id: other.id, cashRegisterId: other.cashRegisterId, status: other.status } }, { status: 200 })
+    }
 
     return NextResponse.json(
       {

@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError"
 import { NextResponse } from "next/server"
 import { SalePaymentService } from "@/services/salePaymentService"
 
@@ -19,7 +20,7 @@ export async function GET(
       success: true,
       data: result
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }
 
 // POST /api/sales/[id]/payments - Create a new payment for a sale (starts as PENDING)
@@ -88,5 +89,5 @@ export async function POST(
       },
       { status: 201 }
     )
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }

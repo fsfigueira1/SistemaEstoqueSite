@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError"
 import { NextResponse } from "next/server"
 import { StockService } from "@/services/stockService"
 import { getSystemUserId } from "@/lib/systemUser"
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
       data: result
     })
 
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }
 
 // GET /api/stock/movement - Get stock movements with filtering and pagination
@@ -128,5 +129,5 @@ export async function GET(request: Request) {
       data: result
     })
 
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }
