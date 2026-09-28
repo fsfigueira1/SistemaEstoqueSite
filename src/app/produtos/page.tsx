@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ProductStatus } from '@/generated/prisma/enums';
 import Layout, { PageHeader } from '@/components/Layout';
 import Link from 'next/link';
-import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, XCircle, Loader2, TrendingUp, FileSpreadsheet, Copy } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, XCircle, Loader2, TrendingUp, FileSpreadsheet } from 'lucide-react';
 import ProfitHint from '@/components/ProfitHint';
 import { errorText } from '@/lib/friendlyError';
 import SupplierSelect from '@/components/SupplierSelect';
@@ -293,13 +293,6 @@ export default function ProdutosPage() {
           subtitle="Catálogo, preços e estoque"
           actions={
             <>
-              <Link
-                href="/produtos/duplicados"
-                className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 font-medium text-foreground hover:bg-muted"
-              >
-                <Copy className="h-4 w-4 text-primary" />
-                Duplicados
-              </Link>
               <Link
                 href="/produtos/importar"
                 className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 font-medium text-foreground hover:bg-muted"
