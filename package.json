@@ -1,6 +1,6 @@
 {
   "name": "lacolaria-erp",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -123,7 +123,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "include": "electron/installer.nsh"
     },
     "npmRebuild": false,
     "afterPack": "scripts/after-pack.cjs"
