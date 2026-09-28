@@ -84,10 +84,37 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
 
 let upgrade: Promise<void> | null = null
 
+// O que já existe no banco (uma consulta só). Com isso o app não roda
+// ALTER TABLE à toa a cada abertura — o ALTER trava a tabela, e com 3 PCs
+// abrindo + backup rodando isso podia deixar as telas esperando.
+async function existing(): Promise<{ cols: Set<string>; rels: Set<string> }> {
+  const cols = await prisma.$queryRawUnsafe<Array<{ t: string; c: string }>>(
+    `SELECT table_name AS t, column_name AS c FROM information_schema.columns WHERE table_schema = current_schema()`,
+  )
+  const rels = await prisma.$queryRawUnsafe<Array<{ n: string }>>(
+    `SELECT c.relname AS n FROM pg_class c JOIN pg_namespace ns ON ns.oid = c.relnamespace WHERE ns.nspname = current_schema()`,
+  )
+  return { cols: new Set(cols.map((r) => `${r.t}.${r.c}`)), rels: new Set(rels.map((r) => r.n)) }
+}
+
+export function isAlreadyApplied(sql: string, have: { cols: Set<string>; rels: Set<string> }): boolean {
+  const col = sql.match(/ALTER TABLE "(\w+)" ADD COLUMN IF NOT EXISTS "(\w+)"/i)
+  if (col) return have.cols.has(`${col[1]}.${col[2]}`)
+  const rel = sql.match(/CREATE (?:UNIQUE )?(?:TABLE|INDEX) IF NOT EXISTS "(\w+)"/i)
+  if (rel) return have.rels.has(rel[1])
+  return false
+}
+
 async function run(): Promise<void> {
+  const have = await existing()
   for (const sql of SCHEMA_UPGRADE_STATEMENTS) {
+    if (isAlreadyApplied(sql, have)) continue
     try {
-      await prisma.$executeRawUnsafe(sql)
+      // não fica esperando para sempre por uma trava de outro PC
+      await prisma.$transaction([
+        prisma.$executeRawUnsafe(`SET LOCAL lock_timeout = '10s'`),
+        prisma.$executeRawUnsafe(sql),
+      ])
     } catch (err) {
       // Duas máquinas criando a mesma coluna ao mesmo tempo pode gerar
       // "already exists" mesmo com IF NOT EXISTS — nesse caso está tudo certo.

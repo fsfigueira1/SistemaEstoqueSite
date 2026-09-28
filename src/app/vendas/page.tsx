@@ -112,13 +112,24 @@ export default function VendasPage() {
     setLoading(true);
     try {
       const { startDate, endDate } = rangeFor(period);
-      const qs = new URLSearchParams({ limit: '200', page: '1' });
-      if (startDate) qs.set('startDate', startDate);
-      if (endDate) qs.set('endDate', endDate);
-      if (status !== 'all') qs.set('status', status);
-      const res = await fetch(`/api/sales?${qs}`);
-      const data = await res.json();
-      setRows(data?.data?.sales ?? []);
+      // busca todas as páginas do período — os totais (faturamento, ticket
+      // médio) contam todas as vendas, não só as 200 primeiras
+      const all: SaleRow[] = [];
+      for (let page = 1; page <= 50; page++) {
+        const qs = new URLSearchParams({ limit: '200', page: String(page) });
+        if (startDate) qs.set('startDate', startDate);
+        if (endDate) qs.set('endDate', endDate);
+        if (status !== 'all') qs.set('status', status);
+        const res = await fetch(`/api/sales?${qs}`);
+        const data = await res.json().catch(() => null);
+        const sales: SaleRow[] = data?.data?.sales ?? [];
+        all.push(...sales);
+        const totalPages = Number(data?.data?.pagination?.totalPages) || 1;
+        if (!res.ok || sales.length === 0 || page >= totalPages) break;
+      }
+      setRows(all);
+    } catch {
+      /* sem conexão: mantém a lista que já estava na tela */
     } finally {
       setLoading(false);
     }

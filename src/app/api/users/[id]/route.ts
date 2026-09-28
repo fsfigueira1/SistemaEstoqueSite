@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError"
 import { NextResponse } from "next/server"
 import { UserService } from "@/services/userService"
 
@@ -11,7 +12,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       data: result
     })
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
   }
 }
 
@@ -26,7 +27,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       data: result
     })
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
   }
 }
 
@@ -40,6 +41,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       data: result
     })
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
   }
 }

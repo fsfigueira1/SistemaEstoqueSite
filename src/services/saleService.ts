@@ -25,8 +25,13 @@ type CreateSaleInput = {
   queued?: boolean
 }
 
+const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100
+
 export class SaleService {
   // Create a new sale (starts as PENDING)
+  // Tudo é lido/validado antes e a venda + itens são gravados num único
+  // comando (create aninhado): nada de transação interativa longa, que
+  // expirava (5s) com carrinho grande e banco lento.
   static async createSale(input: CreateSaleInput) {
     // Validate inputs
     if (!input.cashSessionId) throw new Error('Cash session ID is required')
@@ -66,28 +71,46 @@ export class SaleService {
       throw new Error('Customer ID is required')
     }
 
+    // Produtos do carrinho numa consulta só
+    const productIds = [...new Set(input.items.map((i) => i.productId).filter((x): x is string => Boolean(x)))]
+    const products = productIds.length
+      ? await prisma.product.findMany({ where: { id: { in: productIds } } })
+      : []
+    const byId = new Map(products.map((p: { id: string }) => [p.id, p]))
+
+    // quantidade pedida por produto (o mesmo produto pode vir em 2 linhas)
+    const wanted = new Map<string, number>()
+    for (const item of input.items) {
+      if (item.productId) wanted.set(item.productId, (wanted.get(item.productId) ?? 0) + Number(item.quantity))
+    }
+
     // Validate items
     for (const item of input.items) {
       if (!item.quantity || item.quantity <= 0) throw new Error('Quantity must be positive for each item')
+      if (!Number.isInteger(Number(item.quantity))) throw new Error('A quantidade precisa ser um número inteiro')
+      if (item.unitPrice !== undefined && item.unitPrice !== null && !(Number(item.unitPrice) >= 0)) {
+        throw new Error('Preço inválido')
+      }
       if (item.productId) {
-        // Check if we have sufficient stock
-        const product = await prisma.product.findUnique({
-          where: { id: item.productId }
-        })
+        const product = byId.get(item.productId) as { name: string; stockQuantity: number; status: string } | undefined
         if (!product) {
           throw new Error(`Product not found: ${item.productId}`)
         }
         // Venda da fila offline: não bloqueia por estoque (pode ter mudado
         // enquanto o balcão estava sem internet). Deixa ir a negativo e segue.
-        if (!input.queued && product.stockQuantity < item.quantity) {
-          throw new Error(`Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, requested: ${item.quantity}`)
+        const need = wanted.get(item.productId) ?? Number(item.quantity)
+        if (!input.queued && product.stockQuantity < need) {
+          throw new Error(`Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, requested: ${need}`)
+        }
+        if (!input.queued && product.status !== ProductStatus.ACTIVE) {
+          throw new Error(`Cannot sell inactive or discontinued product: ${product.name}`)
         }
       } else {
         // Item avulso: não cadastrado no catálogo, precisa de nome e preço.
         if (!item.name || !item.name.trim()) {
           throw new Error('Nome é obrigatório para item avulso')
         }
-        if (item.unitPrice === undefined || item.unitPrice === null || Number(item.unitPrice) < 0) {
+        if (item.unitPrice === undefined || item.unitPrice === null || !(Number(item.unitPrice) >= 0)) {
           throw new Error('Preço inválido para item avulso')
         }
       }
@@ -101,132 +124,137 @@ export class SaleService {
       throw new Error('Discount amount cannot be negative')
     }
 
-    // Use transaction to ensure consistency
-    return prisma.$transaction(async (tx: any) => {
-      // Calculate totals from items (using current product prices, not trusting frontend)
-      let subtotal = 0
-      let itemDiscountTotal = 0
-      const saleItemsData = []
+    // Totais em centavos arredondados (nada de 59.699999999)
+    let subtotal = 0
+    let itemDiscountTotal = 0
+    const saleItemsData: Array<{
+      productId: string | null
+      productName: string | null
+      quantity: number
+      unitPrice: number
+      discountAmount: number
+      totalAmount: number
+    }> = []
 
-      for (const item of input.items) {
-        let unitPrice: number | Prisma.Decimal
-        let productId: string | null = null
-        let productName: string | null = null
+    for (const item of input.items) {
+      let unitPrice: number
+      let productId: string | null = null
+      let productName: string | null = null
 
-        if (item.productId) {
-          // Get current product data (not trusting frontend prices)
-          const product = await tx.product.findUnique({
-            where: { id: item.productId }
-          })
-
-          if (!product) {
-            throw new Error(`Product not found: ${item.productId}`)
-          }
-
-          if (!input.queued && product.status !== ProductStatus.ACTIVE) {
-            throw new Error(`Cannot sell inactive or discontinued product: ${product.name}`)
-          }
-
-          // Use passed-in unitPrice if provided, otherwise fallback to product's sale price
-          unitPrice = item.unitPrice ?? product.salePrice
-          productId = product.id
-        } else {
-          // Item avulso: preço e nome vêm do balcão, não existe Product por trás.
-          unitPrice = item.unitPrice
-          productName = String(item.name).trim()
-        }
-
-        const lineTotal = Number(unitPrice) * Number(item.quantity)
-        const itemDiscount = Number(item.discountAmount ?? 0)
-        const itemTotal = lineTotal - itemDiscount
-
-        subtotal += lineTotal
-        itemDiscountTotal += itemDiscount
-
-        saleItemsData.push({
-          productId,
-          productName,
-          quantity: item.quantity,
-          unitPrice, // Store the actual price used
-          discountAmount: itemDiscount,
-          totalAmount: itemTotal
-        })
+      if (item.productId) {
+        const product = byId.get(item.productId) as { id: string; salePrice: unknown }
+        // Use passed-in unitPrice if provided, otherwise fallback to product's sale price
+        unitPrice = round2(Number(item.unitPrice ?? product.salePrice))
+        productId = product.id
+      } else {
+        // Item avulso: preço e nome vêm do balcão, não existe Product por trás.
+        unitPrice = round2(Number(item.unitPrice))
+        productName = String(item.name).trim()
       }
 
-      // Calculate final amounts - combine item-level and sale-level discounts
-      const saleDiscount = Number(input.discountAmount ?? 0)
-      const totalDiscount = itemDiscountTotal + saleDiscount
-      // Acréscimo (ex.: juros de cartão parcelado). Fica embutido no totalAmount;
-      // o valor do juro é sempre totalAmount - (subtotal - discountAmount).
-      const surcharge = Math.max(0, Number(input.surchargeAmount ?? 0))
-      const totalAmount = subtotal - totalDiscount + surcharge
+      const lineTotal = round2(unitPrice * Number(item.quantity))
+      const itemDiscount = round2(Number(item.discountAmount ?? 0))
+      const itemTotal = round2(lineTotal - itemDiscount)
 
-      // Validate totals
-      if (totalAmount < 0) {
-        throw new Error('Total amount cannot be negative')
-      }
+      subtotal = round2(subtotal + lineTotal)
+      itemDiscountTotal = round2(itemDiscountTotal + itemDiscount)
 
-      // Número da venda — legível e sem colisão entre máquinas:
-      // data + timestamp em base36 + 3 chars aleatórios.
-      // Venda da fila offline usa a data/hora em que a venda aconteceu.
-      const now = input.occurredAt ? new Date(input.occurredAt) : new Date()
-      const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-      const rand = randomBytes(3).toString('hex').slice(0, 3).toUpperCase()
-      const saleNumber = `V${ymd}-${now.getTime().toString(36).slice(-5).toUpperCase()}${rand}`
-
-      // Create the sale
-      const sale = await tx.sale.create({
-        data: {
-          saleNumber,
-          clientId: input.clientId ?? null,
-          cashSessionId: input.cashSessionId,
-          customerId: input.customerId ?? null,
-          status: SaleStatus.PENDING,
-          subtotal: new Prisma.Decimal(subtotal),
-          discountAmount: new Prisma.Decimal(totalDiscount),
-          totalAmount: new Prisma.Decimal(totalAmount),
-          paidAmount: 0, // Starts at 0
-          changeAmount: 0, // Starts at 0
-          notes: input.notes ?? null,
-          createdById: input.createdById,
-          ...(input.occurredAt ? { createdAt: new Date(input.occurredAt) } : {}),
-        }
+      saleItemsData.push({
+        productId,
+        productName,
+        quantity: Number(item.quantity),
+        unitPrice, // Store the actual price used
+        discountAmount: itemDiscount,
+        totalAmount: itemTotal
       })
+    }
 
-      // Create sale items
-      const createdSaleItems = []
-      for (const itemData of saleItemsData) {
-        const saleItem = await tx.saleItem.create({
-          data: {
-            sale: { connect: { id: sale.id } },
-            ...(itemData.productId
-              ? { product: { connect: { id: itemData.productId } } }
-              : { productName: itemData.productName }),
-            quantity: itemData.quantity,
-            unitPrice: new Prisma.Decimal(itemData.unitPrice),
-            discountAmount: new Prisma.Decimal(itemData.discountAmount ?? 0),
-            totalAmount: new Prisma.Decimal(itemData.totalAmount)
-          }
-        })
-        createdSaleItems.push(saleItem)
-      }
+    // Calculate final amounts - combine item-level and sale-level discounts
+    const saleDiscount = round2(Number(input.discountAmount ?? 0))
+    const totalDiscount = round2(itemDiscountTotal + saleDiscount)
+    // Acréscimo (ex.: juros de cartão parcelado). Fica embutido no totalAmount;
+    // o valor do juro é sempre totalAmount - (subtotal - discountAmount).
+    const surcharge = round2(Math.max(0, Number(input.surchargeAmount ?? 0)))
+    const totalAmount = round2(subtotal - totalDiscount + surcharge)
 
-      return {
-        sale: {
-          ...sale,
-          subtotal: sale.subtotal.toNumber(),
-          discountAmount: sale.discountAmount.toNumber(),
-          totalAmount: sale.totalAmount.toNumber(),
-          paidAmount: sale.paidAmount.toNumber(),
-          changeAmount: sale.changeAmount.toNumber()
+    // Validate totals
+    if (totalAmount < 0) {
+      throw new Error('Total amount cannot be negative')
+    }
+
+    // Número da venda — legível e sem colisão entre máquinas:
+    // data + timestamp em base36 + 3 chars aleatórios.
+    // Venda da fila offline usa a data/hora em que a venda aconteceu.
+    const now = input.occurredAt ? new Date(input.occurredAt) : new Date()
+    const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+    const rand = randomBytes(3).toString('hex').slice(0, 3).toUpperCase()
+    const saleNumber = `V${ymd}-${now.getTime().toString(36).slice(-5).toUpperCase()}${rand}`
+
+    // Venda + itens num comando só (o Prisma faz isso atômico)
+    const sale = await prisma.sale.create({
+      data: {
+        saleNumber,
+        clientId: input.clientId ?? null,
+        cashSessionId: input.cashSessionId,
+        customerId: input.customerId ?? null,
+        status: SaleStatus.PENDING,
+        subtotal: new Prisma.Decimal(subtotal),
+        discountAmount: new Prisma.Decimal(totalDiscount),
+        totalAmount: new Prisma.Decimal(totalAmount),
+        paidAmount: 0, // Starts at 0
+        changeAmount: 0, // Starts at 0
+        notes: input.notes ?? null,
+        createdById: input.createdById,
+        ...(input.occurredAt ? { createdAt: new Date(input.occurredAt) } : {}),
+        items: {
+          create: saleItemsData.map((d) => ({
+            productId: d.productId,
+            productName: d.productId ? null : d.productName,
+            quantity: d.quantity,
+            unitPrice: new Prisma.Decimal(d.unitPrice),
+            discountAmount: new Prisma.Decimal(d.discountAmount),
+            totalAmount: new Prisma.Decimal(d.totalAmount),
+          })),
         },
-        saleItems: createdSaleItems,
-        calculatedTotals: {
-          subtotal,
-          discountAmount: totalDiscount,
-          totalAmount
-        }
+      },
+      include: { items: true },
+    })
+
+    const { items: createdSaleItems, ...saleRow } = sale
+    return {
+      sale: {
+        ...saleRow,
+        subtotal: saleRow.subtotal.toNumber(),
+        discountAmount: saleRow.discountAmount.toNumber(),
+        totalAmount: saleRow.totalAmount.toNumber(),
+        paidAmount: saleRow.paidAmount.toNumber(),
+        changeAmount: saleRow.changeAmount.toNumber()
+      },
+      saleItems: createdSaleItems,
+      calculatedTotals: {
+        subtotal,
+        discountAmount: totalDiscount,
+        totalAmount
       }
+    }
+  }
+
+  // Checkout que não terminou: devolve a venda PENDENTE para "cancelada" e
+  // solta o clientId, para a próxima tentativa (fila offline / novo clique)
+  // conseguir gravar a venda de novo. Nunca mexe numa venda concluída.
+  static async abandonPendingSale(id: string): Promise<boolean> {
+    const r = await prisma.sale.updateMany({
+      where: { id, status: SaleStatus.PENDING },
+      data: { status: SaleStatus.CANCELLED, clientId: null },
+    })
+    return r.count === 1
+  }
+
+  // Venda cancelada que ainda segura um clientId: solta o clientId.
+  static async releaseClientId(id: string) {
+    await prisma.sale.updateMany({
+      where: { id, status: { in: [SaleStatus.CANCELLED] } },
+      data: { clientId: null },
     })
   }
 
@@ -265,16 +293,22 @@ export class SaleService {
     })
     if (!reg) throw new Error('Nenhum caixa cadastrado no sistema')
 
-    const created = await prisma.cashSession.create({
-      data: {
-        cashRegisterId: reg.id,
-        openedById,
-        openedAt: new Date(),
-        openingAmount: new Prisma.Decimal(0),
-        status: 'OPEN',
-      },
+    // mesma trava do "abrir caixa": dois PCs escoando a fila não abrem duas sessões
+    return prisma.$transaction(async (tx: any) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'cash-open:' + reg.id}))`
+      const again = await tx.cashSession.findFirst({ where: { status: 'OPEN' }, orderBy: { openedAt: 'desc' } })
+      if (again) return again.id
+      const created = await tx.cashSession.create({
+        data: {
+          cashRegisterId: reg.id,
+          openedById,
+          openedAt: new Date(),
+          openingAmount: new Prisma.Decimal(0),
+          status: 'OPEN',
+        },
+      })
+      return created.id
     })
-    return created.id
   }
 
   // Get sale by ID
@@ -453,6 +487,8 @@ export class SaleService {
   // restock=true devolve as quantidades ao estoque (reverte a venda).
   static async deleteSale(id: string, opts: { restock?: boolean } = {}) {
     return prisma.$transaction(async (tx: any) => {
+      // trava a linha da venda: um estorno/exclusão ao mesmo tempo espera este terminar
+      await tx.$executeRaw`SELECT id FROM "Sale" WHERE id = ${id} FOR UPDATE`
       const sale = await tx.sale.findUnique({ where: { id }, include: { items: true } })
       if (!sale) throw new Error('Venda não encontrada')
 
@@ -723,84 +759,10 @@ export class SaleService {
         }
       }
 
-      // 6. Verificar quantidade em estoque e atualizar.
-      const itemsWithStockUpdate = []
-
-      for (const item of sale.items) {
-        // Item avulso (sem productId): não existe estoque para baixar.
-        if (!item.productId) continue
-
-        // Get current product data
-        const product = await tx.product.findUnique({
-          where: { id: item.productId }
-        })
-
-        if (!product) {
-          throw new Error(`Product not found: ${item.productId}`)
-        }
-
-        if (!opts.queued && product.status !== ProductStatus.ACTIVE) {
-          throw new Error(`Cannot sell inactive or discontinued product: ${product.name}`)
-        }
-
-        // Use passed-in unitPrice if provided, otherwise fallback to product's sale price
-
-        itemsWithStockUpdate.push({
-          productId: item.productId,
-          quantity: item.quantity,
-          product: product
-        })
-      }
-
-      // 7. Criar SalePayment PAID (um por forma de pagamento). O troco fica
-      // na parte em dinheiro.
-      let changeLeft = changeAmount
-      for (const part of parts) {
-        const isCash = part.method === PaymentMethod.CASH
-        await tx.salePayment.create({
-          data: {
-            sale: { connect: { id: sale.id } },
-            amount: part.amount,
-            method: part.method,
-            transactionId: part.transactionId ?? null,
-            processingFee: part.processingFee ?? null,
-            installmentCount: part.installmentCount ?? null,
-            changeAmount: split ? (isCash && changeLeft ? changeLeft : null) : paymentData.changeAmount ?? null,
-            status: PaymentStatus.PAID,
-            processedBy: { connect: { id: paymentData.processedById } },
-          }
-        })
-        if (isCash) changeLeft = 0
-      }
-
-      // 8. Baixar estoque e 9. Criar StockMovement SALE.
-      for (const itemWithStock of itemsWithStockUpdate) {
-        // Update product stock (decrement)
-        await tx.product.update({
-          where: { id: itemWithStock.productId },
-          data: {
-            stockQuantity: {
-              decrement: itemWithStock.quantity
-            }
-          }
-        })
-
-        // Create stock movement record
-        await tx.stockMovement.create({
-          data: {
-            productId: itemWithStock.productId,
-            type: StockMovementType.SALE,
-            quantity: itemWithStock.quantity, // Always positive
-            reference: sale.id, // Reference to the sale
-            notes: `Sale ${sale.saleNumber}`,
-            performedById: paymentData.processedById
-          }
-        })
-      }
-
-      // 10. Atualizar Sale para COMPLETED.
-      const updatedSale = await tx.sale.update({
-        where: { id },
+      // 6. "Trava" a venda: só uma chamada consegue passar de PENDING para
+      // COMPLETED (duas abas/PCs, reenvio da fila, cancelamento ao mesmo tempo).
+      const claimed = await tx.sale.updateMany({
+        where: { id, status: SaleStatus.PENDING },
         data: {
           status: SaleStatus.COMPLETED,
           paidAmount: saleTotal, // Update paid amount to total
@@ -809,6 +771,80 @@ export class SaleService {
           updatedAt: new Date()
         }
       })
+      if (claimed.count !== 1) {
+        throw new Error('Sale is already completed')
+      }
+
+      // 7. Produtos (já vieram junto com a venda — sem reler um por um).
+      const itemsWithStockUpdate: Array<{ productId: string; quantity: number; name: string }> = []
+      for (const item of sale.items) {
+        // Item avulso (sem productId): não existe estoque para baixar.
+        if (!item.productId) continue
+        const product = item.product
+        if (!product) {
+          throw new Error(`Product not found: ${item.productId}`)
+        }
+        if (!opts.queued && product.status !== ProductStatus.ACTIVE) {
+          throw new Error(`Cannot sell inactive or discontinued product: ${product.name}`)
+        }
+        itemsWithStockUpdate.push({ productId: item.productId, quantity: item.quantity, name: product.name })
+      }
+
+      // 8. Criar SalePayment PAID (um por forma de pagamento). O troco fica
+      // na parte em dinheiro.
+      let changeLeft = changeAmount
+      await tx.salePayment.createMany({
+        data: parts.map((part) => {
+          const isCash = part.method === PaymentMethod.CASH
+          const row = {
+            saleId: sale.id,
+            amount: part.amount,
+            method: part.method,
+            transactionId: part.transactionId ?? null,
+            processingFee: part.processingFee ?? null,
+            installmentCount: part.installmentCount ?? null,
+            changeAmount: split ? (isCash && changeLeft ? changeLeft : null) : paymentData.changeAmount ?? null,
+            status: PaymentStatus.PAID,
+            processedById: paymentData.processedById,
+          }
+          if (isCash) changeLeft = 0
+          return row
+        })
+      })
+
+      // 9. Baixar estoque. Venda no balcão (online): só baixa se ainda tem —
+      // dois PCs vendendo a última unidade ao mesmo tempo não deixam negativo.
+      // Venda da fila offline: baixa sempre (já aconteceu).
+      for (const it of itemsWithStockUpdate) {
+        if (opts.queued) {
+          await tx.product.update({
+            where: { id: it.productId },
+            data: { stockQuantity: { decrement: it.quantity } }
+          })
+        } else {
+          const r = await tx.product.updateMany({
+            where: { id: it.productId, stockQuantity: { gte: it.quantity } },
+            data: { stockQuantity: { decrement: it.quantity } }
+          })
+          if (r.count !== 1) {
+            throw new Error(`Insufficient stock for product ${it.name}`)
+          }
+        }
+      }
+
+      // 10. StockMovement SALE (um comando só)
+      if (itemsWithStockUpdate.length) {
+        await tx.stockMovement.createMany({
+          data: itemsWithStockUpdate.map((it) => ({
+            productId: it.productId,
+            type: StockMovementType.SALE,
+            quantity: it.quantity, // Always positive
+            reference: sale.id, // Reference to the sale
+            notes: `Sale ${sale.saleNumber}`,
+            performedById: paymentData.processedById
+          }))
+        })
+      }
 
       // 11. Criar CashMovement SALE.
       await tx.cashMovement.create({
@@ -838,6 +874,8 @@ export class SaleService {
           }
         }
       })
+
+      const updatedSale = await tx.sale.findUnique({ where: { id } })
 
       // Return just the sale object as expected by tests
       return {
@@ -898,6 +936,16 @@ export class SaleService {
       // 5. Calcular totals da venda original
       const totalAmount = Number(sale.totalAmount)
 
+      // 5b. "Trava": só um estorno passa (dois PCs / clique duplo não devolvem
+      // o estoque duas vezes).
+      const claimed = await tx.sale.updateMany({
+        where: { id, status: SaleStatus.COMPLETED },
+        data: { status: SaleStatus.REFUNDED, paidAmount: 0, updatedAt: new Date() }
+      })
+      if (claimed.count !== 1) {
+        throw new Error('Sale is already refunded')
+      }
+
       // 6. Atualizar o pagamento existente para REFUNDED (em vez de criar novo)
       // Follow the exact same pattern as salePaymentService.refundPayment
       const refundedAt = new Date()
@@ -939,16 +987,8 @@ export class SaleService {
         })
       }
 
-      // 8. Atualizar Sale para REFUNDED.
-      const updatedSale = await tx.sale.update({
-        where: { id },
-        data: {
-          status: SaleStatus.REFUNDED,
-          paidAmount: 0, // Após reembolso total, o valor pago fica zero
-          // O changeAmount permanece como estava (fato histórico do transaction original)
-          updatedAt: new Date()
-        }
-      })
+      // 8. Sale já foi para REFUNDED no passo 5b.
+      const updatedSale = await tx.sale.findUnique({ where: { id } })
 
       // 9. Criar CashMovement WITHDRAWAL (refund removes cash from session).
       await tx.cashMovement.create({

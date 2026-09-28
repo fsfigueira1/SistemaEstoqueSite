@@ -42,11 +42,17 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Optional: validate role and timestamp (not strictly necessary for now)
-  // We'll just accept any non-empty cookie as valid.
-  // In the future, we could check expiration, etc.
-
-  return NextResponse.next()
+  // Sessão "deslizante": cada uso renova as 8h. Sem isso o PIN vencia no meio
+  // do expediente e o PDV passava a dizer "produto não encontrado"/"caixa
+  // fechado" (na verdade era 401). Só vence depois de 8h sem usar.
+  const res = NextResponse.next()
+  res.cookies.set('erp_auth', cookieValue, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 8,
+    path: '/',
+  })
+  return res
 }
 
 // Roda em tudo, menos assets do Next e arquivos estáticos (com extensão:
@@ -55,5 +61,7 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)',
+    // API sempre passa pelo PIN, mesmo com "." no caminho (ex.: e-mail)
+    '/api/:path*',
   ],
 }

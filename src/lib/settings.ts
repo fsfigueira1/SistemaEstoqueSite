@@ -128,23 +128,25 @@ export async function saveSettings(
   extra?: { aiApiKey?: string; aiApiKeyClear?: boolean; shoppingApiKey?: string; shoppingApiKeyClear?: boolean },
 ): Promise<StoreSettings> {
   const next = { ...readCache(), ...patch };
-  writeCache(next);
+  let data: { success?: boolean; data?: unknown; error?: unknown } | null = null;
   try {
     const res = await fetch('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...next, ...extra }),
     });
-    const data = await res.json().catch(() => null);
-    if (data?.success && data.data) {
-      const merged = { ...DEFAULT_SETTINGS, ...data.data } as StoreSettings;
-      writeCache(merged);
-      return merged;
-    }
+    data = await res.json().catch(() => null);
   } catch {
-    /* offline: mantém só no cache até reconectar */
+    throw new Error('Sem conexão — não foi salvo');
   }
-  return next;
+  if (data?.success && data.data) {
+    const merged = { ...DEFAULT_SETTINGS, ...(data.data as object) } as StoreSettings;
+    writeCache(merged);
+    return merged;
+  }
+  // não finge que salvou: a mudança não chegou ao banco (nem aos outros PCs)
+  const msg = typeof data?.error === 'string' ? data.error : (data?.error as { message?: string })?.message;
+  throw new Error(msg || 'Não foi possível salvar');
 }
 
 // ---- PIN local do PinLock (permanece por dispositivo) ----

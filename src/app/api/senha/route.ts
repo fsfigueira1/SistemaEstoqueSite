@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError"
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
@@ -46,6 +47,6 @@ export async function POST(request: Request) {
 
     return response
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
   }
 }

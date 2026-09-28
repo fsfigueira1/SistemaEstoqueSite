@@ -33,6 +33,7 @@ import { takePdvPrefill } from '@/lib/pdvPrefill';
 import { planPayments, toCheckoutPayments, type PartInput, type PlannedPart } from '@/lib/payments';
 
 const CASH_KEY = 'lacolaria:lastCashSessionId';
+const CART_KEY = 'lacolaria:pdvCart';
 
 async function fetchWithTimeout(url: string, opts: RequestInit = {}, ms = 3000) {
   const ctrl = new AbortController();
@@ -166,10 +167,46 @@ export default function PDVPage() {
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
   // após uma falha de rede, assume offline por 60s (não espera o timeout de novo)
   const offlineUntilRef = useRef(0);
+  // venda em andamento: mesmo carrinho reenviado usa o mesmo clientId
+  const attemptRef = useRef<{ fingerprint: string; clientId: string } | null>(null);
+  // trava contra clique duplo (o estado do React só atualiza no próximo render)
+  const busyRef = useRef(false);
+
+  // Carrinho sobrevive a um recarregamento da tela (servidor reiniciou,
+  // tela travou e recarregou): guardado só nesta janela (sessionStorage).
+  const cartRestoredRef = useRef(false);
+  useEffect(() => {
+    if (!cartRestoredRef.current) return;
+    try {
+      if (carrinho.length)
+        sessionStorage.setItem(CART_KEY, JSON.stringify({ carrinho, parts, valorRecebido, attempt: attemptRef.current }));
+      else sessionStorage.removeItem(CART_KEY);
+    } catch {
+      /* ignora */
+    }
+  }, [carrinho, parts, valorRecebido]);
 
   useEffect(() => {
     // itens vindos da Lista escolar (Levar para o PDV)
     const prefill = takePdvPrefill();
+    if (!prefill.length) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(CART_KEY) || 'null');
+        if (saved && Array.isArray(saved.carrinho) && saved.carrinho.length) {
+          setCarrinho(saved.carrinho);
+          if (Array.isArray(saved.parts) && saved.parts.length) setParts(saved.parts);
+          if (typeof saved.valorRecebido === 'string') setValorRecebido(saved.valorRecebido);
+          // a tela recarregou no meio de uma venda: reenviar o mesmo carrinho
+          // usa o mesmo clientId (se a venda já tinha entrado, não duplica)
+          if (saved.attempt && typeof saved.attempt.clientId === 'string' && typeof saved.attempt.fingerprint === 'string') {
+            attemptRef.current = saved.attempt;
+          }
+        }
+      } catch {
+        /* ignora */
+      }
+    }
+    cartRestoredRef.current = true;
     if (prefill.length) {
       setCarrinho(
         prefill.map((i) => ({
@@ -409,18 +446,24 @@ export default function PDVPage() {
       return id;
     };
     try {
-      const cur = await fetchWithTimeout('/api/cash-session/current', {}, 3000).then((r) => r.json());
+      // 5xx = banco fora/lento: trata como sem internet (a venda vai para a fila)
+      const readJson = async (r: Response) => {
+        if (r.status === 401) throw new Error('Acesso bloqueado — digite o PIN');
+        if (r.status >= 500) throw new TypeError('servidor sem banco');
+        return r.json().catch(() => ({}));
+      };
+      const cur = await fetchWithTimeout('/api/cash-session/current', {}, 5000).then(readJson);
       if (cur?.success && cur.data?.id) return remember(cur.data.id);
 
-      const regsRes = await fetchWithTimeout('/api/cash-session/open', {}, 3000).then((r) => r.json());
+      const regsRes = await fetchWithTimeout('/api/cash-session/open', {}, 5000).then(readJson);
       const registers: Array<{ id: string }> = regsRes?.data ?? [];
       if (registers.length === 0) throw new Error('Nenhum caixa cadastrado no sistema');
 
       const openRes = await fetchWithTimeout('/api/cash-session/open', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cashRegisterId: registers[0].id, openingAmount: 0 }),
-      }).then((r) => r.json());
+        body: JSON.stringify({ cashRegisterId: registers[0].id, openingAmount: 0, reuseIfOpen: true }),
+      }, 8000).then(readJson);
 
       if (!openRes?.success || !openRes.data?.id) {
         throw new Error(errorText(openRes, 'Falha ao abrir a sessão de caixa'));
@@ -439,6 +482,7 @@ export default function PDVPage() {
   }
 
   const resetAfterSale = () => {
+    attemptRef.current = null;
     setCarrinho([]);
     setBarcode('');
     setValorRecebido('');
@@ -456,6 +500,8 @@ export default function PDVPage() {
       setError(plan.error);
       return;
     }
+    if (busyRef.current) return;
+    busyRef.current = true;
     setIsProcessing(true);
     setError(null);
     setSavedOffline(false);
@@ -473,12 +519,28 @@ export default function PDVPage() {
       unitPrice: i.preco,
       total: i.preco * i.quantidade,
     }));
-    const clientId =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const occurredAt = new Date().toISOString();
+    // Mesmo carrinho + mesmo pagamento = mesma venda: se a tentativa anterior
+    // chegou ao servidor e a resposta se perdeu, o servidor reconhece o
+    // clientId e não grava a venda duas vezes.
     const payments = toCheckoutPayments(plan);
+    const fingerprint = JSON.stringify({ items, payments, juros });
+    if (!attemptRef.current || attemptRef.current.fingerprint !== fingerprint) {
+      attemptRef.current = {
+        fingerprint,
+        clientId:
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      };
+    }
+    const clientId = attemptRef.current.clientId;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(CART_KEY) || 'null');
+      if (saved) sessionStorage.setItem(CART_KEY, JSON.stringify({ ...saved, attempt: attemptRef.current }));
+    } catch {
+      /* ignora */
+    }
+    const occurredAt = new Date().toISOString();
     const changeAmount = troco > 0 ? troco : undefined;
     const received = plan.cashPart > 0 ? recebido || plan.cashPart : 0;
 
@@ -558,6 +620,13 @@ export default function PDVPage() {
       }
 
       const data = await res.json().catch(() => ({}));
+      // 503 = banco fora do ar / lento: a venda vai para a fila e sobe sozinha
+      // depois (mesmo clientId → nunca duplica)
+      if (res.status === 503) {
+        offlineUntilRef.current = Date.now() + 60_000;
+        await queueIt(cashSessionId);
+        return;
+      }
       if (!res.ok || !data.success) {
         throw new Error(
           errorText(data, 'Venda não finalizada'),
@@ -583,6 +652,7 @@ export default function PDVPage() {
     } catch (err) {
       setError(errorText(err, 'Venda não finalizada'));
     } finally {
+      busyRef.current = false;
       setIsProcessing(false);
     }
   };

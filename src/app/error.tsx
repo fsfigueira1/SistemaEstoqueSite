@@ -6,7 +6,7 @@ import { simplifyMessage } from "@/lib/friendlyError"
 
 // Tela de erro geral: nome curto do problema + duas saídas claras.
 // O detalhe técnico vai só para o console.
-export default function Error({ error, reset }: { error: Error; reset: () => void }) {
+export default function Error({ error, reset, retry }: { error: Error; reset: () => void; retry?: () => void }) {
   useEffect(() => {
     // eslint-disable-next-line quality/no-direct-console -- tela de erro do navegador: o detalhe fica no console do app
     console.error(error)
@@ -26,7 +26,7 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
         <p className="mt-2 text-sm text-muted-foreground">{hint}</p>
         <div className="mt-6 grid gap-2">
           <button
-            onClick={() => reset()}
+            onClick={() => (retry ?? reset)()}
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90"
           >
             <RotateCcw className="h-4 w-4" /> Tentar de novo

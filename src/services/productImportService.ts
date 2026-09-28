@@ -172,6 +172,9 @@ export async function runImport(rows: ImportRow[]): Promise<ImportResult> {
       const categoryId = (await category(r.category)) ?? null
       const supplierId = await supplier(r.supplier)
       const existing = await findExisting(r)
+      // resolvido FORA da transação: criar categoria usa outra conexão, e
+      // pedir uma 2ª conexão com a transação aberta pode travar o pool
+      const newCategoryId = existing ? null : categoryId ?? (await fallbackCategory())
       const productId = await prisma.$transaction(async (tx) => {
         let id: string
         let addStock = r.qty > 0
@@ -181,7 +184,7 @@ export async function runImport(rows: ImportRow[]): Promise<ImportResult> {
               name: r.name,
               sku: r.barcode ?? (r.sku as string),
               barcode: r.barcode,
-              categoryId: categoryId ?? (await fallbackCategory()),
+              categoryId: newCategoryId as string,
               supplierId,
               costPrice: r.cost ?? 0,
               salePrice: r.price ?? 0,

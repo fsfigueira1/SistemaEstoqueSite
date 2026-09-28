@@ -38,6 +38,9 @@ export class CashSessionService {
     // Check if there's already an open session for this cash register
     // Using transaction to prevent race conditions
     return prisma.$transaction(async (tx: any) => {
+      // Trava por caixa: dois PCs abrindo ao mesmo tempo esperam um ao outro
+      // (sem isso os dois viam "nenhuma aberta" e abriam duas sessões).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'cash-open:' + input.cashRegisterId}))`
       // Check for open session again within transaction
       const existingOpenSession = await tx.cashSession.findFirst({
         where: {

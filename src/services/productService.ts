@@ -191,7 +191,10 @@ export class ProductService {
   }
 
   // Update product
-  static async updateProduct(id: string, data: ProductUpdateInput) {
+  // opts.stockOriginal: estoque que a tela mostrava ao abrir a edição. Com
+  // ele, o servidor aplica só a DIFERENÇA (e registra a movimentação) — se
+  // outro PC vendeu nesse meio tempo, a venda não é desfeita.
+  static async updateProduct(id: string, data: ProductUpdateInput, opts: { stockOriginal?: number; userId?: string } = {}) {
     // Validate prices are not negative if provided
     if (data.costPrice !== undefined && Number(data.costPrice) < 0) {
       throw new Error('Cost price cannot be negative')
@@ -230,10 +233,36 @@ export class ProductService {
       // For now, we'll allow deactivation but note that physical deletion is not allowed
     }
 
-    const product = await prisma.product.update({
-      where: { id },
-      data
-    })
+    const stockOriginal = Number(opts.stockOriginal)
+    let product
+    if (data.stockQuantity !== undefined && opts.stockOriginal !== undefined && opts.stockOriginal !== null && Number.isFinite(stockOriginal)) {
+      const delta = Math.round(Number(data.stockQuantity) - stockOriginal)
+      const { stockQuantity: _ignored, ...rest } = data
+      void _ignored
+      product = await prisma.$transaction(async (tx: any) => {
+        const p = await tx.product.update({
+          where: { id },
+          data: { ...rest, ...(delta !== 0 ? { stockQuantity: { increment: delta } } : {}) },
+        })
+        if (delta !== 0 && opts.userId) {
+          await tx.stockMovement.create({
+            data: {
+              productId: id,
+              type: delta > 0 ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT',
+              quantity: Math.abs(delta),
+              notes: `Ajuste na edição do produto (${stockOriginal} → ${Number(data.stockQuantity)})`,
+              performedById: opts.userId,
+            },
+          })
+        }
+        return p
+      })
+    } else {
+      product = await prisma.product.update({
+        where: { id },
+        data
+      })
+    }
 
     // Convert Decimal values to numbers for consistency with test expectations
     return {

@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError"
 import { NextResponse } from "next/server"
 import { SalePaymentService } from "@/services/salePaymentService"
 
@@ -19,7 +20,7 @@ export async function GET(
       success: true,
       data: result
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }
 
 // PUT /api/sales/payments/[id] - Process payment (create and confirm in one operation)
@@ -68,7 +69,7 @@ export async function PUT(
       success: true,
       data: result
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }
 
 // DELETE /api/sales/payments/[id] - Refund payment
@@ -103,5 +104,5 @@ export async function DELETE(
       success: true,
       data: result
     })
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }

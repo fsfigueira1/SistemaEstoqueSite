@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError"
 import { NextResponse } from "next/server"
 import { SaleService } from "@/services/saleService"
 
@@ -24,7 +25,7 @@ export async function POST(
       },
       { status: 405 }
     )
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }
 
 // DELETE /api/sales/[id]/items - NOT IMPLEMENTED: SaleService doesn't have add/remove items methods
@@ -48,5 +49,5 @@ export async function DELETE(
       },
       { status: 405 }
     )
-  } catch (error) { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
 }

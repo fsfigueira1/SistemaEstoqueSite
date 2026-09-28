@@ -28,4 +28,29 @@ for (const f of [".env", ".env.local", ".env.production"]) {
   if (fs.existsSync(p)) fs.rmSync(p);
 }
 
+// Ponto de entrada usado pelo Electron: sobe o server.js do Next com um
+// "vigia" — se o app principal sumir (travou, foi fechado à força), este
+// servidor fecha junto em vez de ficar perdido segurando a porta 4123 e os
+// arquivos (o que fazia a atualização falhar no meio).
+fs.writeFileSync(
+  path.join(out, "lacolaria-server.cjs"),
+  `/* gerado por scripts/prepare-standalone.cjs */
+const parent = Number(process.env.LACOLARIA_PARENT_PID) || process.ppid;
+if (parent) {
+  setInterval(() => {
+    try {
+      process.kill(parent, 0);
+    } catch (e) {
+      if (!e || e.code !== "EPERM") process.exit(0);
+    }
+  }, 3000).unref();
+}
+// uma promessa esquecida não derruba o servidor do balcão
+process.on("unhandledRejection", (err) => {
+  console.error("[servidor] promessa sem tratamento:", err && err.stack ? err.stack : err);
+});
+require("./server.js");
+`,
+);
+
 console.log("server-bundle pronto:", out);

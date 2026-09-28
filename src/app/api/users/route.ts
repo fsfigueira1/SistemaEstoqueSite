@@ -1,3 +1,4 @@
+import { friendlyError } from "@/lib/friendlyError"
 import { NextResponse } from "next/server"
 import { UserService } from "@/services/userService"
 import { Role, UserStatus } from "@/generated/prisma/client"
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
       data: result
     })
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
   }
 }
 
@@ -48,6 +49,6 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
   }
 }

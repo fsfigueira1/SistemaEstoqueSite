@@ -48,17 +48,80 @@ let updateReady = null; // { version } quando um update já foi baixado
 // ---------------- configuração (DATABASE_URL etc.) ----------------
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
 
+// Gravação segura: escreve num arquivo temporário e troca de uma vez, e
+// guarda uma cópia (.bak). Uma queda de energia no meio da gravação não
+// apaga mais a configuração do banco.
 function readConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
-  } catch {
-    return {};
+  for (const p of [CONFIG_PATH, CONFIG_PATH + ".bak"]) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (cfg && typeof cfg === "object") return cfg;
+    } catch {
+      /* tenta a próxima */
+    }
   }
+  return {};
 }
 function writeConfig(cfg) {
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+  const data = JSON.stringify(cfg, null, 2);
+  const tmp = CONFIG_PATH + ".tmp";
+  fs.writeFileSync(tmp, data);
+  try {
+    if (fs.existsSync(CONFIG_PATH)) fs.copyFileSync(CONFIG_PATH, CONFIG_PATH + ".bak");
+  } catch {
+    /* sem cópia, segue */
+  }
+  fs.renameSync(tmp, CONFIG_PATH);
 }
+
+// ---------------- log em arquivo (para suporte) ----------------
+// %APPDATA%\Laçolaria\logs\app.log — erros do app e do servidor interno.
+const LOG_DIR = path.join(app.getPath("userData"), "logs");
+let logStream = null;
+function logFile() {
+  if (logStream) return logStream;
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    const p = path.join(LOG_DIR, "app.log");
+    try {
+      // não deixa crescer sem fim: passou de 5 MB, guarda o antigo e recomeça
+      if (fs.statSync(p).size > 5 * 1024 * 1024) fs.renameSync(p, path.join(LOG_DIR, "app.old.log"));
+    } catch {
+      /* ainda não existe */
+    }
+    logStream = fs.createWriteStream(p, { flags: "a" });
+    logStream.on("error", () => {
+      logStream = null;
+    });
+  } catch {
+    logStream = null;
+  }
+  return logStream;
+}
+function log(...args) {
+  const text = (a) => {
+    if (a instanceof Error) return a.stack || a.message;
+    if (typeof a === "string") return a;
+    try {
+      return JSON.stringify(a);
+    } catch {
+      return String(a);
+    }
+  };
+  const line = `[${new Date().toISOString()}] ${args.map(text).join(" ")}\n`;
+  try {
+    process.stderr.write(line);
+  } catch {
+    /* sem console */
+  }
+  const s = logFile();
+  if (s) s.write(line);
+}
+
+// Nenhum erro inesperado derruba o app do balcão: registra e segue.
+process.on("uncaughtException", (err) => log("[main] erro inesperado:", err));
+process.on("unhandledRejection", (err) => log("[main] promessa sem tratamento:", err));
 // Pasta do backup automático diário (Configurações → Backup). Dá para trocar
 // por uma pasta do Google Drive/OneDrive para ter cópia fora da loja.
 function backupDir() {
@@ -101,27 +164,47 @@ function startServer() {
     });
   } else {
     const entry = serverEntry();
-    // roda server.js como node puro usando o próprio Electron
-    serverProc = spawn(process.execPath, [entry], {
+    // lacolaria-server.cjs = server.js + "vigia": se este app fechar de
+    // qualquer jeito (travou, Gerenciador de Tarefas), o servidor fecha junto
+    // e não fica um Laçolaria.exe perdido segurando a porta e os arquivos.
+    const wrapper = path.join(path.dirname(entry), "lacolaria-server.cjs");
+    const script = fs.existsSync(wrapper) ? wrapper : entry;
+    // roda como node puro usando o próprio Electron
+    serverProc = spawn(process.execPath, [script], {
       cwd: path.dirname(entry),
-      stdio: ["ignore", "inherit", "inherit"],
-      env: { ...getEnvForServer(), ELECTRON_RUN_AS_NODE: "1" },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      env: { ...getEnvForServer(), ELECTRON_RUN_AS_NODE: "1", LACOLARIA_PARENT_PID: String(process.pid) },
     });
+    const pipe = (stream) =>
+      stream &&
+      stream.on("data", (chunk) => {
+        const s = logFile();
+        if (s) s.write(chunk);
+      });
+    pipe(serverProc.stdout);
+    pipe(serverProc.stderr);
   }
+  serverStartedAt = Date.now();
 
   serverProc.on("exit", (code) => {
-    console.error(`[servidor] saiu com código ${code}`);
+    log(`[servidor] saiu com código ${code}`);
     serverProc = null;
     if (quitting) return;
-    // sobe de novo (backoff curto) — o app não pode ficar parado
+    // sobe de novo — o app não pode ficar parado. Se cair logo depois de
+    // subir, espera mais a cada vez (até 30s) para não ficar em loop.
+    serverFailures = Date.now() - serverStartedAt > 60_000 ? 1 : serverFailures + 1;
+    const delay = Math.min(30_000, 1500 * 2 ** (serverFailures - 1));
     clearTimeout(serverRestartTimer);
     serverRestartTimer = setTimeout(() => {
       startServer();
       if (mainWindow) waitForServer().then(() => mainWindow.reload()).catch(() => {});
-    }, 1500);
+    }, delay);
   });
-  serverProc.on("error", (err) => console.error("[servidor] erro:", err));
+  serverProc.on("error", (err) => log("[servidor] erro:", err));
 }
+let serverStartedAt = 0;
+let serverFailures = 0;
 
 function stopServer() {
   quitting = true;
@@ -187,6 +270,7 @@ function trayImage() {
 }
 
 function setupErrorPage(message) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   const html = `<!doctype html><html><body style="font-family:system-ui;padding:48px;max-width:640px;margin:auto">
     <h1 style="color:#0aa">Laçolaria</h1>
     <p>Não consegui iniciar o sistema.</p>
@@ -237,10 +321,51 @@ async function createWindow() {
       return;
     }
     reloads.push(now);
-    mainWindow.reload();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
   };
-  mainWindow.webContents.on("render-process-gone", guardedReload);
-  mainWindow.webContents.on("unresponsive", guardedReload);
+  mainWindow.webContents.on("render-process-gone", (_e, details) => {
+    log("[janela] tela caiu:", details && details.reason);
+    guardedReload();
+  });
+  // "Não respondendo" pode ser só uma tarefa pesada (leitura da lista escolar,
+  // relatório grande). Só recarrega se continuar travada por 30s — antes,
+  // recarregava na hora e apagava o carrinho no meio da venda.
+  let hangTimer = null;
+  mainWindow.webContents.on("unresponsive", () => {
+    if (hangTimer) return;
+    hangTimer = setTimeout(() => {
+      hangTimer = null;
+      log("[janela] travada por 30s — recarregando");
+      guardedReload();
+    }, 30_000);
+  });
+  mainWindow.webContents.on("responsive", () => {
+    clearTimeout(hangTimer);
+    hangTimer = null;
+  });
+  // Página do sistema não carregou (servidor reiniciando): espera e tenta de novo
+  let failLoads = [];
+  mainWindow.webContents.on("did-fail-load", (_e, code, desc, url, isMainFrame) => {
+    if (!isMainFrame || quitting || code === -3 /* ABORTED */) return;
+    if (!String(url || "").startsWith(BASE_URL)) return;
+    log("[janela] falhou ao carregar:", code, desc);
+    const now = Date.now();
+    failLoads = failLoads.filter((t) => now - t < 60_000);
+    failLoads.push(now);
+    if (failLoads.length > 5) {
+      setupErrorPage("O sistema não está respondendo. Use Recarregar na bandeja ou reinicie o app.");
+      return;
+    }
+    waitForServer()
+      .then(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) return mainWindow.loadURL(url);
+      })
+      .catch((err) => {
+        log("[janela] nova tentativa falhou:", err);
+        // servidor não voltou em 90s: mostra a tela de ajuda em vez da página de erro do Chrome
+        if (err && /não respondeu/.test(String(err.message))) setupErrorPage(err.message);
+      });
+  });
 
   // fechar o X -> esconde na bandeja (não mata o servidor)
   mainWindow.on("close", (e) => {
@@ -272,7 +397,23 @@ function buildTrayMenu() {
   if (!tray) return;
   const items = [
     { label: "Abrir", click: () => showWindow() },
-    { label: "Recarregar", click: () => mainWindow && mainWindow.reload() },
+    {
+      // volta para o sistema (a tela de erro é uma página à parte — recarregar
+      // ela só mostraria o erro de novo)
+      label: "Recarregar",
+      click: () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return showWindow();
+        if (quitting) return;
+        if (!serverProc) {
+          clearTimeout(serverRestartTimer);
+          startServer();
+        }
+        waitForServer()
+          .then(() => mainWindow.loadURL(BASE_URL))
+          .catch((err) => setupErrorPage(err && err.message ? err.message : err));
+        showWindow();
+      },
+    },
     { type: "separator" },
     { label: "Configurar banco de dados…", click: () => promptDatabaseUrl() },
     {
@@ -398,7 +539,7 @@ function checkForUpdates() {
     .catch((err) => {
       updateDownloading = false;
       buildTrayMenu();
-      console.error("[update] falha:", err && err.message);
+      log("[update] falha:", err);
       dialog.showMessageBox(mainWindow || null, {
         type: "error",
         title: "Atualização",
@@ -413,7 +554,7 @@ function setupAutoUpdate() {
   if (isDev) return;
   autoUpdater.autoDownload = false; // nunca baixa sem pedir
   autoUpdater.autoInstallOnAppQuit = false; // nunca instala escondido ao sair/desligar
-  autoUpdater.on("error", (err) => console.error("[update] erro:", err && err.message));
+  autoUpdater.on("error", (err) => log("[update] erro:", err));
   autoUpdater.on("update-downloaded", (info) => {
     updateDownloading = false;
     updateReady = { version: info && info.version };

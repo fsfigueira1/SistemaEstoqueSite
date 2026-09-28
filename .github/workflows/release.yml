@@ -37,6 +37,26 @@ jobs:
 
       - run: npm ci
 
+      # não publica versão quebrada: testes das regras (sem banco) e checagem de tipos
+      - name: Testes
+        shell: bash
+        run: |
+          npx prisma generate
+          npx vitest run src
+          npx tsc --noEmit -p .
+
+      - name: Conferir a versão nova (não pode repetir uma já publicada)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v=$(node -p "require('./package.json').version")
+          # só bloqueia se a versão já está completa (com latest.yml); uma
+          # publicação que parou no meio pode ser refeita
+          if gh release view "v$v" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null | grep -qx latest.yml; then
+            echo "A versão $v já foi publicada — aumente a versão no package.json"; exit 1
+          fi
+
       # prebuild roda o prisma generate
       - run: npm run build
 

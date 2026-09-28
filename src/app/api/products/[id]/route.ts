@@ -1,3 +1,4 @@
+import { getSystemUserId } from "@/lib/systemUser"
 import { NextResponse } from "next/server"
 import { ProductService } from "@/services/productService"
 import { friendlyError } from "@/lib/friendlyError"
@@ -75,7 +76,13 @@ export async function PUT(
       isFeatured: data.isFeatured,
     }
 
-    const product = await ProductService.updateProduct((await params).id, productData)
+    const rawOriginal = data.estoqueOriginal ?? data.stockQuantityOriginal
+    const stockOriginal =
+      rawOriginal === undefined || rawOriginal === null || rawOriginal === "" ? undefined : Number(rawOriginal)
+    const product = await ProductService.updateProduct((await params).id, productData, {
+      stockOriginal: Number.isFinite(stockOriginal) ? stockOriginal : undefined,
+      userId: stockOriginal !== undefined ? await getSystemUserId() : undefined,
+    })
 
     return NextResponse.json({
       success: true,

@@ -20,14 +20,26 @@ function create(): PrismaClient {
   const adapter = new PrismaPg({
     connectionString: url,
     max: Number(process.env.DB_POOL_MAX) || 2,
-    idleTimeoutMillis: 15_000,
+    // reaproveita a conexão por mais tempo (cada conexão nova ao Supabase
+    // custa um handshake TLS lento)
+    idleTimeoutMillis: 60_000,
     connectionTimeoutMillis: 20_000,
+    // detecta conexão morta (Wi-Fi caiu, roteador reiniciou) em vez de travar
+    keepAlive: true,
+    // nenhuma consulta fica pendurada para sempre se a rede sumir no meio
+    query_timeout: 45_000,
   });
   // Cacheia SEMPRE (dev e produção). O Proxy abaixo procura o client em
   // globalForPrisma.prisma; sem este cache, produção recria um PrismaClient
   // + pool pg a cada query — handshake novo no pooler do Supabase toda vez,
   // conexões vazando até estourar o limite e disparar o circuit breaker.
-  const client = new PrismaClient({ adapter });
+  // Transações: o padrão do Prisma (espera 2s por conexão, 5s no total) é
+  // curto demais para o Supabase acessado do Brasil com pool de 2 conexões —
+  // uma venda grande expirava no meio e era desfeita.
+  const client = new PrismaClient({
+    adapter,
+    transactionOptions: { maxWait: 15_000, timeout: 40_000 },
+  });
   globalForPrisma.prisma = client;
   return client;
 }
