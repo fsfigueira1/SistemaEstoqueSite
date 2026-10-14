@@ -1,6 +1,7 @@
 // Cache local do catálogo (produtos ativos). O PDV lê daqui para funcionar
 // offline e também para responder mais rápido quando online.
 import { getDB, norm, type CachedProduct } from './db';
+import { smartSearch, suggestFor } from '@/lib/smartSearch';
 
 export type { CachedProduct } from './db';
 
@@ -60,24 +61,23 @@ export async function findByBarcode(code: string): Promise<CachedProduct | null>
   return hit;
 }
 
-/** Busca por nome ou SKU no cache (produtos ativos). */
+/** Busca inteligente (nome, SKU, código) no cache — mesma regra do servidor. */
 export async function searchProducts(term: string, limit = 8): Promise<CachedProduct[]> {
   const dbp = getDB();
   if (!dbp) return [];
-  const q = norm(term);
-  if (q.length < 2) return [];
+  if (norm(term).length < 2) return [];
   const db = await dbp;
+  const active = ((await db.getAll('products')) as CachedProduct[]).filter((p) => p.status === 'ACTIVE');
+  return smartSearch(active, term, (p) => [p.name, p.sku, p.barcode]).slice(0, limit);
+}
 
-  const out: CachedProduct[] = [];
-  const tx = db.transaction('products');
-  for await (const cursor of tx.store) {
-    const p = cursor.value as CachedProduct;
-    if (p.status === 'ACTIVE' && (norm(p.name).includes(q) || norm(p.sku).includes(q))) {
-      out.push(p);
-      if (out.length >= limit) break;
-    }
-  }
-  return out;
+/** "Você quis dizer…?" sem internet, com as palavras do catálogo em cache. */
+export async function suggestSearch(term: string): Promise<string | null> {
+  const dbp = getDB();
+  if (!dbp) return null;
+  const db = await dbp;
+  const active = ((await db.getAll('products')) as CachedProduct[]).filter((p) => p.status === 'ACTIVE');
+  return suggestFor(active, term, (p) => [p.name, p.sku, p.barcode]);
 }
 
 /** Abate estoque no cache depois de uma venda offline (não deixa revender o mesmo item). */

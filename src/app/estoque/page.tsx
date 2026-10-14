@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
+import { fetchAllProducts } from '@/lib/fetchAllProducts';
 import { ProductStatus } from '@/generated/prisma/enums';
 import Layout, { PageHeader } from '@/components/Layout';
 import {
@@ -12,8 +13,11 @@ import {
   Trash2,
   Pencil,
   PackagePlus,
-  PackageMinus,
+  Search,
 } from 'lucide-react';
+import { StockAdjustModal } from '@/components/stock/StockAdjustModal';
+import { SearchSuggestion } from '@/components/SearchSuggestion';
+import { buildSearchIndex, productSearchFields } from '@/lib/smartSearch';
 import { errorText } from '@/lib/friendlyError';
 import PriceAdvisor from '@/components/PriceAdvisor';
 
@@ -115,16 +119,12 @@ export default function EstoquePage() {
   const [deleteBlocked, setDeleteBlocked] = useState(false);
   const [deleteForce, setDeleteForce] = useState(false);
 
-  // ---------- ajuste de estoque (entrada/saída num produto já cadastrado) ----------
+  // ajuste de estoque (entrada/saída/contagem) num produto já cadastrado
   const [stockTarget, setStockTarget] = useState<Product | null>(null);
-  const [stockType, setStockType] = useState<'add' | 'remove'>('add');
-  const [stockQty, setStockQty] = useState('');
-  const [stockNote, setStockNote] = useState('');
-  const [stockSaving, setStockSaving] = useState(false);
-  const [stockErr, setStockErr] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const reload = useCallback(async () => {
-    const r = await fetch('/api/products?limit=1000').then((x) => x.json());
+    const r = await fetchAllProducts<Product>();
     if (r.success) setProducts(r.data?.products ?? []);
   }, []);
 
@@ -132,7 +132,7 @@ export default function EstoquePage() {
     (async () => {
       try {
         const [p, c] = await Promise.all([
-          fetch('/api/products?limit=1000').then((r) => r.json()),
+          fetchAllProducts<Product>(),
           fetch('/api/categories?limit=200').then((r) => r.json()),
         ]);
         if (p.success) setProducts(p.data?.products ?? []);
@@ -340,59 +340,9 @@ export default function EstoquePage() {
     }
   };
 
-  // ---------- ajuste de estoque ----------
-  const openStockAdjust = (p: Product, type: 'add' | 'remove' = 'add') => {
-    setStockTarget(p);
-    setStockType(type);
-    setStockQty('');
-    setStockNote('');
-    setStockErr(null);
-  };
-  const closeStockAdjust = () => {
-    setStockTarget(null);
-    setStockQty('');
-    setStockNote('');
-    setStockErr(null);
-    setStockSaving(false);
-  };
-
-  const submitStockAdjust = async () => {
-    if (!stockTarget) return;
-    const qty = toNumber(stockQty);
-    if (qty <= 0) {
-      setStockErr('Informe uma quantidade maior que zero');
-      return;
-    }
-    setStockSaving(true);
-    setStockErr(null);
-    try {
-      const res = await fetch('/api/stock/movement', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: stockType,
-          productId: stockTarget.id,
-          quantity: qty,
-          notes: stockNote.trim() || undefined,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) {
-        setStockErr(errorText(data, 'Não foi possível ajustar o estoque'));
-        return;
-      }
-      // já gravou: fecha antes de recarregar a lista (se a recarga falhar,
-      // ninguém reenvia o ajuste achando que não foi)
-      closeStockAdjust();
-      reload().catch(() => {});
-    } catch {
-      setStockErr('Sem conexão');
-    } finally {
-      setStockSaving(false);
-    }
-  };
-
   // ---------- derived ----------
+  const searchIndex = useMemo(() => buildSearchIndex(products, productSearchFields), [products]);
+  const shown = useMemo(() => searchIndex.search(search), [searchIndex, search]);
   const catName = useMemo(() => {
     const m = new Map(categories.map((c) => [c.id, c.name]));
     return (id?: string | null) => (id && m.get(id)) || '—';
@@ -461,6 +411,23 @@ export default function EstoquePage() {
           </p>
         </section>
 
+        {/* busca por nome (para quem não tem o produto na mão) */}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder='Procurar produto: ex. "caneta preta", "caderno batman" (aceita erro de digitação)'
+            className="w-full rounded-lg border border-border bg-card py-2.5 pl-10 pr-4 focus:border-ring focus:ring-2 focus:ring-ring/40"
+          />
+          {search.trim() && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+              {shown.length} encontrado{shown.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
+
         {/* tabela */}
         <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
           {loading ? (
@@ -487,7 +454,14 @@ export default function EstoquePage() {
                 </tr>
               </thead>
               <tbody>
-                {products.map((p) => {
+                {shown.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <SearchSuggestion products={products} query={search} onPick={setSearch} />
+                    </td>
+                  </tr>
+                )}
+                {shown.map((p) => {
                   const stock = toNumber(p.stockQuantity);
                   const min = toNumber(p.minStockLevel ?? 0);
                   return (
@@ -531,7 +505,7 @@ export default function EstoquePage() {
                         <div className="flex justify-end gap-1">
                           <button
                             type="button"
-                            onClick={() => openStockAdjust(p, 'add')}
+                            onClick={() => setStockTarget(p)}
                             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent-soft hover:text-accent-soft-foreground"
                             aria-label={`Ajustar estoque de ${p.name}`}
                             title="Ajustar estoque"
@@ -822,116 +796,17 @@ export default function EstoquePage() {
         </div>
       )}
 
-      {/* modal ajustar estoque */}
       {stockTarget && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="estoque-ajuste-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-        >
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
-            <div className="mb-1 flex items-center justify-between">
-              <h2 id="estoque-ajuste-title" className="text-xl font-bold text-foreground">
-                Ajustar estoque
-              </h2>
-              <button
-                type="button"
-                onClick={closeStockAdjust}
-                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label="Fechar"
-              >
-                <XCircle className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="mb-4 text-sm text-muted-foreground">
-              {stockTarget.name} · estoque atual{' '}
-              <span className="font-semibold text-foreground">{toNumber(stockTarget.stockQuantity)}</span>
-            </p>
-
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setStockType('add')}
-                className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 font-medium transition-colors ${
-                  stockType === 'add'
-                    ? 'border-primary bg-accent-soft text-accent-soft-foreground'
-                    : 'border-border text-muted-foreground hover:bg-muted'
-                }`}
-              >
-                <PackagePlus className="h-4 w-4" />
-                Entrada
-              </button>
-              <button
-                type="button"
-                onClick={() => setStockType('remove')}
-                className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 font-medium transition-colors ${
-                  stockType === 'remove'
-                    ? 'border-primary bg-accent-soft text-accent-soft-foreground'
-                    : 'border-border text-muted-foreground hover:bg-muted'
-                }`}
-              >
-                <PackageMinus className="h-4 w-4" />
-                Saída
-              </button>
-            </div>
-
-            <Field label={stockType === 'add' ? 'Quantidade a adicionar' : 'Quantidade a remover'} required>
-              <input
-                autoFocus
-                type="number"
-                min="1"
-                step="1"
-                value={stockQty}
-                onChange={(e) => {
-                  setStockQty(e.target.value);
-                  setStockErr(null);
-                }}
-                className={inputCls()}
-                placeholder="0"
-              />
-            </Field>
-
-            <div className="mt-4">
-              <Field label="Observação" hint="Opcional — ex.: nota fiscal, motivo do ajuste">
-                <input
-                  value={stockNote}
-                  onChange={(e) => setStockNote(e.target.value)}
-                  className={inputCls()}
-                  placeholder="Ex.: compra NF 12345"
-                />
-              </Field>
-            </div>
-
-            {stockErr && (
-              <div
-                role="alert"
-                className="mt-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
-              >
-                {stockErr}
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={closeStockAdjust}
-                className="rounded-lg border border-border px-4 py-2 font-medium text-foreground transition-colors hover:bg-muted"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={submitStockAdjust}
-                disabled={stockSaving}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-              >
-                {stockSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                Confirmar
-              </button>
-            </div>
-          </div>
-        </div>
+        <StockAdjustModal
+          product={stockTarget}
+          onClose={() => setStockTarget(null)}
+          onSaved={(newStock) => {
+            const id = stockTarget.id;
+            setStockTarget(null);
+            setProducts((list) => list.map((x) => (x.id === id ? { ...x, stockQuantity: newStock } : x)));
+            reload().catch(() => {});
+          }}
+        />
       )}
     </Layout>
   );

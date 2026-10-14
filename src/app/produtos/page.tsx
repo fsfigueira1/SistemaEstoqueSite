@@ -1,10 +1,15 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { fetchAllProducts } from '@/lib/fetchAllProducts';
 import { ProductStatus } from '@/generated/prisma/enums';
 import Layout, { PageHeader } from '@/components/Layout';
 import Link from 'next/link';
-import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, XCircle, Loader2, TrendingUp, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, PackagePlus, AlertTriangle, XCircle, Loader2, TrendingUp, FileSpreadsheet, Tag } from 'lucide-react';
+import { StockAdjustModal } from '@/components/stock/StockAdjustModal';
+import { SearchSuggestion } from '@/components/SearchSuggestion';
+import { buildSearchIndex, productSearchFields } from '@/lib/smartSearch';
+import { GenerateBarcodeButton, PrintLabelNotice, PromoFields, useProductPromo } from '@/components/labels/PromoFields';
 import ProfitHint from '@/components/ProfitHint';
 import { errorText } from '@/lib/friendlyError';
 import SupplierSelect from '@/components/SupplierSelect';
@@ -25,12 +30,6 @@ function toNumber(value: unknown): number {
 }
 const brl = (v: unknown) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(toNumber(v));
-const norm = (v: unknown) =>
-  String(v ?? '')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim();
 
 // ---------- types ----------
 interface Category {
@@ -103,10 +102,14 @@ export default function ProdutosPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'base', string>>>({});
   const [saving, setSaving] = useState(false);
+  const promo = useProductPromo();
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [justSaved, setJustSaved] = useState<{ id: string; name: string; warning?: string | null } | null>(null);
+  const [stockTarget, setStockTarget] = useState<Product | null>(null);
+  const originalPriceRef = useRef(0);
 
   const reload = useCallback(async () => {
-    const res = await fetch('/api/products?limit=1000');
-    const data = await res.json();
+    const data = await fetchAllProducts<Product>();
     if (data.success) setProducts(data.data?.products ?? []);
   }, []);
 
@@ -139,7 +142,7 @@ export default function ProdutosPage() {
     (async () => {
       try {
         const [p, c] = await Promise.all([
-          fetch('/api/products?limit=1000').then((r) => r.json()),
+          fetchAllProducts<Product>(),
           fetch('/api/categories').then((r) => r.json()),
         ]);
         if (p.success) setProducts(p.data?.products ?? []);
@@ -151,9 +154,10 @@ export default function ProdutosPage() {
   }, []);
 
   // ---------- derived ----------
+  const searchIndex = useMemo(() => buildSearchIndex(products, productSearchFields), [products]);
   const filtered = useMemo(() => {
-    return products.filter((p) => {
-      if (search && !norm(`${p.name} ${p.sku} ${p.barcode ?? ''}`).includes(norm(search))) return false;
+    // busca inteligente já devolve na ordem do mais parecido
+    return searchIndex.search(search).filter((p) => {
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (onlyBelowMarket && !priceAlerts.has(p.id)) return false;
       if (stockFilter !== 'all') {
@@ -164,7 +168,7 @@ export default function ProdutosPage() {
       }
       return true;
     });
-  }, [products, search, statusFilter, stockFilter, onlyBelowMarket, priceAlerts]);
+  }, [searchIndex, search, statusFilter, stockFilter, onlyBelowMarket, priceAlerts]);
 
   const stats = useMemo(() => {
     let low = 0;
@@ -185,11 +189,16 @@ export default function ProdutosPage() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setErrors({});
+    setPromoError(null);
+    promo.load(null);
     setModalOpen(true);
   };
   const openEdit = (p: Product) => {
     setEditingId(p.id);
     originalStockRef.current = toNumber(p.stockQuantity);
+    originalPriceRef.current = toNumber(p.salePrice);
+    setPromoError(null);
+    promo.load(p.id);
     setForm({
       nome: p.name,
       codigoBarras: p.barcode ?? '',
@@ -235,7 +244,9 @@ export default function ProdutosPage() {
     if (toNumber(form.custo) < 0) e.custo = 'Custo não pode ser negativo';
     if (toNumber(form.estoque) < 0) e.estoque = 'Estoque não pode ser negativo';
     if (toNumber(form.estoqueMinimo) < 0) e.estoqueMinimo = 'Valor não pode ser negativo';
-    if (Object.keys(e).length) {
+    const promoErr = promo.validate(toNumber(form.preco));
+    setPromoError(promoErr);
+    if (Object.keys(e).length || promoErr) {
       setErrors(e);
       return;
     }
@@ -267,6 +278,10 @@ export default function ProdutosPage() {
         return;
       }
       // já salvou: fecha primeiro (reenviar somaria o ajuste de estoque de novo)
+      const savedId: string = editingId ?? data.data?.id;
+      const priceChanged = !editingId || toNumber(form.preco) !== originalPriceRef.current || promo.changed();
+      const promoWarning = savedId ? await promo.save(savedId) : null;
+      setJustSaved(savedId && (priceChanged || promoWarning) ? { id: savedId, name: form.nome.trim(), warning: promoWarning } : null);
       closeModal();
       reload().catch(() => {});
       loadAlerts();
@@ -316,6 +331,8 @@ export default function ProdutosPage() {
           }
         />
 
+        <PrintLabelNotice saved={justSaved} onClose={() => setJustSaved(null)} />
+
         {/* stats */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard icon={<Package className="h-4 w-4" />} label="Produtos" value={String(stats.total)} />
@@ -358,7 +375,7 @@ export default function ProdutosPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nome, SKU ou código de barras"
+              placeholder="Buscar: ex. &quot;caneta preta&quot;, &quot;caderno batman&quot;, SKU ou código"
               className="w-full rounded-lg border border-border py-2 pl-9 pr-3 focus:border-ring focus:ring-2 focus:ring-ring/40"
             />
           </div>
@@ -391,7 +408,9 @@ export default function ProdutosPage() {
               Carregando produtos…
             </div>
           ) : filtered.length === 0 ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">Nenhum produto encontrado.</div>
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              <SearchSuggestion products={products} query={search} onPick={setSearch} />
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -456,6 +475,22 @@ export default function ProdutosPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
+                          <Link
+                            href={`/etiquetas?produtos=${encodeURIComponent(p.id)}`}
+                            className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            aria-label="Imprimir etiqueta"
+                            title="Imprimir etiqueta de gôndola"
+                          >
+                            <Tag className="h-4 w-4" />
+                          </Link>
+                          <button
+                            onClick={() => setStockTarget(p)}
+                            className="rounded p-1.5 text-muted-foreground hover:bg-accent-soft hover:text-accent-soft-foreground"
+                            aria-label={`Ajustar estoque de ${p.name}`}
+                            title="Ajustar estoque (entrada, saída ou contagem)"
+                          >
+                            <PackagePlus className="h-4 w-4" />
+                          </button>
                           <button
                             onClick={() => openEdit(p)}
                             className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -517,13 +552,16 @@ export default function ProdutosPage() {
                   hint="O código escaneável no PDV"
                   error={errors.codigoBarras}
                 >
-                  <input
-                    value={form.codigoBarras}
-                    onChange={(e) => set('codigoBarras', e.target.value)}
-                    className={inputCls(errors.codigoBarras)}
-                    placeholder="Ex.: 7891234567890"
-                    inputMode="numeric"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      value={form.codigoBarras}
+                      onChange={(e) => set('codigoBarras', e.target.value)}
+                      className={inputCls(errors.codigoBarras)}
+                      placeholder="Ex.: 7891234567890"
+                      inputMode="numeric"
+                    />
+                    {!form.codigoBarras.trim() && <GenerateBarcodeButton onCode={(c) => set('codigoBarras', c)} />}
+                  </div>
                 </Field>
                 <Field label="SKU / código interno" hint="Opcional — usa o de barras se vazio">
                   <input
@@ -586,6 +624,16 @@ export default function ProdutosPage() {
 
               <ProfitHint cost={toNumber(form.custo)} price={toNumber(form.preco)} onUsePrice={applyPrice} />
 
+              <PromoFields
+                value={promo.promo}
+                onChange={(v) => {
+                  promo.setPromo(v);
+                  setPromoError(null);
+                }}
+                error={promoError}
+                inputCls={inputCls}
+              />
+
               <PriceAdvisor
                 barcode={form.codigoBarras}
                 name={form.nome}
@@ -607,9 +655,16 @@ export default function ProdutosPage() {
                     disabled={!!editingId}
                   />
                   {editingId && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Ajuste o estoque por compras/vendas, não aqui.
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const p = products.find((x) => x.id === editingId);
+                        if (p) setStockTarget({ ...p, stockQuantity: toNumber(form.estoque) });
+                      }}
+                      className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      <PackagePlus className="h-3.5 w-3.5" /> Ajustar estoque
+                    </button>
                   )}
                 </Field>
                 <Field label="Estoque mínimo" error={errors.estoqueMinimo}>
@@ -654,6 +709,24 @@ export default function ProdutosPage() {
             </div>
           </div>
         </div>
+      )}
+      {stockTarget && (
+        <StockAdjustModal
+          product={stockTarget}
+          onClose={() => setStockTarget(null)}
+          onSaved={(newStock) => {
+            const id = stockTarget.id;
+            setStockTarget(null);
+            setProducts((list) => list.map((x) => (x.id === id ? { ...x, stockQuantity: newStock } : x)));
+            // cadastro aberto do mesmo produto: o "original" acompanha, senão
+            // salvar o cadastro desfaria o ajuste
+            if (editingId === id) {
+              originalStockRef.current = newStock;
+              setForm((f) => ({ ...f, estoque: String(newStock) }));
+            }
+            reload().catch(() => {});
+          }}
+        />
       )}
     </Layout>
   );

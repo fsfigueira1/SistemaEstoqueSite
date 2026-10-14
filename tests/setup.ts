@@ -1,3 +1,8 @@
+import { assertTestDatabase } from "./dbGuard";
+
+// Antes de tudo: nunca rodar contra o banco da loja (ver dbGuard.ts).
+assertTestDatabase();
+
 // Shared PrismaClient instance - import from the main lib to avoid multiple connections
 import { prisma } from "../src/lib/prisma";
 

@@ -1,5 +1,6 @@
 import { prisma, Prisma } from "../lib/prisma"
 import { ProductStatus } from "../generated/prisma/client.ts"
+import { searchProductsRanked } from "./productSearch"
 
 // Define input types for product operations
 type ProductCreateInput = {
@@ -56,28 +57,17 @@ export class ProductService {
     } = filters
 
     const skip = (page - 1) * limit
-    type StrFilter = { contains: string; mode?: "insensitive" }
     const where: {
       categoryId?: string
       supplierId?: string
       status?: ProductStatus
-      OR?: Array<{
-        name?: StrFilter
-        sku?: StrFilter
-        barcode?: StrFilter
-      }>
     } = {}
 
     if (categoryId) where.categoryId = categoryId
     if (supplierId) where.supplierId = supplierId
     if (status !== undefined) where.status = status
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { sku: { contains: search, mode: "insensitive" } },
-        { barcode: { contains: search, mode: "insensitive" } }
-      ]
-    }
+    // busca inteligente (qualquer ordem, sem acento, tolera erro de digitação)
+    if (search?.trim()) return searchProductsRanked(where, search, page, limit)
 
     const [products, total] = await Promise.all([
       prisma.product.findMany({

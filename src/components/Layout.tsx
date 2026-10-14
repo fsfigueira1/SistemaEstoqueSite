@@ -10,11 +10,13 @@ import {
   List,
   Receipt,
   Settings,
+  Tag,
   Menu,
   X,
   NotebookPen,
   ClipboardList,
   GraduationCap,
+  SpellCheck,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import DailyAssistant, { openDailyAssistant } from '@/components/DailyAssistant';
@@ -34,7 +36,9 @@ const groups: Array<{ title: string; items: Array<{ name: string; href: string; 
     title: 'Gestão',
     items: [
       { name: 'Produtos', href: '/produtos', icon: List },
+      { name: 'Etiquetas', href: '/etiquetas', icon: Tag },
       { name: 'Estoque', href: '/estoque', icon: Package },
+      { name: 'Revisão de cadastro', href: '/revisao', icon: SpellCheck },
       { name: 'Compras', href: '/compras', icon: ClipboardList },
       { name: 'Relatórios', href: '/relatorios', icon: NotebookPen },
       { name: 'Configurações', href: '/configuracoes', icon: Settings },

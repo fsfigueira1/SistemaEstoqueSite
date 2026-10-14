@@ -232,6 +232,7 @@ model Product {
   purchaseOrderItems PurchaseOrderItem[] @relation("ProductPurchaseOrderItems")
   saleItems          SaleItem[]          @relation("ProductSaleItems")
   stockMovements     StockMovement[]     @relation("ProductStockMovements")
+  label              ProductLabel?
   @@index([sku])
   @@index([barcode])
   @@index([categoryId])
@@ -463,4 +464,22 @@ model PriceCheck {
   @@index([productId])
   @@index([barcode])
   @@index([createdAt])
+}
+
+/// Etiqueta de gôndola e promoção — tabela à parte para não mexer nas
+/// colunas de Product (as consultas de produto do app inteiro continuam
+/// iguais mesmo antes do banco ser atualizado). Ver schemaUpgrade.ts.
+model ProductLabel {
+  productId      String    @id
+  /// "De R$ X" da promoção (o "por" é sempre o salePrice, que é o que o PDV cobra)
+  compareAtPrice Decimal?
+  /// último dia da promoção (inclusive); vazio = sem data para acabar
+  promoUntil     DateTime?
+  /// preço impresso na última etiqueta (para saber quando reimprimir)
+  labelPrice     Decimal?
+  /// "de" impresso na última etiqueta (0 = etiqueta sem promoção)
+  labelCompareAt Decimal?
+  labelPrintedAt DateTime?
+  updatedAt      DateTime  @default(now()) @updatedAt
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
 }

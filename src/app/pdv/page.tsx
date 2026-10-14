@@ -21,6 +21,7 @@ import { getSettings, loadSettings, type StoreSettings } from '@/lib/settings';
 import {
   findByBarcode,
   searchProducts,
+  suggestSearch,
   refreshProductCache,
   applyLocalStockDelta,
   type CachedProduct,
@@ -132,6 +133,8 @@ export default function PDVPage() {
   const [searchResults, setSearchResults] = useState<ApiProduct[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
+  // "Você quis dizer…?" quando a busca não acha nada
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const [highlight, setHighlight] = useState(-1);
 
   const [avulsoOpen, setAvulsoOpen] = useState(false);
@@ -333,6 +336,7 @@ export default function PDVPage() {
       setSearchResults([]);
       setHighlight(-1);
       setSearchError(false);
+      setSuggestion(null);
       return;
     }
     setSearching(true);
@@ -350,12 +354,14 @@ export default function PDVPage() {
         setSearchResults(list);
         setHighlight(list.length > 0 ? 0 : -1);
         setSearchError(false);
+        setSuggestion(list.length ? null : (data?.data?.suggestion ?? null));
       } catch {
         // sem internet: busca no catálogo em cache
         const cached = await searchProducts(term, 8);
         setSearchResults(cached.map(cachedToApi));
         setHighlight(cached.length > 0 ? 0 : -1);
         setSearchError(cached.length === 0);
+        setSuggestion(cached.length ? null : await suggestSearch(term));
       } finally {
         setSearching(false);
       }
@@ -383,6 +389,7 @@ export default function PDVPage() {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (highlight >= 0 && searchResults[highlight]) pickResult(searchResults[highlight]);
+      else if (!searchResults.length && suggestion) setSearchTerm(suggestion); // Enter aceita a sugestão
     } else if (e.key === 'Escape') {
       setSearchTerm('');
       setSearchResults([]);
@@ -839,13 +846,30 @@ export default function PDVPage() {
                   )}
                 </div>
 
-                {searchTerm.trim().length >= 2 && !searching && searchError && (
+                {searchTerm.trim().length >= 2 && !searching && suggestion && searchResults.length === 0 && (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Nenhum produto encontrado. Você quis dizer{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchTerm(suggestion);
+                        searchRef.current?.focus();
+                      }}
+                      className="font-semibold text-primary underline-offset-2 hover:underline"
+                    >
+                      {suggestion}
+                    </button>
+                    ? <span className="text-xs">(Enter aceita)</span>
+                  </p>
+                )}
+
+                {searchTerm.trim().length >= 2 && !searching && !suggestion && searchError && (
                   <p className="mt-3 text-sm text-danger">
                     Não foi possível buscar agora. Verifique a conexão e tente de novo.
                   </p>
                 )}
 
-                {searchTerm.trim().length >= 2 && !searching && !searchError && searchResults.length === 0 && (
+                {searchTerm.trim().length >= 2 && !searching && !suggestion && !searchError && searchResults.length === 0 && (
                   <p className="mt-3 text-sm text-muted-foreground">Nenhum produto encontrado.</p>
                 )}
 
