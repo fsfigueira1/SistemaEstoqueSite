@@ -1,6 +1,6 @@
 {
   "name": "lacolaria-erp",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -100,7 +100,7 @@
       {
         "provider": "github",
         "owner": "fsfigueira1",
-        "repo": "SistemaEstoqueSite",
+        "repo": "lacolaria-atualizacoes",
         "releaseType": "release"
       }
     ],
