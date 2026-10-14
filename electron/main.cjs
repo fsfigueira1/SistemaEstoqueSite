@@ -380,7 +380,12 @@ async function createWindow() {
     await waitForServer();
     await mainWindow.loadURL(BASE_URL);
   } catch (err) {
-    setupErrorPage(err && err.message ? err.message : err);
+    // ERR_ABORTED (-3) = outra navegação substituiu esta (redirect, ou o
+    // next dev recarregando a página após compilar). A página está abrindo
+    // normalmente — não é falha, não pode cair na tela de erro.
+    if (!(err && (err.errno === -3 || err.code === "ERR_ABORTED"))) {
+      setupErrorPage(err && err.message ? err.message : err);
+    }
   }
   if (!mainWindow.isVisible()) mainWindow.show();
 }
@@ -786,5 +791,28 @@ ipcMain.handle("print-receipt", async (_e, pageSize) => {
   }
   return new Promise((resolve) => {
     mainWindow.webContents.print(printOptions, (ok, reason) => resolve({ ok, reason }));
+  });
+});
+
+// ---------------- impressão das etiquetas de gôndola ----------------
+// Folha A4/A3 numa impressora comum (não é a térmica do comprovante), por isso
+// sempre abre o diálogo para escolher a impressora. Margens "none" e escala
+// 100%: a própria página já traz as margens e as etiquetas em milímetros —
+// qualquer "ajustar à página" do driver muda o tamanho de 3cm x 6,5cm.
+ipcMain.handle("print-labels", async (_e, paper) => {
+  if (!mainWindow) return { ok: false, reason: "sem janela" };
+  const pageSize = paper === "A3" ? "A3" : "A4";
+  return new Promise((resolve) => {
+    mainWindow.webContents.print(
+      {
+        silent: false,
+        pageSize,
+        landscape: false,
+        margins: { marginType: "none" },
+        scaleFactor: 100,
+        printBackground: true,
+      },
+      (ok, reason) => resolve({ ok, reason }),
+    );
   });
 });

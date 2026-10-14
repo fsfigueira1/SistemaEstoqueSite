@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { getSettings } from '@/lib/settings';
 import type { PayMethod } from '@/lib/payments';
 import { ReceiptPayments } from '@/components/pdv/ReceiptPayments';
@@ -78,6 +79,12 @@ export function ReceiptPrint({
   const printingRef = React.useRef(false);
   const autoStarted = React.useRef(false);
   const receiptRef = React.useRef<HTMLDivElement>(null);
+  // O comprovante é montado direto no <body> (portal), nunca dentro do modal
+  // do PDV/Vendas: dentro do modal o "top: 0" da impressão era relativo ao
+  // modal centralizado, e o papel saía com um bloco em branco no começo e o
+  // fim cortado (a altura da página é medida só pelo comprovante).
+  const [host, setHost] = React.useState<HTMLElement | null>(null);
+  React.useEffect(() => setHost(document.body), []);
 
   React.useEffect(() => {
     const after = () => {
@@ -124,12 +131,12 @@ export function ReceiptPrint({
   }, [onPrintComplete, cfg.receiptWidth]);
 
   React.useEffect(() => {
-    if (!autoPrint || autoStarted.current) return;
+    if (!autoPrint || !host || autoStarted.current) return;
     autoStarted.current = true;
     // dois frames para o layout do comprovante ser aplicado antes de imprimir
     const id = requestAnimationFrame(() => requestAnimationFrame(() => handlePrint()));
     return () => cancelAnimationFrame(id);
-  }, [autoPrint, handlePrint]);
+  }, [autoPrint, host, handlePrint]);
 
   const d = new Date(data.date);
   const dateStr = d.toLocaleString('pt-BR', {
@@ -150,12 +157,9 @@ export function ReceiptPrint({
           cfg.receiptWidth em runtime, por isso é injetado aqui e não fica só
           no globals.css. Tem que bater com o data-w abaixo. */}
       <style>{`@media print { @page { size: ${cssPageSize} auto; margin: 0; } } `}</style>
+      {host && createPortal(
       <div id="receipt-print-area" data-w={cfg.receiptWidth}>
-      <div
-        ref={receiptRef}
-        className="receipt"
-        style={{ width: cfg.receiptWidth === '58mm' ? '48mm' : '72mm' }}
-      >
+      <div ref={receiptRef} className="receipt">
         <div className="center bold big">{storeName}</div>
         {storeInfo && <div className="center small">{storeInfo}</div>}
         {cfg.receiptShowCompany && cfg.companyDoc && (
@@ -223,16 +227,18 @@ export function ReceiptPrint({
           ))}
         <div className="feed" />
       </div>
-      </div>
+      </div>,
+      host,
+      )}
 
       {showButton && (
-        <button type="button" onClick={handlePrint} className="no-print print-btn">
+        <button type="button" onClick={handlePrint} className="no-print receipt-print-btn">
           Imprimir comprovante
         </button>
       )}
 
-      <style jsx>{`
-        .receipt {
+      <style jsx global>{`
+        #receipt-print-area .receipt {
           width: 72mm;
           margin: 0 auto;
           padding: 2mm 0;
@@ -242,40 +248,40 @@ export function ReceiptPrint({
           color: #000;
           background: #fff;
         }
-        .center {
+        #receipt-print-area .center {
           text-align: center;
         }
-        .bold {
+        #receipt-print-area .bold {
           font-weight: bold;
         }
-        .big {
+        #receipt-print-area .big {
           font-size: 14px;
         }
-        .small {
+        #receipt-print-area .small {
           font-size: 10px;
         }
-        .sep {
+        #receipt-print-area .sep {
           border-top: 1px dashed #000;
           margin: 2mm 0;
         }
-        .row {
+        #receipt-print-area .row {
           display: flex;
           justify-content: space-between;
           gap: 6px;
           margin: 1px 0;
         }
-        .item {
+        #receipt-print-area .item {
           margin-bottom: 2px;
           page-break-inside: avoid;
         }
-        .item-name {
+        #receipt-print-area .item-name {
           font-weight: bold;
           word-break: break-word;
         }
-        .feed {
+        #receipt-print-area .feed {
           height: 8mm;
         }
-        .print-btn {
+        .receipt-print-btn {
           margin-top: 12px;
           width: 100%;
           padding: 10px 16px;
@@ -286,16 +292,12 @@ export function ReceiptPrint({
           font-weight: 600;
           cursor: pointer;
         }
-        .print-btn:hover {
+        .receipt-print-btn:hover {
           background: #047857;
         }
         @media print {
           .no-print {
             display: none !important;
-          }
-          :global(body) {
-            margin: 0;
-            background: #fff;
           }
         }
       `}</style>

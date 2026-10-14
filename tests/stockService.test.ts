@@ -322,22 +322,23 @@ describe('Stock Service', () => {
       ).rejects.toThrow('Cannot modify stock for inactive or discontinued product');
     });
 
-    it('should throw error for non-positive quantity', async () => {
-      await expect(
-        StockService.adjustStock({
-          productId: testProduct.id,
-          quantity: 0,
-          performedById: adminUser.id
-        })
-      ).rejects.toThrow('Quantity must be positive');
+    it('should allow counting the stock down to zero', async () => {
+      const result = await StockService.adjustStock({
+        productId: testProduct.id,
+        quantity: 0,
+        performedById: adminUser.id
+      });
+      expect(result.product?.stockQuantity).toBe(0);
+    });
 
+    it('should throw error for negative target quantity', async () => {
       await expect(
         StockService.adjustStock({
           productId: testProduct.id,
           quantity: -5,
           performedById: adminUser.id
         })
-      ).rejects.toThrow('Quantity must be positive');
+      ).rejects.toThrow('Stock cannot be negative');
     });
   });
 

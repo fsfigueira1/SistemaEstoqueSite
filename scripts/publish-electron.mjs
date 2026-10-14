@@ -1,7 +1,10 @@
 /* eslint-disable no-console */
 // Publica o instalador Windows no GitHub Releases (auto-update).
-// Lê GH_TOKEN do .env (gitignorado). Cria e envia a tag vX.Y.Z antes de
-// publicar — sem a tag no git, a API do GitHub recusa o release (422).
+// O código fica num repositório privado; os instaladores vão para o
+// repositório público fsfigueira1/lacolaria-atualizacoes (build.publish no
+// package.json), que não tem código — os PCs da loja baixam de lá sem senha.
+// Lê GH_TOKEN do .env (gitignorado). Cria e envia a tag vX.Y.Z no código
+// antes de publicar, para saber de qual commit saiu cada versão.
 import "dotenv/config";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";

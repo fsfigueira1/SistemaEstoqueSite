@@ -8,7 +8,8 @@
 // colunas/tabelas novas existem. Todos os comandos são idempotentes
 // (IF NOT EXISTS), então rodar em 3 PCs ao mesmo tempo é seguro.
 //
-// Mantenha em sincronia com prisma/migrations/20260924120000_reports_ai/migration.sql.
+// Mantenha em sincronia com prisma/migrations/20260924120000_reports_ai/migration.sql
+// (e as seguintes, como 20261014120000_product_labels).
 import { prisma } from "@/lib/prisma"
 
 export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
@@ -80,6 +81,19 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS "PriceCheck_barcode_idx" ON "PriceCheck"("barcode")`,
   `CREATE INDEX IF NOT EXISTS "PriceCheck_createdAt_idx" ON "PriceCheck"("createdAt")`,
   `ALTER TABLE "PriceCheck" ADD COLUMN IF NOT EXISTS "provider" TEXT`,
+
+  // --- 0.3.6: etiquetas de gôndola e promoção ---
+  `CREATE TABLE IF NOT EXISTS "ProductLabel" (
+    "productId" TEXT NOT NULL,
+    "compareAtPrice" DECIMAL(65,30),
+    "promoUntil" TIMESTAMP(3),
+    "labelPrice" DECIMAL(65,30),
+    "labelCompareAt" DECIMAL(65,30),
+    "labelPrintedAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ProductLabel_pkey" PRIMARY KEY ("productId"),
+    CONSTRAINT "ProductLabel_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
 ]
 
 let upgrade: Promise<void> | null = null

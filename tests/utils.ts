@@ -1,3 +1,4 @@
+import { assertTestDatabase } from "./dbGuard";
 import { prisma } from './setup';
 
 /**
@@ -5,6 +6,7 @@ import { prisma } from './setup';
  * Improved version with better locking prevention
  */
 export async function cleanupDatabase() {
+  assertTestDatabase();
   let lastError: unknown;
 
   // Try up to 3 times with increasing delays

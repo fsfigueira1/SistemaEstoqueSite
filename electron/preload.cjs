@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld(
     // Backup automático: abrir a pasta no Explorer / escolher outra pasta.
     openBackupFolder: () => ipcRenderer.invoke('open-backup-folder'),
     chooseBackupFolder: () => ipcRenderer.invoke('choose-backup-folder'),
+
+    // Etiquetas de gôndola em folha A4/A3 (sempre com diálogo de impressora).
+    printLabels: (paper) => ipcRenderer.invoke('print-labels', paper),
   }
 );
 

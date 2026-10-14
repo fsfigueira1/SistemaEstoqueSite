@@ -17,6 +17,7 @@ import {
   NotebookPen,
 } from 'lucide-react';
 import { errorText } from '@/lib/friendlyError';
+import { LabelReminder } from '@/components/labels/LabelReminder';
 
 type Stats = {
   totalProducts: number;
@@ -86,6 +87,8 @@ export default function DashboardPage() {
             </Link>
           }
         />
+
+        <LabelReminder />
 
         {loading ? (
           <div className="py-20 text-center text-sm text-muted-foreground">

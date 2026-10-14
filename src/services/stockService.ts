@@ -146,7 +146,8 @@ export class StockService {
     // Validate inputs
     if (!input.productId) throw new Error('Product ID is required')
     if (!input.performedById) throw new Error('Performed by ID is required')
-    if (input.quantity === 0) throw new Error('Quantity must not be zero')
+    // quantity = estoque final (contagem); zero é válido (acabou na prateleira)
+    if (!Number.isInteger(input.quantity) || input.quantity < 0) throw new Error('Stock cannot be negative')
 
     // Verify product exists and is active
     const product = await prisma.product.findUnique({ where: { id: input.productId } })
