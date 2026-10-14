@@ -17,8 +17,11 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     // só JSON: formulário de outro site (CSRF) não consegue mandar
-    // application/json sem preflight, que o servidor não libera
-    if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
+    // application/json sem preflight, que o servidor não libera. Compara o
+    // tipo principal (antes do ";") — "text/plain; charset=application/json"
+    // passa sem preflight e não pode ser aceito.
+    const mime = (request.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase()
+    if (mime !== "application/json") {
       return NextResponse.json({ success: false, error: "Envie JSON" }, { status: 415 })
     }
     const body = await request.json().catch(() => ({}))
