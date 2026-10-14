@@ -16,6 +16,11 @@ export async function GET() {
 //   { action: "inactivate", ids: [...] } — desativa duplicados
 export async function POST(request: Request) {
   try {
+    // só JSON: formulário de outro site (CSRF) não consegue mandar
+    // application/json sem preflight, que o servidor não libera
+    if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
+      return NextResponse.json({ success: false, error: "Envie JSON" }, { status: 415 })
+    }
     const body = await request.json().catch(() => ({}))
     if (body?.action === "names") {
       const renamed = await CatalogReviewService.applyNames(body.fixes, Boolean(body.spacing))
