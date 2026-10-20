@@ -19,6 +19,9 @@ export function newListCode(rand: () => number = Math.random): string {
   return `L-${code}`
 }
 
+/** Até junho a loja ainda monta lista do ano corrente; depois, do ano seguinte. */
+export const defaultSchoolYear = (now = new Date()) => (now.getMonth() <= 5 ? now.getFullYear() : now.getFullYear() + 1)
+
 /** Mantém o texto da loja ("3º ano"), só arruma os espaços. */
 export const normalizeGrade = (grade: string) => grade.trim().replace(/\s+/g, " ")
 

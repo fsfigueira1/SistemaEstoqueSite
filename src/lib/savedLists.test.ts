@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { slugify, newListCode, LIST_CODE_ALPHABET, normalizeGrade, toSaveItems, savedLines } from './savedLists'
+import { slugify, newListCode, LIST_CODE_ALPHABET, normalizeGrade, toSaveItems, savedLines, defaultSchoolYear } from './savedLists'
+
+describe('defaultSchoolYear', () => {
+  it('até junho é o ano corrente; de julho em diante, o seguinte', () => {
+    expect(defaultSchoolYear(new Date(2026, 5, 30))).toBe(2026)
+    expect(defaultSchoolYear(new Date(2026, 6, 1))).toBe(2027)
+    expect(defaultSchoolYear(new Date(2026, 0, 2))).toBe(2026)
+  })
+})
 
 describe('slugify', () => {
   it('remove acento, caixa e espaços extras', () => {

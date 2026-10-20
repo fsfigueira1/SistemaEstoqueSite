@@ -6,10 +6,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Copy, GraduationCap, MessageCircle, ShoppingCart } from 'lucide-react';
+import { Check, Copy, GraduationCap, MessageCircle, Save, ShoppingCart } from 'lucide-react';
 import Layout, { PageHeader } from '@/components/Layout';
 import ListInput from '@/components/lista/ListInput';
 import QuoteRow, { type Row } from '@/components/lista/QuoteRow';
+import SaveListDialog from '@/components/lista/SaveListDialog';
+import OpenSavedList, { type SavedListSummary } from '@/components/lista/OpenSavedList';
+import { toSaveItems, type SavedQuoteLine } from '@/lib/savedLists';
 import { allocate, quoteMessage, quoteTotals, type QuoteLine } from '@/lib/schoolList';
 import { whatsappNumber } from '@/lib/restock';
 import { errorText } from '@/lib/friendlyError';
@@ -30,6 +33,10 @@ export default function ListaEscolarPage() {
   const [copied, setCopied] = useState(false);
   const [store, setStore] = useState('loja');
   const [aiAvailable, setAiAvailable] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [savedCount, setSavedCount] = useState(0);
+  // lista salva aberta agora (para o diálogo de salvar já vir preenchido)
+  const [openedList, setOpenedList] = useState<{ schoolName: string; grade: string; schoolYear: number } | null>(null);
 
   useEffect(() => {
     loadSettings()
@@ -57,6 +64,7 @@ export default function ListaEscolarPage() {
   const build = async () => {
     setBuilding(true);
     setErr(null);
+    setOpenedList(null);
     try {
       const r = await fetch('/api/school-list/quote', {
         method: 'POST',
@@ -86,6 +94,23 @@ export default function ListaEscolarPage() {
     } finally {
       setBuilding(false);
     }
+  };
+
+  const openSaved = (list: SavedListSummary, lines: SavedQuoteLine[]) => {
+    setErr(null);
+    setRows(
+      lines.map((l, i) => ({
+        key: `${i}-${l.text}`,
+        raw: l.raw,
+        text: l.text,
+        qty: l.qty,
+        skip: false,
+        product: l.product,
+        options: l.product ? [l.product] : [],
+      })),
+    );
+    setTitle(`${list.schoolName} — ${list.grade}`);
+    setOpenedList({ schoolName: list.schoolName, grade: list.grade, schoolYear: list.schoolYear });
   };
 
   const totals = useMemo(() => quoteTotals(rows), [rows]);
@@ -131,6 +156,8 @@ export default function ListaEscolarPage() {
           title="Lista escolar"
           subtitle="Cole a lista ou tire uma foto — o orçamento sai com o que tem na loja"
         />
+
+        <OpenSavedList onOpen={openSaved} refreshKey={savedCount} />
 
         <ListInput text={text} setText={setText} onBuild={build} building={building} aiAvailable={aiAvailable} />
 
@@ -192,6 +219,13 @@ export default function ListaEscolarPage() {
                 />
                 <button
                   type="button"
+                  onClick={() => setSaveOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted"
+                >
+                  <Save className="h-4 w-4 text-primary" /> Salvar como lista da escola
+                </button>
+                <button
+                  type="button"
                   onClick={copy}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted"
                 >
@@ -217,6 +251,15 @@ export default function ListaEscolarPage() {
             </div>
           </section>
         )}
+
+        <SaveListDialog
+          open={saveOpen}
+          onOpenChange={setSaveOpen}
+          sourceText={text}
+          items={toSaveItems(rows)}
+          initial={openedList ?? undefined}
+          onSaved={() => setSavedCount((n) => n + 1)}
+        />
       </div>
     </Layout>
   );

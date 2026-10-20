@@ -75,6 +75,27 @@ const isCodeClash = (err: unknown) => {
   return target === '""' || target.includes("code")
 }
 
+// o corpo vem da tela (JSON) — não confia nos tipos
+function validateSaveInput(input: SaveListInput) {
+  const schoolName = String(input?.schoolName ?? "").trim().replace(/\s+/g, " ")
+  const slug = slugify(schoolName)
+  const grade = normalizeGrade(String(input?.grade ?? ""))
+  const schoolYear = Number(input?.schoolYear)
+  const items = Array.isArray(input?.items) ? input.items : []
+  if (!slug) throw new Error("Informe a escola")
+  if (!grade) throw new Error("Informe a série")
+  if (!Number.isInteger(schoolYear) || schoolYear < 2000 || schoolYear > 2100) throw new Error("Ano letivo inválido")
+  if (!items.length) throw new Error("A lista está vazia")
+  const rows = items.map((i, position) => ({
+    position,
+    raw: String(i?.raw ?? ""),
+    text: String(i?.text ?? ""),
+    qty: Math.max(1, Math.round(Number(i?.qty) || 1)),
+    productId: typeof i?.productId === "string" && i.productId ? i.productId : null,
+  }))
+  return { schoolName, slug, grade, schoolYear, rows }
+}
+
 export const SavedListService = {
   async listSchools(): Promise<SchoolDTO[]> {
     await ensureSchema()
@@ -83,22 +104,7 @@ export const SavedListService = {
 
   async saveList(input: SaveListInput): Promise<SavedListSummary> {
     await ensureSchema()
-    const schoolName = String(input.schoolName ?? "").trim().replace(/\s+/g, " ")
-    const slug = slugify(schoolName)
-    const grade = normalizeGrade(String(input.grade ?? ""))
-    const schoolYear = Number(input.schoolYear)
-    const items = Array.isArray(input.items) ? input.items : []
-    if (!slug) throw new Error("Informe a escola")
-    if (!grade) throw new Error("Informe a série")
-    if (!Number.isInteger(schoolYear) || schoolYear < 2000 || schoolYear > 2100) throw new Error("Ano letivo inválido")
-    if (!items.length) throw new Error("A lista está vazia")
-    const rows = items.map((i, position) => ({
-      position,
-      raw: String(i.raw ?? ""),
-      text: String(i.text ?? ""),
-      qty: Math.max(1, Math.round(Number(i.qty) || 1)),
-      productId: i.productId || null,
-    }))
+    const { schoolName, slug, grade, schoolYear, rows } = validateSaveInput(input)
 
     for (let attempt = 0; ; attempt++) {
       try {
