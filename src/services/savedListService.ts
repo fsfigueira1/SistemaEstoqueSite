@@ -5,6 +5,7 @@
 import { prisma } from "@/lib/prisma"
 import { ensureSchema } from "@/lib/schemaUpgrade"
 import {
+  gradeKey,
   newListCode,
   normalizeGrade,
   savedLines,
@@ -109,14 +110,15 @@ export const SavedListService = {
     for (let attempt = 0; ; attempt++) {
       try {
         const id = await prisma.$transaction(async (tx) => {
+          // mantém a grafia do primeiro cadastro (é o nome que o site e o robô mostram)
           const school = await tx.school.upsert({
             where: { slug },
-            update: { name: schoolName },
+            update: {},
             create: { name: schoolName, slug },
           })
-          const existing = await tx.schoolList.findUnique({
-            where: { schoolId_grade_schoolYear: { schoolId: school.id, grade, schoolYear } },
-          })
+          const key = gradeKey(grade)
+          const sameYear = await tx.schoolList.findMany({ where: { schoolId: school.id, schoolYear } })
+          const existing = sameYear.find((l) => gradeKey(l.grade) === key)
           const list = existing
             ? await tx.schoolList.update({
                 where: { id: existing.id },
@@ -151,7 +153,7 @@ export const SavedListService = {
   async getQuote(
     idOrCode: string,
     opts: { activeOnly?: boolean } = {},
-  ): Promise<{ list: SavedListSummary; lines: SavedQuoteLine[] } | null> {
+  ): Promise<{ list: SavedListSummary; lines: SavedQuoteLine[]; sourceText: string } | null> {
     await ensureSchema()
     const key = String(idOrCode ?? "").trim()
     if (!key) return null
@@ -166,7 +168,7 @@ export const SavedListService = {
       ? await prisma.product.findMany({ where: { id: { in: ids }, status: "ACTIVE" }, select: CATALOG_SELECT })
       : []
     const catalog = new Map(products.map((p) => [p.id, toCatalogProduct(p)]))
-    return { list: toSummary(list), lines: savedLines(list.items, catalog) }
+    return { list: toSummary(list), lines: savedLines(list.items, catalog), sourceText: list.sourceText }
   },
 
   async setActive(id: string, active: boolean): Promise<void> {

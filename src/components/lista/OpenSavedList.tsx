@@ -23,7 +23,7 @@ export default function OpenSavedList({
   onOpen,
   refreshKey = 0,
 }: {
-  onOpen: (list: SavedListSummary, lines: SavedQuoteLine[]) => void;
+  onOpen: (list: SavedListSummary, lines: SavedQuoteLine[], sourceText: string) => void;
   /** muda depois de salvar uma lista, para o menu já mostrar a nova */
   refreshKey?: number;
 }) {
@@ -52,7 +52,7 @@ export default function OpenSavedList({
       const r = await fetch(`/api/school-lists/${encodeURIComponent(id)}`);
       const data = await r.json();
       if (!r.ok || !data.success) throw new Error(errorText(data, 'Não consegui abrir a lista'));
-      onOpen(data.data.list, data.data.lines);
+      onOpen(data.data.list, data.data.lines, data.data.sourceText ?? '');
     } catch (e) {
       setErr(errorText(e, 'Não consegui abrir a lista'));
     } finally {

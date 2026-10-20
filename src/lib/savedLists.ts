@@ -25,18 +25,46 @@ export const defaultSchoolYear = (now = new Date()) => (now.getMonth() <= 5 ? no
 /** Mantém o texto da loja ("3º ano"), só arruma os espaços. */
 export const normalizeGrade = (grade: string) => grade.trim().replace(/\s+/g, " ")
 
+/**
+ * Chave para achar a mesma série escrita de outro jeito ("3º ano" = "3o Ano"
+ * = "3° ano"), senão salvar de novo criaria outra lista com outro código.
+ */
+export const gradeKey = (grade: string) =>
+  norm(grade)
+    .replace(/[º°]/g, "o")
+    .replace(/ª/g, "a")
+    .replace(/[^a-z0-9]+/g, "")
+
 export type SavedItemInput = { raw: string; text: string; qty: number; productId: string | null }
 
-/** Linhas da tela → itens a salvar (as marcadas "Fora" não entram). */
+/**
+ * Linhas da tela → itens a salvar (as marcadas "Fora" não entram). Linha de
+ * lista reaberta cujo produto está inativo hoje mantém o produto salvo — senão
+ * salvar de novo perderia a ligação para sempre.
+ */
 export function toSaveItems(
-  rows: Array<{ raw: string; text: string; qty: number; skip: boolean; product: { id: string } | null }>,
+  rows: Array<{
+    raw: string
+    text: string
+    qty: number
+    skip: boolean
+    product: { id: string } | null
+    savedProductId?: string | null
+  }>,
 ): SavedItemInput[] {
   return rows
     .filter((r) => !r.skip)
-    .map((r) => ({ raw: r.raw, text: r.text, qty: r.qty, productId: r.product?.id ?? null }))
+    .map((r) => ({ raw: r.raw, text: r.text, qty: r.qty, productId: r.product?.id ?? r.savedProductId ?? null }))
 }
 
-export type SavedQuoteLine = { raw: string; text: string; qty: number; product: CatalogProduct | null }
+export type SavedQuoteLine = {
+  raw: string
+  text: string
+  qty: number
+  product: CatalogProduct | null
+  /** produto gravado na lista, mesmo que hoje esteja inativo */
+  savedProductId: string | null
+}
 
 /** Liga os itens salvos ao catálogo atual; produto apagado/inativo vira "não temos". */
 export function savedLines(items: SavedItemInput[], catalog: Map<string, CatalogProduct>): SavedQuoteLine[] {
@@ -45,5 +73,6 @@ export function savedLines(items: SavedItemInput[], catalog: Map<string, Catalog
     text: i.text,
     qty: i.qty,
     product: i.productId ? (catalog.get(i.productId) ?? null) : null,
+    savedProductId: i.productId,
   }))
 }

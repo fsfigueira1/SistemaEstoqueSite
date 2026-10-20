@@ -36,7 +36,7 @@ export default function ListaEscolarPage() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
   // lista salva aberta agora (para o diálogo de salvar já vir preenchido)
-  const [openedList, setOpenedList] = useState<{ schoolName: string; grade: string; schoolYear: number } | null>(null);
+  const [openedList, setOpenedList] = useState<{ schoolName: string; grade: string; schoolYear: number; sourceText: string } | null>(null);
 
   useEffect(() => {
     loadSettings()
@@ -96,7 +96,7 @@ export default function ListaEscolarPage() {
     }
   };
 
-  const openSaved = (list: SavedListSummary, lines: SavedQuoteLine[]) => {
+  const openSaved = (list: SavedListSummary, lines: SavedQuoteLine[], sourceText: string) => {
     setErr(null);
     setRows(
       lines.map((l, i) => ({
@@ -107,10 +107,11 @@ export default function ListaEscolarPage() {
         skip: false,
         product: l.product,
         options: l.product ? [l.product] : [],
+        savedProductId: l.savedProductId,
       })),
     );
     setTitle(`${list.schoolName} — ${list.grade}`);
-    setOpenedList({ schoolName: list.schoolName, grade: list.grade, schoolYear: list.schoolYear });
+    setOpenedList({ schoolName: list.schoolName, grade: list.grade, schoolYear: list.schoolYear, sourceText });
   };
 
   const totals = useMemo(() => quoteTotals(rows), [rows]);
@@ -193,7 +194,12 @@ export default function ListaEscolarPage() {
                       key={r.key}
                       row={r}
                       take={takes[i] ?? 0}
-                      onChange={(patch) => setRows((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)))}
+                      // trocar o produto na tela solta o produto salvo da lista reaberta
+                      onChange={(patch) =>
+                        setRows((list) =>
+                          list.map((x, j) => (j === i ? { ...x, ...patch, ...('product' in patch ? { savedProductId: null } : {}) } : x)),
+                        )
+                      }
                     />
                   ))}
                 </tbody>
@@ -255,7 +261,7 @@ export default function ListaEscolarPage() {
         <SaveListDialog
           open={saveOpen}
           onOpenChange={setSaveOpen}
-          sourceText={text}
+          sourceText={openedList ? openedList.sourceText : text}
           items={toSaveItems(rows)}
           initial={openedList ?? undefined}
           onSaved={() => setSavedCount((n) => n + 1)}

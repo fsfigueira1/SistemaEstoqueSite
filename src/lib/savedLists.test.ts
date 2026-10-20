@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { slugify, newListCode, LIST_CODE_ALPHABET, normalizeGrade, toSaveItems, savedLines, defaultSchoolYear } from './savedLists'
+import { slugify, newListCode, LIST_CODE_ALPHABET, normalizeGrade, toSaveItems, savedLines, defaultSchoolYear, gradeKey } from './savedLists'
 
 describe('defaultSchoolYear', () => {
   it('até junho é o ano corrente; de julho em diante, o seguinte', () => {
@@ -28,6 +28,34 @@ describe('newListCode', () => {
 
 describe('normalizeGrade', () => {
   it('colapsa espaços', () => expect(normalizeGrade('  3º   ano ')).toBe('3º ano'))
+})
+
+describe('gradeKey', () => {
+  it('mesma série com caixa, acento e sinal de ordinal diferentes', () => {
+    const k = gradeKey('3º ano')
+    expect(gradeKey('3º Ano')).toBe(k)
+    expect(gradeKey('3o ano')).toBe(k)
+    expect(gradeKey('3° ANO ')).toBe(k)
+    expect(gradeKey('4º ano')).not.toBe(k)
+  })
+})
+
+describe('toSaveItems mantém produto salvo', () => {
+  it('linha reaberta com produto inativo continua ligada ao produto salvo', () => {
+    const rows = [{ raw: '1 cola', text: 'cola', qty: 1, skip: false, product: null, savedProductId: 'p9' }]
+    expect(toSaveItems(rows)[0].productId).toBe('p9')
+  })
+  it('produto escolhido na tela vence o salvo', () => {
+    const rows = [{ raw: '1 cola', text: 'cola', qty: 1, skip: false, product: { id: 'p1' }, savedProductId: 'p9' }]
+    expect(toSaveItems(rows)[0].productId).toBe('p1')
+  })
+})
+
+describe('savedLines devolve o produto salvo', () => {
+  it('savedProductId vem mesmo quando o produto está fora do catálogo', () => {
+    const lines = savedLines([{ raw: '1 cola', text: 'cola', qty: 1, productId: 'p9' }], new Map())
+    expect(lines[0]).toMatchObject({ product: null, savedProductId: 'p9' })
+  })
 })
 
 describe('toSaveItems', () => {

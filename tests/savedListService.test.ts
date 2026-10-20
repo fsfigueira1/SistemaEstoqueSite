@@ -42,6 +42,29 @@ describe('SavedListService', () => {
     expect(await SavedListService.listSchools()).toHaveLength(1);
   });
 
+  it('saveList keeps the first school spelling', async () => {
+    await SavedListService.saveList({ ...base, schoolName: 'Colégio São José' });
+    await SavedListService.saveList({ ...base, schoolName: ' colegio sao jose ', grade: '4º ano' });
+    expect((await SavedListService.listSchools())[0].name).toBe('Colégio São José');
+  });
+
+  it('saveList matches grade ignoring case and ordinal sign', async () => {
+    const a = await SavedListService.saveList({ ...base, grade: '3º ano' });
+    const b = await SavedListService.saveList({ ...base, grade: '3o Ano', items: [base.items[0]] });
+    expect(b.id).toBe(a.id);
+    expect(b.code).toBe(a.code);
+    expect(b.grade).toBe('3º ano');
+    expect(b.itemCount).toBe(1);
+  });
+
+  it('getQuote devolve o texto original e o produto salvo de item inativo', async () => {
+    const s = await SavedListService.saveList({ ...base, sourceText: '2 lápis\n1 cola' });
+    await prisma.product.update({ where: { id: pCola.id }, data: { status: 'INACTIVE' } });
+    const q = await SavedListService.getQuote(s.code);
+    expect(q!.sourceText).toBe('2 lápis\n1 cola');
+    expect(q!.lines[1]).toMatchObject({ product: null, savedProductId: pCola.id });
+  });
+
   it('saveList twice keeps code and replaces items', async () => {
     const a = await SavedListService.saveList(base);
     const b = await SavedListService.saveList({ ...base, items: [base.items[0]] });
