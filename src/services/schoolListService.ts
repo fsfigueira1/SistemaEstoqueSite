@@ -14,20 +14,27 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? n : 0
 }
 
-export async function getCatalog(): Promise<CatalogProduct[]> {
-  const rows = await prisma.product.findMany({
-    where: { status: "ACTIVE" },
-    select: {
-      id: true,
-      name: true,
-      barcode: true,
-      sku: true,
-      salePrice: true,
-      stockQuantity: true,
-      category: { select: { name: true } },
-    },
-  })
-  return rows.map((p) => ({
+/** Campos de Product que o orçamento usa (ver toCatalogProduct). */
+export const CATALOG_SELECT = {
+  id: true,
+  name: true,
+  barcode: true,
+  sku: true,
+  salePrice: true,
+  stockQuantity: true,
+  category: { select: { name: true } },
+} as const
+
+export function toCatalogProduct(p: {
+  id: string
+  name: string
+  barcode: string | null
+  sku: string
+  salePrice: unknown
+  stockQuantity: number
+  category?: { name: string } | null
+}): CatalogProduct {
+  return {
     id: p.id,
     name: p.name,
     barcode: p.barcode,
@@ -35,7 +42,12 @@ export async function getCatalog(): Promise<CatalogProduct[]> {
     salePrice: Math.round(num(p.salePrice) * 100) / 100,
     stock: p.stockQuantity,
     category: p.category?.name ?? null,
-  }))
+  }
+}
+
+export async function getCatalog(): Promise<CatalogProduct[]> {
+  const rows = await prisma.product.findMany({ where: { status: "ACTIVE" }, select: CATALOG_SELECT })
+  return rows.map(toCatalogProduct)
 }
 
 export async function quoteFromText(text: string): Promise<QuoteLine[]> {

@@ -233,6 +233,7 @@ model Product {
   saleItems          SaleItem[]          @relation("ProductSaleItems")
   stockMovements     StockMovement[]     @relation("ProductStockMovements")
   label              ProductLabel?
+  schoolListItems    SchoolListItem[]
   @@index([sku])
   @@index([barcode])
   @@index([categoryId])
@@ -482,4 +483,50 @@ model ProductLabel {
   labelPrintedAt DateTime?
   updatedAt      DateTime  @default(now()) @updatedAt
   product        Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+/// Escola cuja lista de material a loja salvou (ver savedListService.ts).
+/// O slug junta grafias diferentes do mesmo nome ("Colégio São José" =
+/// "colegio sao jose").
+model School {
+  id        String       @id @default(uuid())
+  name      String
+  slug      String       @unique
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  lists     SchoolList[]
+}
+
+/// Lista de material de uma série num ano letivo. O código curto ("L-3A7K")
+/// vai no botão do site e na mensagem do WhatsApp — não muda quando a lista
+/// é salva de novo. Preço e estoque não ficam gravados: o orçamento recalcula.
+model SchoolList {
+  id         String           @id @default(uuid())
+  schoolId   String
+  grade      String
+  schoolYear Int
+  code       String           @unique
+  sourceText String           @default("")
+  active     Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  school     School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  items      SchoolListItem[]
+  @@unique([schoolId, grade, schoolYear])
+}
+
+/// Item da lista salva; sem produto = "não temos".
+model SchoolListItem {
+  id        String     @id @default(uuid())
+  listId    String
+  position  Int
+  raw       String
+  text      String
+  qty       Int
+  productId String?
+  list      SchoolList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  product   Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  @@index([listId])
+  @@index([productId])
 }
