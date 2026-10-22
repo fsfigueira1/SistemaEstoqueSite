@@ -74,4 +74,20 @@ describe('ContactService', () => {
     await ContactService.remove(c.id);
     expect(await ContactService.list()).toHaveLength(0);
   });
+
+  it('quem saiu não pode ser excluído (senão a planilha cadastraria de novo)', async () => {
+    await ContactService.importRows([{ name: 'Ana', phone: '5517999998888' }], 'planilha');
+    const [c] = await ContactService.list();
+    await ContactService.setStatus(c.id, false);
+    await expect(ContactService.remove(c.id)).rejects.toThrow('Quem saiu fica na lista para não receber de novo');
+    await ContactService.importRows([{ name: 'Ana', phone: '5517999998888' }], 'planilha');
+    expect((await ContactService.list())[0].status).toBe('saiu');
+  });
+
+  it('importa muitos contatos de uma vez', async () => {
+    const rows = Array.from({ length: 300 }, (_, i) => ({ name: `C${i}`, phone: `55179${String(90000000 + i)}` }));
+    const r = await ContactService.importRows([...rows, rows[0]], 'planilha');
+    expect(r).toEqual({ criados: 300, atualizados: 0 });
+    expect(await prisma.contact.count()).toBe(300);
+  });
 });

@@ -48,7 +48,7 @@ export async function buildAssistantContext(now = new Date()): Promise<Assistant
     }),
     prisma.product.findMany({
       where: { status: "ACTIVE" },
-      select: { id: true, name: true, stockQuantity: true, minStockLevel: true },
+      select: { id: true, name: true, stockQuantity: true, minStockLevel: true, createdAt: true },
       orderBy: { name: "asc" },
     }),
   ])
@@ -83,7 +83,8 @@ export async function buildAssistantContext(now = new Date()): Promise<Assistant
       .map((p) => ({ nome: p.name, estoque: p.stockQuantity, minimo: p.minStockLevel })),
     semEstoque: products.filter((p) => p.stockQuantity <= 0).slice(0, LIST_MAX).map((p) => p.name),
     parados: products
-      .filter((p) => p.stockQuantity > 0 && !soldIds.has(p.id))
+      // cadastrado há mais de 60 dias e sem venda nesse tempo (o que acabou de chegar não conta)
+      .filter((p) => p.stockQuantity > 0 && !soldIds.has(p.id) && p.createdAt < since60)
       .sort((a, b) => b.stockQuantity - a.stockQuantity)
       .slice(0, LIST_MAX)
       .map((p) => ({ nome: p.name, estoque: p.stockQuantity })),

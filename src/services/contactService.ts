@@ -23,30 +23,45 @@ const statusOf = (c: { optInAt: Date | null; optOutAt: Date | null }): ContactSt
 
 type Source = "planilha" | "manual" | "cliente"
 
-async function upsertRows(rows: Array<ContactRow & { customerId?: string }>, source: Source) {
+const CHUNK = 200
+
+// Em lote: o banco da loja é o Supabase, longe — uma ida e volta por linha
+// deixaria uma planilha de milhares de contatos levando minutos.
+async function upsertRows(input: Array<ContactRow & { customerId?: string }>, source: Source) {
+  const byPhone = new Map<string, ContactRow & { customerId?: string }>()
+  for (const r of input) if (!byPhone.has(r.phone)) byPhone.set(r.phone, r)
+  const rows = [...byPhone.values()]
+  const now = new Date()
   let criados = 0
   let atualizados = 0
-  const now = new Date()
-  for (const r of rows) {
-    const name = r.name.trim() || null
-    const existing = await prisma.contact.findUnique({ where: { phone: r.phone } })
-    if (!existing) {
-      await prisma.contact.create({
-        data: { phone: r.phone, name, source, optInAt: now, customerId: r.customerId ?? null },
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const part = rows.slice(i, i + CHUNK)
+    const existing = await prisma.contact.findMany({ where: { phone: { in: part.map((r) => r.phone) } } })
+    const found = new Map(existing.map((c) => [c.phone, c]))
+    const fresh = part.filter((r) => !found.has(r.phone))
+    if (fresh.length) {
+      // skipDuplicates: outro PC pode ter criado o mesmo telefone agora
+      const created = await prisma.contact.createMany({
+        data: fresh.map((r) => ({ phone: r.phone, name: r.name.trim() || null, source, optInAt: now, customerId: r.customerId ?? null })),
+        skipDuplicates: true,
       })
-      criados++
-      continue
+      criados += created.count
     }
-    await prisma.contact.update({
-      where: { id: existing.id },
-      data: {
+    const updates = part.flatMap((r) => {
+      const c = found.get(r.phone)
+      if (!c) return []
+      const name = r.name.trim() || null
+      const data = {
         // nome novo só preenche quando faltava
-        ...(name && !existing.name ? { name } : {}),
-        ...(!existing.optInAt && !existing.optOutAt ? { optInAt: now } : {}),
-        ...(r.customerId && !existing.customerId ? { customerId: r.customerId } : {}),
-      },
+        ...(name && !c.name ? { name } : {}),
+        // nunca reativa quem saiu
+        ...(!c.optInAt && !c.optOutAt ? { optInAt: now } : {}),
+        ...(r.customerId && !c.customerId ? { customerId: r.customerId } : {}),
+      }
+      return Object.keys(data).length ? [prisma.contact.update({ where: { id: c.id }, data })] : []
     })
-    atualizados++
+    if (updates.length) await prisma.$transaction(updates)
+    atualizados += part.length - fresh.length
   }
   return { criados, atualizados }
 }
@@ -102,8 +117,11 @@ export const ContactService = {
     })
   },
 
+  /** Quem saiu fica gravado: é o que impede a próxima planilha de cadastrar de novo. */
   async remove(id: string): Promise<void> {
     await ensureSchema()
+    const c = await prisma.contact.findUniqueOrThrow({ where: { id } })
+    if (c.optOutAt) throw new Error("Quem saiu fica na lista para não receber de novo")
     await prisma.contact.delete({ where: { id } })
   },
 }

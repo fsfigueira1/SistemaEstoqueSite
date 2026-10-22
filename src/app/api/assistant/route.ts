@@ -3,8 +3,16 @@ import { getServerSettings } from "@/lib/serverSettings"
 import { isJsonRequest } from "@/lib/requireJson"
 import { friendlyError } from "@/lib/friendlyError"
 import { assistantSystemPrompt, parseAssistantMessages } from "@/lib/assistantPrompt"
-import { NVIDIA_DEFAULT_MODEL, nvidiaStream } from "@/lib/nvidia"
+import { NVIDIA_DEFAULT_MODEL, NvidiaError, nvidiaStreamStart } from "@/lib/nvidia"
 import { buildAssistantContext } from "@/services/assistantService"
+
+function nvidiaMessage(error: unknown): string {
+  const status = error instanceof NvidiaError ? error.status : 0
+  if (status === 401 || status === 403) return "Chave da NVIDIA inválida — confira em Configurações"
+  if (status === 429) return "Limite de uso da NVIDIA atingido — tente de novo em alguns minutos"
+  if (status === 504) return "A IA da NVIDIA demorou demais — tente de novo"
+  return "A IA da NVIDIA não respondeu agora — tente de novo"
+}
 
 // POST /api/assistant { messages: [{ role, content }] } — ajudante com IA da
 // NVIDIA. Junta os números da loja (só leitura) e responde em texto, aos
@@ -29,12 +37,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: friendlyError(error).message }, { status: 500 })
   }
 
+  let chunks: AsyncGenerator<string>
+  try {
+    chunks = await nvidiaStreamStart({ apiKey, model, messages: [{ role: "system", content: system }, ...messages], signal: request.signal })
+  } catch (error) {
+    friendlyError(error) // registra o detalhe no log do servidor
+    return NextResponse.json({ success: false, error: nvidiaMessage(error) }, { status: 502 })
+  }
+
   const encoder = new TextEncoder()
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
       let sent = false
       try {
-        for await (const text of nvidiaStream({ apiKey, model, messages: [{ role: "system", content: system }, ...messages], signal: request.signal })) {
+        for await (const text of chunks) {
           sent = true
           controller.enqueue(encoder.encode(text))
         }

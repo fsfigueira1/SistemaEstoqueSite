@@ -9,7 +9,28 @@ export const NVIDIA_DEFAULT_MODEL = "nvidia/nemotron-3.5-super-vl-120b-a12b"
 type Part = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
 export type NvMessage = { role: "system" | "user" | "assistant"; content: string | Part[] }
 
-type Opts = { apiKey: string; model: string; messages: NvMessage[]; signal?: AbortSignal; fetchImpl?: typeof fetch; maxTokens?: number }
+type Opts = {
+  apiKey: string
+  model: string
+  messages: NvMessage[]
+  /** cancelamento de quem chamou (ex.: a tela fechou) — o tempo limite vale junto */
+  signal?: AbortSignal
+  /** padrão 150 s (o endpoint gratuito às vezes leva 1–2 min) */
+  timeoutMs?: number
+  fetchImpl?: typeof fetch
+  maxTokens?: number
+}
+
+/** Erro da NVIDIA com o status HTTP (401/403 = chave, 429 = limite). */
+export class NvidiaError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+    this.name = "NvidiaError"
+  }
+}
 
 /** Corpo da chamada (valores recomendados no model card do Nemotron Super, iguais aos do site). */
 export function nvidiaRequest(opts: { model: string; messages: NvMessage[]; stream: boolean; maxTokens?: number }): object {
@@ -27,10 +48,20 @@ export function nvidiaRequest(opts: { model: string; messages: NvMessage[]; stre
 }
 
 async function call(opts: Opts, stream: boolean): Promise<Response> {
+  const timeout = AbortSignal.timeout(opts.timeoutMs ?? 150_000)
+  const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout
+  try {
+    return await request(opts, stream, signal)
+  } catch (err) {
+    if (timeout.aborted) throw new NvidiaError("A IA da NVIDIA demorou demais — tente de novo", 504)
+    throw err
+  }
+}
+
+async function request(opts: Opts, stream: boolean, signal: AbortSignal): Promise<Response> {
   const res = await (opts.fetchImpl ?? fetch)(NVIDIA_URL, {
     method: "POST",
-    // o endpoint gratuito às vezes leva 1–2 min
-    signal: opts.signal ?? AbortSignal.timeout(150_000),
+    signal,
     headers: {
       Authorization: `Bearer ${opts.apiKey}`,
       "Content-Type": "application/json",
@@ -41,7 +72,7 @@ async function call(opts: Opts, stream: boolean): Promise<Response> {
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { detail?: string; error?: { message?: string } | string; message?: string }
     const detail = data.detail ?? (typeof data.error === "string" ? data.error : data.error?.message) ?? data.message ?? ""
-    throw new Error(`IA da NVIDIA respondeu ${res.status}${detail ? `: ${detail}` : ""}`)
+    throw new NvidiaError(`IA da NVIDIA respondeu ${res.status}${detail ? `: ${detail}` : ""}`, res.status)
   }
   return res
 }
@@ -53,9 +84,21 @@ export async function nvidiaChat(opts: Opts): Promise<string> {
   return (data.choices?.[0]?.message?.content ?? "").trim()
 }
 
+/**
+ * Abre a resposta aos pedaços. Espera a NVIDIA responder (status) antes de
+ * devolver o gerador — assim chave inválida/limite viram erro antes de a
+ * rota começar a transmitir.
+ */
+export async function nvidiaStreamStart(opts: Opts): Promise<AsyncGenerator<string>> {
+  return readSse(await call(opts, true))
+}
+
 /** Resposta aos pedaços (SSE): só o texto final, sem o raciocínio. */
 export async function* nvidiaStream(opts: Opts): AsyncGenerator<string> {
-  const res = await call(opts, true)
+  yield* await nvidiaStreamStart(opts)
+}
+
+async function* readSse(res: Response): AsyncGenerator<string> {
   if (!res.body) return
   const reader = res.body.getReader()
   const decoder = new TextDecoder()

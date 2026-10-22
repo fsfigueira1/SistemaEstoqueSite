@@ -47,4 +47,19 @@ describe('mensagem', () => {
     expect(v).toContain('BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ana\\; Souza\r\nTEL;TYPE=CELL:+5517999998888\r\nEND:VCARD')
     expect(v).toContain('FN:Cliente 0909')
   })
+
+describe('correções da revisão', () => {
+  it('telefone com 0 na frente vira 55 + DDD', () => {
+    expect(parseContacts('Ana\t0 17 99999-8888\nBeto\t(017) 3228-0909').rows).toEqual([
+      { name: 'Ana', phone: '5517999998888' },
+      { name: 'Beto', phone: '551732280909' },
+    ])
+  })
+
+  it('reconhece cabeçalhos compostos como "Nome completo" e "Telefone celular"', () => {
+    const r = parseContacts('Nome completo;CPF;Telefone celular\nAna Souza;12345678901;(17) 99999-8888')
+    expect(r.rows).toEqual([{ name: 'Ana Souza', phone: '5517999998888' }])
+    expect(r.invalid).toEqual([])
+  })
+})
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { NVIDIA_URL, nvidiaChat, nvidiaRequest, nvidiaStream } from "./nvidia"
+import { NVIDIA_URL, nvidiaChat, nvidiaRequest, nvidiaStream, nvidiaStreamStart } from "./nvidia"
 
 type Call = { url: string; init?: RequestInit }
 const fakeFetch = (res: Response) => {
@@ -74,5 +74,19 @@ describe("nvidia", () => {
     let out = ""
     for await (const t of nvidiaStream({ apiKey: "k", model: "m", messages: [{ role: "user", content: "oi" }], fetchImpl: f })) out += t
     expect(out).toBe("Vendas: R$ 10")
+  })
+
+  it("timeout vale mesmo quando a rota passa o signal da requisição", async () => {
+    const hanging = (async (_u: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)))) as typeof fetch
+    const ctrl = new AbortController()
+    await expect(
+      nvidiaChat({ apiKey: "k", model: "m", messages: [{ role: "user", content: "oi" }], signal: ctrl.signal, timeoutMs: 50, fetchImpl: hanging }),
+    ).rejects.toThrow(/demorou demais/)
+  })
+
+  it("nvidiaStreamStart falha antes de devolver o gerador quando a chave é inválida", async () => {
+    const { f } = fakeFetch(new Response(JSON.stringify({ detail: "Unauthorized" }), { status: 401 }))
+    await expect(nvidiaStreamStart({ apiKey: "x", model: "m", messages: [{ role: "user", content: "oi" }], fetchImpl: f })).rejects.toMatchObject({ status: 401 })
   })
 })

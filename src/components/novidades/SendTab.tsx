@@ -135,7 +135,9 @@ export default function SendTab({ activeCount, draft, onDraftUsed, onAskHelper }
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">O aviso “Para não receber mais, responda SAIR.” vai sempre no fim.</p>
+          <p className="text-xs text-muted-foreground">
+            O aviso “Para não receber mais, responda SAIR.” vai sempre no fim. Quem responder SAIR no celular: marque como “Saiu” em Contatos.
+          </p>
           <button
             type="button"
             onClick={create}
@@ -170,11 +172,11 @@ export default function SendTab({ activeCount, draft, onDraftUsed, onAskHelper }
                 <a href={`/api/broadcasts/${open.id}/vcf`} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted">
                   <Download className="h-4 w-4 text-primary" /> Baixar contatos (.vcf)
                 </a>
-                <button type="button" onClick={() => copyMessage(open.message)} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted">
+                <button type="button" onClick={() => copyMessage(personalize(open.message, null))} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted">
                   {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />} {copied ? 'Copiada' : 'Copiar mensagem'}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground">Na lista de transmissão o {'{nome}'} não é trocado — prefira um texto sem ele.</p>
+              <p className="text-xs text-muted-foreground">Na lista de transmissão não dá para pôr o nome de cada um: o {'{nome}'} sai do texto copiado.</p>
             </div>
 
             <div className="space-y-2 rounded-xl border border-border p-4">

@@ -131,7 +131,8 @@ export function buildRestockPlan(products: RestockProduct[], soldById: Map<strin
 
 /** Só dígitos, com 55 na frente quando for número brasileiro sem DDI. */
 export function whatsappNumber(phone: string | null | undefined): string | null {
-  const d = (phone ?? "").replace(/\D/g, "")
+  // "0 17 99999-8888" / "(017) …": o 0 da discagem interurbana não faz parte do número
+  const d = (phone ?? "").replace(/\D/g, "").replace(/^0+/, "")
   if (d.length === 10 || d.length === 11) return `55${d}`
   if (d.length >= 12 && d.length <= 13) return d
   return null

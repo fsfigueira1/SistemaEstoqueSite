@@ -22,7 +22,7 @@ export default function AiSettings({
   onRemoveNvidia: () => void;
 }) {
   return (
-    <Section icon={<Bot className="h-5 w-5" />} title="Inteligência artificial" desc="Ajudante (vendas, estoque, ideias de texto) e leitura da foto da lista escolar">
+    <Section icon={<Bot className="h-5 w-5" />} title="Inteligência artificial" desc="O ajudante (vendas, estoque, ideias de texto) usa a NVIDIA. Aqui você escolhe quem lê a foto da lista escolar.">
       <div className="space-y-4">
         <div role="radiogroup" className="grid gap-3 sm:grid-cols-2">
           <ProviderCard
@@ -30,13 +30,13 @@ export default function AiSettings({
             onClick={() => set('aiProvider', 'nvidia')}
             title="NVIDIA"
             badge="Recomendado"
-            text="A mesma IA do chat do site. Lê fotos e responde no ajudante."
+            text="A mesma IA do chat do site. Lê a foto da lista."
           />
           <ProviderCard
             active={form.aiProvider === 'claude'}
             onClick={() => set('aiProvider', 'claude')}
             title="Claude"
-            text="Usa a chave do Claude cadastrada em Pesquisa de preço."
+            text="Lê a foto com a chave do Claude de Pesquisa de preço. O ajudante continua na NVIDIA."
           />
         </div>
         <SecretBox

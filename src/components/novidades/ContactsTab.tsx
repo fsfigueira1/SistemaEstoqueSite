@@ -185,6 +185,7 @@ export default function ContactsTab({ onChanged }: { onChanged?: () => void }) {
                             <UserCheck className="h-4 w-4" />
                           </button>
                         )}
+                        {c.status !== 'saiu' && (
                         <button
                           type="button"
                           title="Excluir"
@@ -196,6 +197,7 @@ export default function ContactsTab({ onChanged }: { onChanged?: () => void }) {
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

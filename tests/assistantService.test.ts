@@ -46,7 +46,9 @@ describe('buildAssistantContext', () => {
     const lapis = await product('Lápis', 50);
     const cola = await product('Cola', 2); // baixo
     await product('Régua', 0); // sem estoque
-    await product('Compasso', 8); // parado (nunca vendeu)
+    const compasso = await product('Compasso', 8); // parado (nunca vendeu, cadastrado há tempo)
+    await prisma.product.update({ where: { id: compasso.id }, data: { createdAt: daysAgo(90) } });
+    await product('Novidade', 4); // chegou agora: não é parado
 
     await sale(new Date(), [{ productId: lapis.id, qty: 3 }], 'PIX'); // hoje: 30
     await sale(daysAgo(3), [{ productId: lapis.id, qty: 2 }, { productId: cola.id, qty: 1 }], 'CASH'); // 7d: +30
@@ -63,5 +65,6 @@ describe('buildAssistantContext', () => {
     expect(ctx.semEstoque).toContain('Régua');
     expect(ctx.parados.map((p) => p.nome)).toContain('Compasso');
     expect(ctx.parados.map((p) => p.nome)).not.toContain('Lápis');
+    expect(ctx.parados.map((p) => p.nome)).not.toContain('Novidade');
   });
 });

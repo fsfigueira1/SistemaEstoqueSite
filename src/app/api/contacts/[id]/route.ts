@@ -21,13 +21,16 @@ export async function PATCH(request: Request, { params }: Ctx) {
   }
 }
 
-// DELETE /api/contacts/[id]
+// DELETE /api/contacts/[id] — quem saiu não pode ser excluído
 export async function DELETE(_request: Request, { params }: Ctx) {
   try {
     await ContactService.remove((await params).id)
     return NextResponse.json({ success: true })
   } catch (error) {
     if (notFound(error)) return NextResponse.json({ success: false, error: "Contato não encontrado" }, { status: 404 })
+    if (/Quem saiu fica na lista/.test(String((error as Error)?.message))) {
+      return NextResponse.json({ success: false, error: friendlyError(error).message }, { status: 409 })
+    }
     return NextResponse.json({ success: false, error: friendlyError(error).message }, { status: 500 })
   }
 }

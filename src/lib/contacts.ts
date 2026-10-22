@@ -8,9 +8,12 @@ import { norm } from "@/lib/schoolList"
 
 export type ContactRow = { name: string; phone: string }
 
-const PHONE_HEADERS = new Set(["telefone", "celular", "whatsapp", "fone", "tel", "numero", "contato"])
-const NAME_HEADERS = new Set(["nome", "cliente", "name", "responsavel"])
+const PHONE_WORDS = ["telefone", "celular", "whatsapp", "fone", "numero", "contato", "tel"]
+const NAME_WORDS = ["nome", "cliente", "name", "responsavel"]
 const headerKey = (c: string) => norm(c).replace(/[^a-z]/g, "")
+// "Telefone celular", "Nome completo", "Nome do responsável"…
+const isPhoneHeader = (h: string) => PHONE_WORDS.some((w) => h.startsWith(w))
+const isNameHeader = (h: string) => !isPhoneHeader(h) && NAME_WORDS.some((w) => h.startsWith(w))
 
 /** Planilha colada (Excel copia com tab) ou CSV: acha nome e telefone sozinho. */
 export function parseContacts(text: string): { rows: ContactRow[]; invalid: Array<{ line: number; raw: string }> } {
@@ -21,9 +24,9 @@ export function parseContacts(text: string): { rows: ContactRow[]; invalid: Arra
   if (!table.length) return { rows, invalid }
 
   const head = table[0].map(headerKey)
-  const hasHeader = head.some((h) => PHONE_HEADERS.has(h) || NAME_HEADERS.has(h)) && !table[0].some((c) => whatsappNumber(c))
-  const phoneCol = hasHeader ? head.findIndex((h) => PHONE_HEADERS.has(h)) : -1
-  const nameCol = hasHeader ? head.findIndex((h) => NAME_HEADERS.has(h)) : -1
+  const hasHeader = head.some((h) => isPhoneHeader(h) || isNameHeader(h)) && !table[0].some((c) => whatsappNumber(c))
+  const phoneCol = hasHeader ? head.findIndex(isPhoneHeader) : -1
+  const nameCol = hasHeader ? head.findIndex(isNameHeader) : -1
   const rawLines = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n").filter((l) => l.trim())
 
   table.forEach((cells, i) => {
