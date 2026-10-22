@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import DailyAssistant, { openDailyAssistant } from '@/components/DailyAssistant';
+import AssistantChat from '@/components/AssistantChat';
 
 // Navegação em grupos: o que se usa no balcão primeiro, gestão depois.
 const groups: Array<{ title: string; items: Array<{ name: string; href: string; icon: typeof LayoutDashboard }> }> = [
@@ -159,6 +160,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </div>
 
       <DailyAssistant />
+      <AssistantChat />
     </div>
   );
 }

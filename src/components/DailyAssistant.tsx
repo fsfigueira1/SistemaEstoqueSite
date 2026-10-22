@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { X, ArrowRight, Clock, Banknote, CreditCard, QrCode, Loader2 } from 'lucide-react';
 import type { DailyReport } from '@/services/reportService';
+import { openAssistantChat } from '@/components/AssistantChat';
 import { loadSettings } from '@/lib/settings';
 import { errorText } from '@/lib/friendlyError';
 
@@ -212,6 +213,15 @@ export default function DailyAssistant() {
             >
               {report?.closing ? 'Ver relatório' : 'Conferir o caixa'} <ArrowRight className="h-4 w-4" />
             </Link>
+            <button
+              onClick={() => {
+                setOpen(false);
+                openAssistantChat();
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground/90 hover:bg-muted"
+            >
+              Perguntar ao ajudante
+            </button>
             {auto && (
               <button
                 onClick={snooze}
