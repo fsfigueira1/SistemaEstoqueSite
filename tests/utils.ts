@@ -27,6 +27,8 @@ export async function cleanupDatabase() {
       await prisma.schoolListItem.deleteMany();
       await prisma.schoolList.deleteMany();
       await prisma.school.deleteMany();
+      await prisma.whatsAppMessage.deleteMany();
+      await prisma.contact.deleteMany();
 
       // Level 2: Tables that reference others and are referenced
       await prisma.cashSession.deleteMany();

@@ -265,6 +265,7 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   sales     Sale[]   @relation("SaleCustomer")
+  contacts  Contact[]
   @@index([name])
   @@index([email])
   @@index([phone])
@@ -529,4 +530,44 @@ model SchoolListItem {
   product   Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
   @@index([listId])
   @@index([productId])
+}
+
+/// Contato do WhatsApp (robô e novidades). Telefone só com dígitos e DDI
+/// ("5517999998888"). Só recebe novidades quem respondeu SIM (optInAt) e
+/// não saiu depois (optOutAt). botPausedUntil: um atendente respondeu pelo
+/// celular, o robô fica quieto nessa conversa até lá.
+model Contact {
+  id             String            @id @default(uuid())
+  phone          String            @unique
+  name           String?
+  /// whatsapp | cliente | planilha
+  source         String            @default("whatsapp")
+  optInAt        DateTime?
+  optOutAt       DateTime?
+  optInAskedAt   DateTime?
+  botPausedUntil DateTime?
+  customerId     String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  customer       Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  messages       WhatsAppMessage[]
+}
+
+/// Mensagem do WhatsApp (entrada e saída). metaId = id da Meta ("wamid..."),
+/// único — é o que impede responder duas vezes quando a Meta reenvia.
+model WhatsAppMessage {
+  id        String   @id @default(uuid())
+  metaId    String?  @unique
+  contactId String
+  /// in | out
+  direction String
+  /// text | image | template | other
+  type      String
+  body      String   @default("")
+  /// received | sent | delivered | read | failed
+  status    String   @default("received")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  @@index([contactId, createdAt])
 }
