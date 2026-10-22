@@ -2,7 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Atualizado em 21/10/2026** com `docs/integracao-site-whatsapp.md` (escrito pelo chat do site). Mudou: o site já está publicado na Vercel; os testes do site são `node --test` (não vitest); o botão do site manda o pedido inteiro no formato `#ORC-SITE v1` com SKU, e o robô orça esse formato primeiro.
+
 **Goal:** Quando um cliente escreve para o WhatsApp da loja, o robô responde sozinho:
+- pedido vindo do site (`#ORC-SITE v1`) → orçamento por SKU;
 - mensagem com código `#L-XXXX` → orçamento da lista salva;
 - lista em texto ou foto → orçamento montado pelo estoque;
 - SIM/SAIR → entra ou sai das novidades;
@@ -12,13 +15,15 @@ O contato é gravado na hora.
 
 **Architecture:** O webhook mora no **LacolariaSite** (Next.js 16, hospedado na Vercel no futuro), em `app/api/whatsapp/webhook/route.ts`. Ele valida a assinatura da Meta, responde 200 na hora e processa depois com `after()` de `next/server`. A lógica do robô é pura (`lib/whatsapp/bot.ts`) e recebe as dependências por parâmetro (banco, envio, leitura de foto), então é testada sem rede e sem banco. O acesso ao banco é SQL simples com `pg` no mesmo Postgres do sistema. As tabelas novas (`Contact`, `WhatsAppMessage`) são criadas pelo **sistema** (schema + migração + `schemaUpgrade.ts`), que continua dono do schema. As regras de orçamento são **copiadas** do sistema (`schoolList.ts`, `savedLists.ts`), com cabeçalho de sincronia.
 
-**Tech Stack:** Next.js 16 (Route Handler + `after`), `pg`, Vitest, WhatsApp Cloud API (Graph API), API do Claude (leitura de foto, chave em `Settings.aiApiKey`).
+**Tech Stack:** Next.js 16 (Route Handler + `after`), `pg`, `node --test` (padrão atual do site: `npm test`, imports com extensão `.ts`), WhatsApp Cloud API (Graph API), API do Claude (leitura de foto, chave em `Settings.aiApiKey`).
 
 **Spec:** `docs/superpowers/specs/2026-10-20-whatsapp-orcamento-novidades-design.md` (§3, §4, §5, §6, §7.2, §8 item 2)
 
 ## Global Constraints
 
-- **Nada é publicado.** Não rodar `electron:publish`/`release` nem deploy na Vercel. A loja continua na versão de teste.
+- **Nada é publicado por este trabalho.** Não rodar `electron:publish`/`release` (a loja continua na versão de teste do sistema). O site já está na Vercel (https://lacolaria.vercel.app), mas `vercel deploy` só a pedido da dona: o webhook fica testável localmente até lá.
+- **Não quebrar o `npm test` do site** (58 testes em `node --test`). Testes novos no mesmo padrão: `node:test` + `node:assert/strict`, arquivos `lib/**/*.test.ts`.
+- **Outra sessão também mexe no site** (vitrine, chat). Só criar/editar os arquivos listados nas tasks; não tocar em `lib/orcamento/**`, `content/**`, `app/api/chat/**`.
 - **Nunca usar o `DATABASE_URL` do `.env` do sistema** (é o Supabase de produção). Testes de banco usam Postgres temporário local (pglite em `127.0.0.1:54329`).
 - Credenciais da Meta e do banco **só em variáveis de ambiente** do site (`.env.local`, que o git ignora): `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_GRAPH_VERSION` (padrão `v23.0`), `DATABASE_URL`. Nada disso vai para o repositório. Criar um `.env.example` só com os nomes.
 - Toda mensagem do robô em pt-BR, curta e com o tom do site. Endereço, horário e nome vêm de `content/site.ts`, nunca digitados à mão.
@@ -30,6 +35,8 @@ O contato é gravado na hora.
 - Banco no site: pool `pg` com `max: 1` (serverless + Supabase free com ~15 conexões).
 
 ## Review Focus
+
+- **Pedido do site editado pelo cliente antes de enviar** (linha apagada, quantidade trocada, texto a mais): o robô orça o que dá e ignora linhas que não casam com a regra, sem quebrar. Teste na Task 4: `pedido do site editado ainda orça`.
 
 - **Mensagem com código de lista desativada ou inexistente**: o robô não deve ficar mudo nem quebrar. Responde que não encontrou a lista e pede a lista em texto ou foto. Teste na Task 4: `código desconhecido pede a lista`.
 - **"sim", "Sim!", " SAIR " (caixa, pontuação, espaços)**: o cliente espera que funcione. Teste na Task 4: `SIM e SAIR aceitam variações`.
@@ -92,20 +99,19 @@ model WhatsAppMessage {
 
 **Files (LacolariaSite):**
 - Run: `git init` e um primeiro commit com o site como está, antes de qualquer mudança. O `.gitignore` já existe: conferir que cobre `.env*.local`, `.next`, `node_modules` e `.playwright-mcp`.
-- Modify: `package.json` (devDeps `vitest`, `@types/pg`; deps `pg`; script `"test": "vitest run"`)
-- Create: `vitest.config.ts` (environment node, alias `@` → raiz)
-- Create: `lib/quote/schoolList.ts`, `lib/quote/savedLists.ts`: cópias exatas de `SistemaEstoqueSite/src/lib/schoolList.ts` e `src/lib/savedLists.ts`, com a primeira linha `// CÓPIA de SistemaEstoqueSite/src/lib/<arquivo> — mantenha em sincronia (fase 2 do WhatsApp).` e o import ajustado para `./schoolList`.
-- Create: `lib/quote/schoolList.test.ts`, `lib/quote/savedLists.test.ts`: cópias dos testes do sistema.
+- Modify: `package.json` (deps `pg`; devDeps `@types/pg`). O script `test` continua o mesmo (`node --test`).
+- Create: `lib/quote/schoolList.ts`, `lib/quote/savedLists.ts`: cópias de `SistemaEstoqueSite/src/lib/schoolList.ts` e `src/lib/savedLists.ts`, com a primeira linha `// CÓPIA de SistemaEstoqueSite/src/lib/<arquivo> — mantenha em sincronia (fase 2 do WhatsApp).` e o import trocado para `./schoolList.ts` (o `node --test` não entende o alias `@`).
+- Create: `lib/quote/schoolList.test.ts`, `lib/quote/savedLists.test.ts`: os testes do sistema convertidos de vitest para `node:test` + `node:assert/strict`, com os mesmos casos e valores.
 - Create: `.env.example` (só os nomes das variáveis de Global Constraints)
 
 **Interfaces:**
 - Produces: `parseList`, `buildQuote`, `quoteMessage`, `allocate`, `quoteTotals`, `CatalogProduct`, `QuoteLine` (de `lib/quote/schoolList`) e `savedLines`, `SavedQuoteLine`, `SavedItemInput` (de `lib/quote/savedLists`)
 
 - [ ] **Step 1:** `git init` + commit inicial `Site como estava antes do WhatsApp`.
-- [ ] **Step 2:** Instalar as dependências e criar o `vitest.config.ts`.
-- [ ] **Step 3:** Copiar libs e testes. Rodar `npx vitest run lib/quote` → PASS (mesma contagem de testes dos arquivos originais).
+- [ ] **Step 2:** Instalar `pg` e `@types/pg`.
+- [ ] **Step 3:** Copiar libs e converter os testes. Rodar `npm test` → PASS: os 58 testes que já existiam mais os copiados (mesma contagem de casos dos originais).
 - [ ] **Step 4:** `npx tsc --noEmit` e `npx next build` → sem erros (o build não pode exigir `DATABASE_URL`).
-- [ ] **Step 5: Commit** `WhatsApp: base de testes e regras de orçamento copiadas do sistema`.
+- [ ] **Step 5: Commit** `WhatsApp: regras de orçamento copiadas do sistema`.
 
 ---
 
@@ -154,7 +160,7 @@ it('payload estranho não quebra', () => {
 
 (Fixtures no mesmo arquivo de teste, no formato da Cloud API: `{ object:'whatsapp_business_account', entry:[{ changes:[{ field:'messages', value:{ ... } }] }] }`. O eco vem com `field:'smb_message_echoes'` e `value.message_echoes[0].to`.)
 
-- [ ] **Step 2:** `npx vitest run lib/whatsapp/webhook.test.ts` → FAIL (módulo não existe)
+- [ ] **Step 2:** `node --test lib/whatsapp/webhook.test.ts` → FAIL (módulo não existe)
 - [ ] **Step 3:** Implementar com `crypto.createHmac` + `timingSafeEqual` (com tamanhos iguais checados antes).
 - [ ] **Step 4:** rodar de novo → PASS
 - [ ] **Step 5: Commit** `WhatsApp: leitura e assinatura do webhook`
@@ -171,6 +177,11 @@ it('payload estranho não quebra', () => {
 **Interfaces:**
 - Consumes: Task 2 (`buildQuote`, `quoteMessage`, `parseList`, `CatalogProduct`, `SavedQuoteLine`) e Task 3 (`IncomingEvent`).
 - Produces:
+  - Em `lib/whatsapp/siteOrder.ts` (com teste `siteOrder.test.ts`), seguindo a gramática de `docs/integracao-site-whatsapp.md` §2:
+    - `type ItemSite = { qtd: number; descricao: string; sku: string | null; secao: "material" | "uniforme" | null }`
+    - `type GrupoSite = { titulo: string; itens: ItemSite[] }`
+    - `parseOrcamentoSite(texto: string): { versao: 1; grupos: GrupoSite[] } | null`: `null` se a última linha não vazia (depois de `trim`, aceitando `\r\n`) não for exatamente `#ORC-SITE v1`. Item = `^- (\d+)x (.+?)(?: \[SKU ([^\]]+)\])?$`. `*…*` abre grupo; `Material escolar:`/`Uniforme:` definem `secao`; outras linhas são ignoradas.
+  - `ORCAR_UNIFORME_DO_SITE = false` (constante em `bot.ts`): **pendente de decisão da dona**. Com `false`, itens de `Uniforme` entram como "a loja confirma" (sem preço). Com `true`, orça igual material.
   - `extractListCode(text: string): string | null`: acha `#L-XXXX` ou `L-XXXX` em qualquer caixa → `"L-XXXX"` maiúsculo.
   - `looksLikeList(text: string): boolean`: `parseList(text).length >= 2 || /^\s*\d+\s+\S/m.test(text)`
   - `type ContactState = { id: string; isNew: boolean; optInAskedAt: Date | null; botPausedUntil: Date | null }`
@@ -178,6 +189,7 @@ it('payload estranho não quebra', () => {
     `  recordIncoming(ev: Extract<IncomingEvent,{kind:"message"}>): Promise<ContactState | null>; // null = metaId já visto`
     `  savedQuote(code: string): Promise<{ title: string; lines: SavedQuoteLine[] } | null>; // activeOnly`
     `  catalog(): Promise<CatalogProduct[]>;`
+    `  productsBySku(skus: string[]): Promise<Map<string, CatalogProduct>>; // só ACTIVE`
     `  readImage(imageId: string): Promise<string | null>; // null = sem chave de IA`
     `  setOptIn(contactId: string): Promise<void>;`
     `  setOptOut(contactId: string): Promise<void>;`
@@ -193,15 +205,44 @@ Ordem da decisão em `handleEvent` para `kind:"message"`:
 1. `recordIncoming` → `null` = repetida → para.
 2. `botPausedUntil > now` → para (atendente está na conversa).
 3. Texto normalizado (sem acento/pontuação, minúsculo, trim) igual a `sim` → `setOptIn` + `optInDone`. Igual a `sair`/`parar`/`cancelar` → `setOptOut` + `optOutDone`. Fim.
-4. `extractListCode(text)` → `savedQuote(code)`. Achou → `quoteReply(title, lines)`. Não achou → `notFoundListReply()`.
-5. `type:"image"` → `readImage`. `null` → `photoNeedsTextReply()`. Texto lido → orçamento com `buildQuote(lido, catalog())`.
-6. `looksLikeList(text)` → `buildQuote(text, catalog())`, linhas com `product` = o candidato escolhido (`productId`) → `quoteReply("sua lista", ...)`.
-7. Senão → `handoffReply()`.
-8. Se `optInAskedAt == null` (e não foi SIM/SAIR): acrescenta `optInQuestion()` na mesma resposta e chama `markOptInAsked`.
+4. `parseOrcamentoSite(text)` ≠ null → `productsBySku`. Linhas na ordem da mensagem, **somando a quantidade do mesmo SKU** entre grupos. Item sem SKU, SKU desconhecido ou inativo → `product: null` ("a loja confirma"). Uniforme com `ORCAR_UNIFORME_DO_SITE = false` → `product: null`. Resposta `quoteReply("pedido do site", linhas)`. Este passo vem **antes** do `#L-`, porque o pedido do site tem cara de lista.
+5. `extractListCode(text)` → `savedQuote(code)`. Achou → `quoteReply(title, lines)`. Não achou → `notFoundListReply()`.
+6. `type:"image"` → `readImage`. `null` → `photoNeedsTextReply()`. Texto lido → orçamento com `buildQuote(lido, catalog())`.
+7. `looksLikeList(text)` → `buildQuote(text, catalog())`, linhas com `product` = o candidato escolhido (`productId`) → `quoteReply("sua lista", ...)`.
+8. Senão → `handoffReply()`.
+9. Se `optInAskedAt == null` (e não foi SIM/SAIR): acrescenta `optInQuestion()` na mesma resposta e chama `markOptInAsked`.
 
 `kind:"echo"` → `pause(to, now + 6h)`. `kind:"status"` → `updateStatus`.
 
-- [ ] **Step 1: Write the failing tests** (`bot.test.ts`, com `fakePorts()` em memória que grava os `send`)
+- [ ] **Step 1: Write the failing tests** (`node:test` + `assert`; abaixo as asserções em estilo `expect` só para ler — escrever com `assert.equal`/`assert.match`/`assert.deepEqual`). Fixture `PEDIDO_SITE` = exemplo real de `docs/integracao-site-whatsapp.md` §2.
+
+`siteOrder.test.ts`:
+- `parseOrcamentoSite` lê 2 grupos e 6 itens; "Tinta guache 6 cores" tem `sku: null`; "Camiseta manga cobalto, tamanho 2" tem `secao: "uniforme"`, `sku: "2000000000022"`, `qtd: 1`.
+- texto sem a marca final → `null`; marca `#ORC-SITE v2` → `null`.
+- mesmo texto com `\r\n` e `"  \n"` depois da marca → aceito.
+- linha `- abc` que não casa é ignorada, sem erro.
+
+`bot.test.ts` (com `fakePorts()` em memória que grava os `send`):
+
+```ts
+it('pedido do site orça por SKU e não cai em lista livre', async () => {
+  const p = fakePorts({ bySku: { '7891027116804': caderno, '7908673911759': lapis } })
+  await handleEvent(msg(PEDIDO_SITE), p)
+  expect(p.sent[0]).toContain('Caderno'); expect(p.catalogCalls).toBe(0)
+  expect(p.sent[0]).toMatch(/Tinta guache/)              // vai para "a loja confirma"
+})
+it('SKU repetido em dois grupos soma', async () => {
+  // dois grupos com "- 2x Lápis [SKU 7908673911759]" e "- 3x Lápis [SKU 7908673911759]"
+  expect(p.sent[0]).toContain('5 × Lápis')
+})
+it('uniforme do site fica para a loja confirmar (ORCAR_UNIFORME_DO_SITE=false)', async () => {
+  expect(p.sent[0]).not.toMatch(/Camiseta.*R\$/)
+})
+it('pedido do site editado ainda orça', async () => {
+  // PEDIDO_SITE sem uma linha de item e com "obs: urgente" no meio
+  expect(p.sent[0]).toContain('Total: R$')
+})
+```
 
 ```ts
 it('código de lista salva responde orçamento com rodapé', async () => {
@@ -254,9 +295,9 @@ it('pergunta de novidades só uma vez', async () => {
 })
 ```
 
-- [ ] **Step 2:** `npx vitest run lib/whatsapp/bot.test.ts` → FAIL
+- [ ] **Step 2:** `node --test lib/whatsapp/siteOrder.test.ts lib/whatsapp/bot.test.ts` → FAIL
 - [ ] **Step 3:** Implementar `messages.ts` e `bot.ts`. Usar `Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' })` para o `brl`. Se `readImage` lançar erro, responder `photoNeedsTextReply()`. Erros de `send` sobem (a rota registra).
-- [ ] **Step 4:** rodar de novo → PASS (9 testes)
+- [ ] **Step 4:** rodar de novo → PASS (13 testes do bot + os do siteOrder)
 - [ ] **Step 5: Commit** `WhatsApp: robô de orçamento (lógica e textos)`
 
 ---
@@ -303,7 +344,7 @@ it('sendText com erro da Meta lança mensagem clara', async () => {
 
 - [ ] **Step 2:** rodar → FAIL
 - [ ] **Step 3:** Implementar. A Graph usa `WHATSAPP_GRAPH_VERSION ?? 'v23.0'`. `downloadMedia`: GET `/{mediaId}` → `url` → GET com o token.
-- [ ] **Step 4:** `npx vitest run lib/whatsapp` → PASS. Com o pglite (migrações do sistema aplicadas): `DATABASE_URL=<pglite> npx vitest run lib/whatsapp/ports.test.ts` → PASS.
+- [ ] **Step 4:** `node --test "lib/whatsapp/*.test.ts"` → PASS. Com o pglite (migrações do sistema aplicadas): `DATABASE_URL=<pglite> node --test lib/whatsapp/ports.test.ts` → PASS.
 - [ ] **Step 5: Commit** `WhatsApp: banco, envio pela Meta e leitura de foto`
 
 ---
@@ -311,19 +352,23 @@ it('sendText com erro da Meta lança mensagem clara', async () => {
 ### Task 6: Rota do webhook + guia de configuração
 
 **Files (LacolariaSite):**
-- Create: `app/api/whatsapp/webhook/route.ts`
-- Test: `app/api/whatsapp/webhook/route.test.ts`
+- Create: `lib/whatsapp/handler.ts` (lógica da rota, testável sem o Next)
+- Test: `lib/whatsapp/handler.test.ts`
+- Create: `app/api/whatsapp/webhook/route.ts` (fino: só chama o handler com `after` e `createPorts`)
 - Create: `docs/whatsapp-setup.md`
 
 **Interfaces:**
 - Consumes: `verifySignature`, `parseWebhook` (Task 3), `handleEvent` (Task 4), `createPorts` (Task 5)
-- Produces: `GET(request: Request): Response`, `POST(request: Request): Promise<Response>`, `export const runtime = "nodejs"`, `export const maxDuration = 60`
+- Produces:
+  - `verifyGet(url: URL, verifyToken: string | undefined): Response`
+  - `handlePost(raw: string, signature: string | null, deps: { appSecret: string | undefined; schedule: (job: () => Promise<void>) => void; handle: (ev: IncomingEvent) => Promise<void> }): Response`
+  - na rota: `GET`, `POST`, `export const runtime = "nodejs"`, `export const maxDuration = 60`; `POST` = `handlePost(await request.text(), request.headers.get('x-hub-signature-256'), { appSecret: env, schedule: after, handle: (ev) => handleEvent(ev, createPorts()) })`
 
 Comportamento:
 - `GET`: `hub.mode=subscribe` + `hub.verify_token` igual ao env → devolve `hub.challenge` (texto, 200). Senão 403.
 - `POST`: lê o corpo cru (`await request.text()`). Assinatura inválida → 401. Válida → `parseWebhook(JSON.parse(raw))` → `after(async () => { for (const ev of events) await handleEvent(ev, createPorts()) })` com `try/catch` por evento (`console.error` com o `metaId`) → responde 200 na hora.
 
-- [ ] **Step 1: Write the failing tests** (com `vi.mock('next/server', ...)` só para o `after` rodar na hora e `vi.mock('@/lib/whatsapp/ports')` devolvendo portas falsas)
+- [ ] **Step 1: Write the failing tests** em `lib/whatsapp/handler.test.ts` (`node:test`; `schedule` = roda o job na hora; `handle` = grava em `handled`). As chamadas abaixo usam `GET(...)`/`POST(...)` como apelido de `verifyGet(new URL(...), token)`/`handlePost(body, sig, deps)`.
 
 ```ts
 it('GET devolve o challenge com o token certo', async () => {
@@ -356,7 +401,7 @@ it('POST assinado responde 200 e processa a mensagem', async () => {
   5. Expor o `localhost` com um túnel para testar o webhook sem publicar o site.
   6. Assinar os campos `messages` e `smb_message_echoes`.
   7. Só no fim, migrar o número da loja em modo coexistência.
-- [ ] **Step 4:** `npx vitest run` → tudo PASS. `npx tsc --noEmit` e `npx next build` → sem erros.
+- [ ] **Step 4:** `npm test` → tudo PASS (os 58 antigos + os novos). `npx tsc --noEmit` e `npx next build` → sem erros.
 - [ ] **Step 5: Commit** `WhatsApp: rota do webhook e guia de configuração`
 
 ---
