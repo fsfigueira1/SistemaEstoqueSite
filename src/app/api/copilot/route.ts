@@ -18,7 +18,8 @@ export async function POST(request: Request) {
   if (text.length > 8000) return NextResponse.json({ success: false, error: "Mensagem grande demais" }, { status: 400 })
   if (name.length > 120) return NextResponse.json({ success: false, error: "Nome grande demais" }, { status: 400 })
   try {
-    const data = await CopilotService.draft({ name, phone: String(body?.phone ?? ""), text })
+    const replaceId = typeof body?.replaceId === "string" ? body.replaceId : null
+    const data = await CopilotService.draft({ name, phone: String(body?.phone ?? ""), text, replaceId })
     return NextResponse.json({ success: true, data })
   } catch (error) {
     return NextResponse.json({ success: false, error: friendlyError(error).message }, { status: 500 })

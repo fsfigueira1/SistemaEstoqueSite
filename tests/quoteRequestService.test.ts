@@ -84,4 +84,15 @@ describe('QuoteRequestService', () => {
     expect((await QuoteRequestService.get(id))!.status).toBe('retirado');
     await expect(QuoteRequestService.setStatus(id, 'perdido')).rejects.toThrow('Situação inválida');
   });
+
+  it('limpa valores vindos da tela e marca contato do balcão como manual', async () => {
+    const { id } = await QuoteRequestService.create(
+      base({ source: 'balcao', total: -5, toConfirm: ['x'.repeat(500)], items: [{ qty: 1, text: 'lápis', productId: lapis.id, price: -2, take: 1 }] }),
+    );
+    const q = await QuoteRequestService.get(id);
+    expect(q!.total).toBe(0);
+    expect(q!.items[0].price).toBe(0);
+    expect(q!.toConfirm[0].length).toBeLessThanOrEqual(200);
+    expect((await prisma.contact.findUniqueOrThrow({ where: { phone: '5517999998888' } })).source).toBe('manual');
+  });
 });

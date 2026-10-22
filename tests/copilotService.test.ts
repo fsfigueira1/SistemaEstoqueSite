@@ -90,4 +90,49 @@ describe('CopilotService.draft', () => {
     expect(r.quoteRequestId).toBeNull();
     expect(r.reply).toMatch(/Não encontrei essa lista/);
   });
+
+  it('"Bom dia" não vira item mesmo com produto "Dia a Dia"', async () => {
+    const cat = await prisma.category.findFirstOrThrow();
+    await prisma.product.create({ data: { name: 'Agenda Dia a Dia 2027', sku: 'QAGE', categoryId: cat.id, salePrice: 29.9, stockQuantity: 5 } });
+    const r = await CopilotService.draft({ name: 'Ana', phone: '', text: 'Bom dia!\nQue horas vocês abrem?' }, { ai });
+    expect(r.intent).toBe('other');
+    expect(await prisma.quoteRequest.count()).toBe(0);
+  });
+
+  it('item sem quantidade e não reconhecido vai para a loja confirmar', async () => {
+    const r = await CopilotService.draft({ name: 'Ana', phone: '', text: 'lápis\nborracha\ncompasso' }, { ai });
+    expect(r.reply).toMatch(/A loja confirma[\s\S]*compasso/);
+  });
+
+  it('resposta comum com preço da IA é trocada pela resposta fixa', async () => {
+    const pricey = async () => 'O caderno custa R$ 20, vem buscar!';
+    const r = await CopilotService.draft({ name: 'Ana', phone: '', text: 'quanto tá o caderno?' }, { ai: pricey });
+    expect(r.reply).not.toMatch(/R\$/);
+    expect(r.reply).toContain('Seg a sex 8h às 18h');
+    const reais = async () => 'Sai por uns 20 reais';
+    expect((await CopilotService.draft({ name: 'Ana', phone: '', text: 'e a mochila?' }, { ai: reais })).reply).not.toMatch(/reais/);
+  });
+
+  it('pedido sem nenhum item com preço não salva orçamento de R$ 0,00', async () => {
+    const texto = 'Material escolar:\n- 1x Tinta guache\nUniforme:\n- 1x Camiseta manga cobalto, tamanho 2 [SKU QCAM]\n#ORC-SITE v1';
+    const r = await CopilotService.draft({ name: 'Ana', phone: '', text: texto }, { ai });
+    expect(r.quoteRequestId).toBeNull();
+    expect(r.reply).not.toMatch(/Total/);
+    expect(r.reply).toMatch(/Tinta guache[\s\S]*Camiseta/);
+  });
+
+  it('SKU desconhecido do site fica para a loja confirmar, não "não temos"', async () => {
+    const texto = '- 2x Lápis HB [SKU QLAP]\n- 1x Estojo azul [SKU NAOEXISTE]\n#ORC-SITE v1';
+    const r = await CopilotService.draft({ name: 'Ana', phone: '', text: texto }, { ai });
+    expect(r.reply).not.toMatch(/Não temos no momento/);
+    expect(r.reply).toMatch(/A loja confirma[\s\S]*Estojo azul/);
+  });
+
+  it('gerar de novo substitui o orçamento em vez de duplicar', async () => {
+    const a = await CopilotService.draft({ name: 'Ana', phone: '', text: '2 lápis\n1 borracha' }, { ai });
+    const b = await CopilotService.draft({ name: 'Ana', phone: '', text: '3 lápis\n1 borracha', replaceId: a.quoteRequestId }, { ai });
+    expect(b.quoteRequestId).toBe(a.quoteRequestId);
+    expect(await prisma.quoteRequest.count()).toBe(1);
+    expect(b.total).toBe(9.3);
+  });
 });

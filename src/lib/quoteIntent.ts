@@ -4,7 +4,7 @@
 // Atendimento (copiloto): o que o cliente mandou no WhatsApp? Pedido do botão
 // do site ("#ORC-SITE v1"), código de lista salva ("#L-XXXX"), lista de
 // material digitada ou uma mensagem comum. Testado em quoteIntent.test.ts.
-import { parseList } from "@/lib/schoolList"
+import { norm, parseList } from "@/lib/schoolList"
 
 export type ItemSite = { qtd: number; descricao: string; sku: string | null; secao: "material" | "uniforme" | null }
 export type GrupoSite = { titulo: string; itens: ItemSite[] }
@@ -67,6 +67,27 @@ export function looksLikeList(text: string): boolean {
 /** Linha que começa com quantidade ("2 lápis", "- 3x borracha", "1. 02 cadernos"). */
 export const EXPLICIT_QTY = /^\s*(?:[-•*]\s*)?(?:\d+[.)]\s+)?\d+\s*x?\s+\S/i
 
+// cumprimentos e cortesias: uma linha feita só disso não é item de lista
+const GREETINGS = [
+  "bom dia", "boa tarde", "boa noite", "tudo bem", "tudo bom", "td bem", "por favor", "ate logo", "ate mais", "e ai",
+  "oi", "oii", "oiii", "ola", "obrigado", "obrigada", "obg", "valeu", "pfv", "bjs", "beijo", "beijos", "boa", "bom",
+]
+const GREETING_RE = new RegExp(`\\b(?:${GREETINGS.map((g) => g.replace(/ /g, "\\s+")).join("|")})\\b`, "g")
+
+/** "Bom dia!", "Oi, tudo bem?", "Obrigada 😊" — sem nada além de cumprimento. */
+export function isGreetingLine(line: string): boolean {
+  const t = norm(line).replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim()
+  if (!t) return false
+  return !t.replace(GREETING_RE, " ").trim()
+}
+
+/** Tira as linhas que são só cumprimento (não viram item do orçamento). */
+export const stripGreetings = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .filter((l) => !isGreetingLine(l))
+    .join("\n")
+
 export type Intent =
   | { kind: "site"; order: SiteOrder }
   | { kind: "code"; code: string }
@@ -77,8 +98,9 @@ export type Intent =
 export function classify(text: string): Intent {
   const order = parseOrcamentoSite(text)
   if (order) return { kind: "site", order }
-  const code = extractListCode(text)
-  if (looksLikeList(text)) return code ? { kind: "list", code } : { kind: "list" }
+  const body = stripGreetings(text)
+  const code = extractListCode(body)
+  if (looksLikeList(body)) return code ? { kind: "list", code } : { kind: "list" }
   if (code) return { kind: "code", code }
   return { kind: "other" }
 }

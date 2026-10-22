@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { classify, extractListCode, looksLikeList, parseOrcamentoSite } from "./quoteIntent"
+import { classify, extractListCode, isGreetingLine, looksLikeList, parseOrcamentoSite } from "./quoteIntent"
 
 const PEDIDO_SITE = `Olá! Vim pelo site e quero um orçamento para retirar na loja:
 
@@ -56,4 +56,16 @@ describe("classify", () => {
     expect(classify("2 lápis\n1 camiseta tam l-azul").kind).toBe("list")
     expect(classify("que horas vocês abrem?").kind).toBe("other")
   })
+
+describe("saudação não conta como item", () => {
+  it("linha de saudação/cortesia é ignorada na classificação", () => {
+    expect(isGreetingLine("Bom dia!")).toBe(true)
+    expect(isGreetingLine("Oi, tudo bem?")).toBe(true)
+    expect(isGreetingLine("Obrigada 😊")).toBe(true)
+    expect(isGreetingLine("2 agendas dia a dia")).toBe(false)
+    expect(classify("Bom dia!\nQue horas vocês abrem?").kind).toBe("other")
+    expect(classify("Boa tarde!\nObrigado").kind).toBe("other")
+    expect(classify("Oi!\n2 lápis\n1 borracha").kind).toBe("list")
+  })
+})
 })

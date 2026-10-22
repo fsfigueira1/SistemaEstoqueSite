@@ -5,7 +5,7 @@
 // pela IA). Nas outras mensagens a IA responde como atendente, só com os dados
 // da loja. Quem envia é sempre o atendente. Testado em tests/copilotService.test.ts.
 import { allocate, buildQuote, quoteMessage, quoteTotals, type CatalogProduct } from "@/lib/schoolList"
-import { classify, EXPLICIT_QTY, type SiteOrder } from "@/lib/quoteIntent"
+import { classify, EXPLICIT_QTY, stripGreetings, type SiteOrder } from "@/lib/quoteIntent"
 import { NVIDIA_DEFAULT_MODEL, nvidiaChat } from "@/lib/nvidia"
 import { getServerSettings, type ServerSettings } from "@/lib/serverSettings"
 import { prisma } from "@/lib/prisma"
@@ -45,7 +45,13 @@ async function siteQuote(order: SiteOrder): Promise<Built> {
     ? await prisma.product.findMany({ where: { sku: { in: [...bySku.keys()] }, status: "ACTIVE" }, select: CATALOG_SELECT })
     : []
   const bySkuProduct = new Map(rows.map((r) => [r.sku, toCatalogProduct(r)]))
-  const lines = [...bySku.entries()].map(([sku, l]) => ({ qty: l.qty, text: l.text, product: bySkuProduct.get(sku) ?? null }))
+  const lines: Line[] = []
+  for (const [sku, l] of bySku) {
+    const product = bySkuProduct.get(sku)
+    // SKU que não existe/inativo: a loja confere (não é "não temos")
+    if (product) lines.push({ qty: l.qty, text: l.text, product })
+    else toConfirm.push(`${l.qty} × ${l.text}`)
+  }
   return { title: "pedido do site", lines, toConfirm }
 }
 
@@ -53,7 +59,7 @@ async function siteQuote(order: SiteOrder): Promise<Built> {
 async function listQuote(text: string): Promise<Built | null> {
   const catalog = await getCatalog()
   const byId = new Map(catalog.map((p) => [p.id, p]))
-  const quote = buildQuote(text, catalog)
+  const quote = buildQuote(stripGreetings(text), catalog)
   const matched = quote.filter((l) => l.productId && byId.has(l.productId)).length
   const withQty = quote.filter((l) => EXPLICIT_QTY.test(l.raw)).length
   if (!matched && withQty < 2) return null
@@ -61,8 +67,9 @@ async function listQuote(text: string): Promise<Built | null> {
   const toConfirm: string[] = []
   for (const l of quote) {
     const product = l.productId ? byId.get(l.productId) : undefined
+    // aceita como lista: o que não casou vai para a loja conferir (nada some)
     if (product) lines.push({ qty: l.qty, text: l.text, product })
-    else if (l.candidates.length || EXPLICIT_QTY.test(l.raw)) toConfirm.push(`${l.qty} × ${l.text}`)
+    else toConfirm.push(`${l.qty} × ${l.text}`)
   }
   return { title: "sua lista", lines, toConfirm }
 }
@@ -106,10 +113,16 @@ function defaultAi(settings: ServerSettings): Ai {
   }
 }
 
+/** Preço escrito pela IA não vai para o cliente (o preço é sempre o do sistema). */
+const PRICE_RE = /R\s?\$|\d+[.,]\d{2}\b|\breais\b|\bcentavos\b/i
+
 const NOT_FOUND = "Não encontrei essa lista aqui. Pode mandar a lista de material (texto ou foto) que eu monto o orçamento com o que temos na loja."
 
 export const CopilotService = {
-  async draft(input: { name: string; phone: string; text: string }, deps: { ai?: Ai } = {}): Promise<DraftResult> {
+  async draft(
+    input: { name: string; phone: string; text: string; /** gerar de novo: substitui este orçamento */ replaceId?: string | null },
+    deps: { ai?: Ai } = {},
+  ): Promise<DraftResult> {
     const settings = await getServerSettings()
     const ai = deps.ai ?? defaultAi(settings)
     const name = String(input.name ?? "").trim().slice(0, 120)
@@ -134,7 +147,7 @@ ${storeFacts(settings)}`
       } catch {
         reply = ""
       }
-      if (!reply) {
+      if (!reply || reply.length > 700 || PRICE_RE.test(reply)) {
         reply = [
           `Oi${first ? `, ${first}` : ""}! Recebemos sua mensagem e já te respondemos por aqui.`,
           "Se for orçamento de material, pode mandar a lista (texto ou foto).",
@@ -145,6 +158,13 @@ ${storeFacts(settings)}`
           .join("\n")
       }
       return { reply, intent: "other", quoteRequestId: null, total: null }
+    }
+
+    // nada com preço (só uniforme, só itens a conferir…): não é orçamento de R$ 0,00
+    if (!built.lines.some((l) => l.product)) {
+      const pending = [...built.lines.map((l) => `${l.qty} × ${l.text}`), ...built.toConfirm]
+      const reply = [`${first ? `Oi, ${first}!` : "Olá!"} Vou conferir esses itens e já te respondo por aqui:`, ...pending.map((t) => `• ${t}`)].join("\n")
+      return { reply, intent: intent.kind, quoteRequestId: null, total: null }
     }
 
     const quote = quoteText(settings.companyName, settings.companyAddress, built)
@@ -160,7 +180,7 @@ ${storeFacts(settings)}`
       opening = ""
     }
     // abertura longa demais ou com números de preço é descartada
-    if (!opening || opening.length > 280 || /R\$|\d+,\d{2}/.test(opening)) opening = `${first ? `Oi, ${first}!` : "Olá!"} Segue o orçamento:`
+    if (!opening || opening.length > 280 || PRICE_RE.test(opening)) opening = `${first ? `Oi, ${first}!` : "Olá!"} Segue o orçamento:`
     const reply = `${opening}\n\n${quote}`
 
     const takes = allocate(built.lines)
@@ -169,16 +189,17 @@ ${storeFacts(settings)}`
       .filter((i) => i.productId)
     const missing = built.lines.filter((l) => !l.product).map((l) => `${l.qty} × ${l.text}`)
     const total = quoteTotals(built.lines).total
-    const { id } = await QuoteRequestService.create({
+    const data = {
       name,
       phone: input.phone,
-      source: "whatsapp",
+      source: "whatsapp" as const,
       title: built.title,
       items,
       toConfirm: [...missing, ...built.toConfirm],
       total,
       message: reply,
-    })
+    }
+    const id = (input.replaceId && (await QuoteRequestService.replace(input.replaceId, data))) || (await QuoteRequestService.create(data)).id
     return { reply, intent: intent.kind, quoteRequestId: id, total }
   },
 }

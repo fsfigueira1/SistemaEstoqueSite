@@ -67,28 +67,53 @@ const summary = (q: {
   itemCount: asItems(q.items).length,
 })
 
+const money = (v: unknown) => {
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0
+}
+
+// o corpo pode vir da tela (Lista Escolar): nada negativo, textos curtos
+function clean(input: CreateInput) {
+  return {
+    name: String(input.name ?? "").trim().slice(0, 120),
+    phone: whatsappNumber(input.phone),
+    source: input.source,
+    title: String(input.title ?? "").slice(0, 200),
+    items: input.items.slice(0, 300).map((i) => ({
+      qty: Math.max(1, Math.round(Number(i.qty) || 1)),
+      text: String(i.text ?? "").slice(0, 200),
+      productId: i.productId || null,
+      price: i.price == null ? null : money(i.price),
+      take: Math.max(0, Math.round(Number(i.take) || 0)),
+    })) as unknown as Prisma.InputJsonValue,
+    toConfirm: input.toConfirm.slice(0, 300).map((t) => String(t).slice(0, 200)),
+    total: money(input.total),
+    message: String(input.message ?? "").slice(0, 8000),
+  }
+}
+
 export const QuoteRequestService = {
   async create(input: CreateInput): Promise<{ id: string }> {
     await ensureSchema()
-    const phone = whatsappNumber(input.phone)
-    const name = String(input.name ?? "").trim().slice(0, 120)
-    const q = await prisma.quoteRequest.create({
-      data: {
-        name,
-        phone,
-        source: input.source,
-        title: String(input.title ?? "").slice(0, 200),
-        items: input.items as unknown as Prisma.InputJsonValue,
-        toConfirm: input.toConfirm,
-        total: Math.round(Number(input.total || 0) * 100) / 100,
-        message: String(input.message ?? "").slice(0, 8000),
-      },
-    })
+    const data = clean(input)
+    const q = await prisma.quoteRequest.create({ data })
     // o número entra nos Contatos como "não respondeu SIM"; quem já existe não muda
-    if (phone) {
-      await prisma.contact.createMany({ data: [{ phone, name: name || null, source: "whatsapp" }], skipDuplicates: true })
+    if (data.phone) {
+      await prisma.contact.createMany({
+        data: [{ phone: data.phone, name: data.name || null, source: input.source === "balcao" ? "manual" : "whatsapp" }],
+        skipDuplicates: true,
+      })
     }
     return { id: q.id }
+  },
+
+  /** Gerou de novo no atendimento: troca o conteúdo do orçamento ainda aberto. null = não dá (não existe ou já andou). */
+  async replace(id: string, input: CreateInput): Promise<string | null> {
+    await ensureSchema()
+    const cur = await prisma.quoteRequest.findUnique({ where: { id }, select: { status: true } })
+    if (!cur || cur.status !== "aberto") return null
+    await prisma.quoteRequest.update({ where: { id }, data: clean(input) })
+    return id
   },
 
   async list(opts: { q?: string; status?: string }): Promise<QuoteSummary[]> {

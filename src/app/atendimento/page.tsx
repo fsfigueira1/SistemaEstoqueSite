@@ -36,12 +36,14 @@ export default function AtendimentoPage() {
   const generate = async () => {
     setBusy(true);
     setErr(null);
+    // gerar de novo para o mesmo cliente substitui o orçamento (não duplica)
+    const replaceId = draft?.quoteRequestId ?? null;
     setDraft(null);
     try {
       const r = await fetch('/api/copilot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone, text }),
+        body: JSON.stringify({ name, phone, text, replaceId }),
       });
       const data = await r.json();
       if (!r.ok || !data.success) throw new Error(errorText(data, 'Não consegui montar a resposta'));
