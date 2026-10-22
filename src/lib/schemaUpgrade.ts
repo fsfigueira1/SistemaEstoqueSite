@@ -9,7 +9,7 @@
 // (IF NOT EXISTS), então rodar em 3 PCs ao mesmo tempo é seguro.
 //
 // Mantenha em sincronia com prisma/migrations/20260924120000_reports_ai/migration.sql
-// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists e 20261021120000_whatsapp_contacts).
+// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists, 20261021120000_whatsapp_contacts e 20261022120000_novidades_ia).
 import { prisma } from "@/lib/prisma"
 
 export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
@@ -168,6 +168,26 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "WhatsAppMessage_metaId_key" ON "WhatsAppMessage"("metaId")`,
   `CREATE INDEX IF NOT EXISTS "WhatsAppMessage_contactId_createdAt_idx" ON "WhatsAppMessage"("contactId", "createdAt")`,
+
+  // --- 0.4.0: novidades e IA da NVIDIA ---
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "aiProvider" TEXT NOT NULL DEFAULT 'nvidia'`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "nvidiaApiKey" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "nvidiaModel" TEXT NOT NULL DEFAULT 'nvidia/nemotron-3.5-super-vl-120b-a12b'`,
+  `CREATE TABLE IF NOT EXISTS "Broadcast" (
+    "id" TEXT NOT NULL,
+    "text" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Broadcast_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE TABLE IF NOT EXISTS "BroadcastRecipient" (
+    "broadcastId" TEXT NOT NULL,
+    "contactId" TEXT NOT NULL,
+    "sentAt" TIMESTAMP(3),
+    CONSTRAINT "BroadcastRecipient_pkey" PRIMARY KEY ("broadcastId","contactId"),
+    CONSTRAINT "BroadcastRecipient_broadcastId_fkey" FOREIGN KEY ("broadcastId") REFERENCES "Broadcast"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "BroadcastRecipient_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS "BroadcastRecipient_contactId_idx" ON "BroadcastRecipient"("contactId")`,
 ]
 
 let upgrade: Promise<void> | null = null

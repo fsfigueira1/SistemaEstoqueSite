@@ -394,6 +394,10 @@ model Settings {
   storeCity                    String   @default("")
   /// Chave da API do Claude (Anthropic). Nunca é devolvida pela API de configurações.
   aiApiKey                     String   @default("")
+  /// nvidia | claude — quem lê a foto da lista e responde no ajudante
+  aiProvider                   String   @default("nvidia")
+  nvidiaApiKey                 String   @default("")
+  nvidiaModel                  String   @default("nvidia/nemotron-3.5-super-vl-120b-a12b")
   aiModel                      String   @default("claude-sonnet-5")
   /// % acima do preço atual que dispara o aviso de "mercado em alta".
   priceAlertPercent            Float    @default(10)
@@ -551,6 +555,7 @@ model Contact {
   updatedAt      DateTime          @updatedAt
   customer       Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
   messages       WhatsAppMessage[]
+  recipients     BroadcastRecipient[]
 }
 
 /// Mensagem do WhatsApp (entrada e saída). metaId = id da Meta ("wamid..."),
@@ -570,4 +575,25 @@ model WhatsAppMessage {
   updatedAt DateTime @updatedAt
   contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   @@index([contactId, createdAt])
+}
+
+/// Novidade enviada pelo WhatsApp do celular (lista de transmissão ou um por
+/// um). Guarda o texto sem o rodapé de saída (entra na hora de enviar).
+model Broadcast {
+  id         String               @id @default(uuid())
+  text       String
+  createdAt  DateTime             @default(now())
+  recipients BroadcastRecipient[]
+}
+
+/// Quem estava recebendo novidades quando o envio foi criado; sentAt = a
+/// loja marcou que mandou.
+model BroadcastRecipient {
+  broadcastId String
+  contactId   String
+  sentAt      DateTime?
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  @@id([broadcastId, contactId])
+  @@index([contactId])
 }
