@@ -11,7 +11,8 @@ export type WhatsAppBridge = {
   show: (bounds: { x: number; y: number; width: number; height: number }) => Promise<boolean>;
   hide: () => Promise<boolean>;
   read: () => Promise<WaChat>;
-  insert: (text: string) => Promise<boolean>;
+  /** cola só se a conversa aberta ainda for a do cliente esperado */
+  insert: (text: string, expected: { name: string; phone: string }) => Promise<{ ok: boolean; reason?: 'outra-conversa' | 'sem-caixa' }>;
   reload: () => Promise<boolean>;
 };
 
@@ -28,6 +29,26 @@ export function customerTurn(messages: Array<{ from: 'cliente' | 'loja'; text: s
   });
   const after = messages.slice(last + 1).filter((m) => m.from === 'cliente');
   return (last >= 0 ? after : after.slice(-6)).map((m) => m.text).join('\n');
+}
+
+type Box = { x: number; y: number; width: number; height: number };
+
+/** Parte visível da área do WhatsApp (a página rolou); null se quase nada aparece. */
+export function visibleBounds(b: Box, win: { width: number; height: number }): Box | null {
+  const x = Math.max(0, b.x);
+  const y = Math.max(0, b.y);
+  const width = Math.min(b.x + b.width, win.width) - x;
+  const height = Math.min(b.y + b.height, win.height) - y;
+  return width >= 50 && height >= 50 ? { x, y, width, height } : null;
+}
+
+/** Mesmo cliente? Pelo telefone quando os dois têm; senão pelo nome (igual a sameChat em electron/whatsappDom.cjs). */
+export function sameCustomer(a: { name: string; phone: string }, b: { name: string; phone: string }): boolean {
+  const pa = a.phone.replace(/\D/g, '');
+  const pb = b.phone.replace(/\D/g, '');
+  if (pa && pb) return pa.slice(-10) === pb.slice(-10);
+  const na = a.name.trim().toLowerCase();
+  return Boolean(na) && na === b.name.trim().toLowerCase();
 }
 
 export const WA_REASON: Record<string, string> = {

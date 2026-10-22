@@ -33,4 +33,13 @@ describe("validação do IPC do WhatsApp", () => {
     expect(ipc.isAppSender("data:text/html,<p>x</p>", app, true)).toBe(false)
     expect(ipc.isAppSender("", app, true)).toBe(false)
   })
+
+  it("permissões só para o próprio WhatsApp e sem ler a área de transferência", () => {
+    expect(ipc.allowPermission("notifications", "https://web.whatsapp.com/")).toBe(true)
+    expect(ipc.allowPermission("persistent-storage", "https://web.whatsapp.com")).toBe(true)
+    expect(ipc.allowPermission("clipboard-read", "https://web.whatsapp.com/")).toBe(false)
+    expect(ipc.allowPermission("media", "https://web.whatsapp.com/")).toBe(false)
+    expect(ipc.allowPermission("notifications", "https://evil.example/")).toBe(false)
+    expect(ipc.allowPermission("notifications", "")).toBe(false)
+  })
 })

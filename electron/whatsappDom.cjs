@@ -48,7 +48,7 @@ function readOpenChat(doc, S) {
   doc.querySelectorAll(S.main + " " + S.idHolder).forEach((el) => {
     if (phone) return;
     const m = /(?:true|false)_(\d{10,15})@c\.us/.exec(el.getAttribute("data-id") || "");
-    if (m) phone = digitsToPhone(m[1]);
+    if (m) phone = m[1]; // o id já vem com o código do país
   });
   if (!phone && /^\+?[\d\s().-]{10,}$/.test(name)) phone = digitsToPhone(name.replace(/\D/g, ""));
 
@@ -72,6 +72,15 @@ function customerTurn(messages) {
   const after = messages.slice(last + 1).filter((m) => m.from === "cliente");
   const pick = last >= 0 ? after : after.slice(-6);
   return pick.map((m) => m.text).join("\n");
+}
+
+/** A conversa aberta é do cliente esperado? Pelo telefone quando os dois têm; senão pelo nome. */
+function sameChat(chat, expected) {
+  const pa = String(chat.phone || "").replace(/\D/g, "");
+  const pb = String(expected.phone || "").replace(/\D/g, "");
+  if (pa && pb) return pa.slice(-10) === pb.slice(-10);
+  const na = String(chat.name || "").trim().toLowerCase();
+  return Boolean(na) && na === String(expected.name || "").trim().toLowerCase();
 }
 
 /** Cola o texto na caixa de mensagem da conversa aberta (não envia). */
@@ -108,4 +117,4 @@ function toScript(fn, ...args) {
   return `(${fn.toString()})(${params})`;
 }
 
-module.exports = { SELECTORS, readOpenChat, customerTurn, insertIntoCompose, toScript };
+module.exports = { SELECTORS, readOpenChat, customerTurn, sameChat, insertIntoCompose, toScript };

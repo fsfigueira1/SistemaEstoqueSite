@@ -34,7 +34,7 @@ contextBridge.exposeInMainWorld(
       show: (bounds) => ipcRenderer.invoke('wa-show', bounds),
       hide: () => ipcRenderer.invoke('wa-hide'),
       read: () => ipcRenderer.invoke('wa-read-chat'),
-      insert: (text) => ipcRenderer.invoke('wa-insert', text),
+      insert: (text, expected) => ipcRenderer.invoke('wa-insert', text, expected),
       reload: () => ipcRenderer.invoke('wa-reload'),
     },
 

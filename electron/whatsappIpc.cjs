@@ -41,4 +41,14 @@ function isAppSender(senderUrl, appOrigin, isMainFrame) {
   }
 }
 
-module.exports = { validBounds, validText, isWhatsAppUrl, isAppSender };
+// armazenamento persistente é obrigatório: sem ele o WhatsApp acusa "erro no banco
+// de dados do navegador" e a sessão (QR code) não fica salva. Ler a área de
+// transferência não: o texto entra por um "colar" simulado.
+const ALLOWED_PERMISSIONS = ["notifications", "clipboard-sanitized-write", "persistent-storage", "storage-access"];
+
+/** Permissão pedida pela página: só as da lista e só vindas do próprio WhatsApp Web. */
+function allowPermission(permission, origin) {
+  return ALLOWED_PERMISSIONS.includes(permission) && isWhatsAppUrl(origin || "");
+}
+
+module.exports = { validBounds, validText, isWhatsAppUrl, isAppSender, allowPermission };

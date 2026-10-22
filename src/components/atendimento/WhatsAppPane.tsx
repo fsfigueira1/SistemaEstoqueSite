@@ -6,7 +6,7 @@
 
 import { useEffect, useRef } from 'react';
 import { RotateCw } from 'lucide-react';
-import { whatsappBridge } from '@/lib/whatsappBridge';
+import { visibleBounds, whatsappBridge } from '@/lib/whatsappBridge';
 
 export default function WhatsAppPane() {
   const ref = useRef<HTMLDivElement>(null);
@@ -17,8 +17,9 @@ export default function WhatsAppPane() {
     if (!wa || !el) return;
     const place = () => {
       const r = el.getBoundingClientRect();
-      if (r.width < 50 || r.height < 50) return;
-      wa.show({ x: Math.max(0, r.left), y: Math.max(0, r.top), width: r.width, height: r.height }).catch(() => {});
+      // só a parte visível (a página pode ter rolado); fora da tela, esconde
+      const b = visibleBounds({ x: r.left, y: r.top, width: r.width, height: r.height }, { width: window.innerWidth, height: window.innerHeight });
+      (b ? wa.show(b) : wa.hide()).catch(() => {});
     };
     place();
     const obs = new ResizeObserver(place);

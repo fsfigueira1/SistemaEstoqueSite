@@ -17,7 +17,7 @@ import LearnedExamples from '@/components/atendimento/LearnedExamples';
 import { errorText } from '@/lib/friendlyError';
 import { whatsappNumber } from '@/lib/restock';
 import { waLink } from '@/lib/contacts';
-import { WA_REASON, customerTurn, whatsappBridge } from '@/lib/whatsappBridge';
+import { WA_REASON, customerTurn, sameCustomer, whatsappBridge } from '@/lib/whatsappBridge';
 
 type Mode = 'whatsapp' | 'colar';
 
@@ -30,6 +30,8 @@ export default function AtendimentoPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  /** cliente para quem a resposta atual foi gerada (como veio da conversa/campos) */
+  const [draftFor, setDraftFor] = useState<{ name: string; phone: string } | null>(null);
   const [reply, setReply] = useState('');
   const [learned, setLearned] = useState(0);
 
@@ -40,8 +42,10 @@ export default function AtendimentoPage() {
   }, []);
 
   const ask = async (n: string, p: string, t: string) => {
-    // gerar de novo para o mesmo cliente substitui o orçamento (não duplica)
-    const replaceId = draft?.quoteRequestId ?? null;
+    // gerar de novo para o MESMO cliente substitui o orçamento (não duplica);
+    // outro cliente ganha um orçamento novo
+    const who = { name: n, phone: p };
+    const replaceId = draft?.quoteRequestId && draftFor && sameCustomer(draftFor, who) ? draft.quoteRequestId : null;
     setDraft(null);
     const r = await fetch('/api/copilot', {
       method: 'POST',
@@ -51,6 +55,7 @@ export default function AtendimentoPage() {
     const data = await r.json();
     if (!r.ok || !data.success) throw new Error(errorText(data, 'Não consegui montar a resposta'));
     setDraft(data.data);
+    setDraftFor(who);
     setReply(data.data.reply);
   };
 
@@ -93,8 +98,21 @@ export default function AtendimentoPage() {
     setPhone('');
     setText('');
     setDraft(null);
+    setDraftFor(null);
     setReply('');
     setErr(null);
+  };
+
+  const insert = async () => {
+    const r = await whatsappBridge()?.insert(reply, draftFor ?? { name: '', phone: '' });
+    if (r?.ok) return { ok: true };
+    return {
+      ok: false,
+      message:
+        r?.reason === 'outra-conversa'
+          ? `A conversa aberta não é a de ${draftFor?.name || 'quem pediu esta resposta'}. Volte para a conversa certa e clique de novo.`
+          : 'Não achei a caixa de mensagem. Abra a conversa no WhatsApp ou use Copiar.',
+    };
   };
 
   const wa = whatsappNumber(phone);
@@ -149,7 +167,7 @@ export default function AtendimentoPage() {
       reply={reply}
       setReply={setReply}
       waLinkHref={mode === 'colar' && wa ? waLink(wa, reply) : null}
-      onInsert={mode === 'whatsapp' ? async () => Boolean(await whatsappBridge()?.insert(reply)) : undefined}
+      onInsert={mode === 'whatsapp' ? insert : undefined}
       onApproved={approved}
       onNext={nextClient}
     />

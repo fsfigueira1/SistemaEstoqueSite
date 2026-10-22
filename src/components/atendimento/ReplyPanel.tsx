@@ -29,12 +29,12 @@ export default function ReplyPanel({
   /** modo colar com telefone válido: link wa.me */
   waLinkHref?: string | null;
   /** modo WhatsApp: escreve na caixa da conversa aberta */
-  onInsert?: () => Promise<boolean>;
+  onInsert?: () => Promise<{ ok: boolean; message?: string }>;
   onApproved: () => void;
   onNext: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const [inserted, setInserted] = useState<null | boolean>(null);
+  const [inserted, setInserted] = useState<null | { ok: boolean; message?: string }>(null);
 
   const copy = async () => {
     try {
@@ -49,9 +49,9 @@ export default function ReplyPanel({
 
   const insert = async () => {
     if (!onInsert) return;
-    const ok = await onInsert();
-    setInserted(ok);
-    if (ok) onApproved();
+    const r = await onInsert();
+    setInserted(r);
+    if (r.ok) onApproved();
   };
 
   return (
@@ -71,10 +71,10 @@ export default function ReplyPanel({
           )}
           <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={12} className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm leading-relaxed" />
           <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-            {inserted === true
+            {inserted?.ok
               ? 'Pronto — confira na conversa e aperte Enter no WhatsApp.'
-              : inserted === false
-                ? 'Não achei a caixa de mensagem. Abra a conversa no WhatsApp ou use Copiar.'
+              : inserted
+                ? inserted.message
                 : 'Confira antes de enviar — quem envia é você.'}
           </p>
           <div className="flex flex-wrap gap-2">

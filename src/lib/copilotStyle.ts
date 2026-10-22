@@ -16,14 +16,17 @@ Nunca invente preço, prazo, estoque ou promoção. Se não souber, diga que vai
 const MAX_SAMPLE = 400
 const MAX_EXAMPLES = 6
 
-/** Parte de "conversa" de uma resposta aprovada: sem o orçamento e sem preço. */
+// linha de item ("• 2 × ...", "- 1 x ..."): o texto é do cliente/da lista, não da loja
+const ITEM_LINE = /^[•\-*]\s|^\d+\s*[×x]\s/i
+
+/** Parte de "conversa" de uma resposta aprovada: sem o orçamento, sem preço e sem itens. */
 export function styleSample(finalReply: string): string | null {
   const beforeQuote = finalReply.split(/\n\s*Orçamento /)[0]
   if (/^\s*Orçamento /.test(finalReply)) return null
   const lines = beforeQuote
     .split("\n")
     .map((l) => l.trim())
-    .filter((l) => l && !PRICE_RE.test(l))
+    .filter((l) => l && !PRICE_RE.test(l) && !ITEM_LINE.test(l))
   const text = lines.join("\n").slice(0, MAX_SAMPLE).trim()
   return text || null
 }

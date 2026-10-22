@@ -14,7 +14,9 @@ describe('CopilotExampleService', () => {
     await CopilotExampleService.record({ customerText: 'oi', aiReply: 'Oi!', finalReply: 'Oi, tudo bem? 😊' });
     await CopilotExampleService.record({ customerText: 'oi', aiReply: 'Oi!', finalReply: 'Oi, tudo bem? 😊' });
     await CopilotExampleService.record({ customerText: 'oi', aiReply: 'Oi!', finalReply: '   ' });
-    expect(await CopilotExampleService.list()).toHaveLength(1);
+    const saved = await CopilotExampleService.list();
+    expect(saved).toHaveLength(1);
+    expect(saved[0].finalReply).toBe('Oi, tudo bem? 😊'); // emoji volta intacto do banco
   });
 
   it('lista os mais recentes primeiro e remove', async () => {

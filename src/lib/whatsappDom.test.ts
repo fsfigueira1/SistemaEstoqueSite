@@ -52,6 +52,23 @@ describe("readOpenChat", () => {
   })
 })
 
+describe("telefone e conferência da conversa", () => {
+  it("id da conversa já tem o código do país (não soma 55)", () => {
+    const html = FIXTURE.replace(/_5517999998888@c\.us/g, "_12025550123@c.us")
+    expect(dom.readOpenChat(page(html))).toMatchObject({ phone: "12025550123" })
+  })
+
+  it("sameChat: mesma pessoa pelo telefone, senão pelo nome", () => {
+    const ana = { name: "Ana Souza", phone: "5517999998888" }
+    expect(dom.sameChat(ana, { name: "Ana Souza", phone: "5517999998888" })).toBe(true)
+    expect(dom.sameChat(ana, { name: "Ana", phone: "5517999998888" })).toBe(true)
+    expect(dom.sameChat(ana, { name: "Ana Souza", phone: "5517911112222" })).toBe(false)
+    expect(dom.sameChat({ name: "Ana Souza", phone: "" }, { name: " ana souza ", phone: "" })).toBe(true)
+    expect(dom.sameChat({ name: "Ana Souza", phone: "" }, { name: "Bruno", phone: "" })).toBe(false)
+    expect(dom.sameChat({ name: "", phone: "" }, { name: "", phone: "" })).toBe(false)
+  })
+})
+
 describe("insertIntoCompose", () => {
   it("insere texto com quebras de linha", () => {
     const doc = page()
