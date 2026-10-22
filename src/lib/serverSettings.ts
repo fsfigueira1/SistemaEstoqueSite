@@ -25,8 +25,8 @@ const hint = (k: string) => (k.length > 8 ? `…${k.slice(-4)}` : k ? "definida"
  * backup usa) — chave nova cadastrada lá some daqui sozinha.
  */
 export function publicSettings(s: ServerSettings) {
-  const rest: Record<string, unknown> = { ...s }
-  for (const col of SECRET_COLUMNS.Settings ?? []) delete rest[col]
+  const secret = new Set<string>(SECRET_COLUMNS.Settings ?? [])
+  const rest = Object.fromEntries(Object.entries(s).filter(([k]) => !secret.has(k)))
   const key = (s.aiApiKey ?? "").trim()
   const shopping = (s.shoppingApiKey ?? "").trim()
   const nvidia = (s.nvidiaApiKey ?? "").trim()

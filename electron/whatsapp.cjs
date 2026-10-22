@@ -4,7 +4,7 @@
 // da área reservada da tela. A página do WhatsApp não recebe Node nem preload:
 // o sistema só lê a conversa aberta e cola a resposta na caixa, e só quando o
 // atendente clica. Nunca envia mensagem.
-/* global require, module, process */
+/* global require, module */
 "use strict";
 
 const { WebContentsView, BrowserWindow, ipcMain, session, shell } = require("electron");
