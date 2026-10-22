@@ -12,6 +12,8 @@ import { prisma } from "@/lib/prisma"
 import { CATALOG_SELECT, getCatalog, toCatalogProduct } from "@/services/schoolListService"
 import { SavedListService } from "@/services/savedListService"
 import { QuoteRequestService, type QuoteItem } from "@/services/quoteRequestService"
+import { CopilotExampleService } from "@/services/copilotExampleService"
+import { PRICE_RE, buildPersonaPrompt } from "@/lib/copilotStyle"
 
 /** Decisão da dona: uniforme do pedido do site fica para a loja confirmar. */
 const QUOTE_SITE_UNIFORMS = false
@@ -113,9 +115,6 @@ function defaultAi(settings: ServerSettings): Ai {
   }
 }
 
-/** Preço escrito pela IA não vai para o cliente (o preço é sempre o do sistema). */
-const PRICE_RE = /R\s?\$|\d+[.,]\d{2}\b|\breais\b|\bcentavos\b/i
-
 const NOT_FOUND = "Não encontrei essa lista aqui. Pode mandar a lista de material (texto ou foto) que eu monto o orçamento com o que temos na loja."
 
 export const CopilotService = {
@@ -124,6 +123,8 @@ export const CopilotService = {
     deps: { ai?: Ai } = {},
   ): Promise<DraftResult> {
     const settings = await getServerSettings()
+    // personalidade (Configurações) + respostas aprovadas recentes = o jeito da loja
+    const persona = buildPersonaPrompt(settings.copilotPersona, await CopilotExampleService.list(6))
     const ai = deps.ai ?? defaultAi(settings)
     const name = String(input.name ?? "").trim().slice(0, 120)
     const text = String(input.text ?? "").trim().slice(0, 8000)
@@ -138,7 +139,9 @@ export const CopilotService = {
     } else if (intent.kind === "list") built = (intent.code && (await savedQuote(intent.code))) || (await listQuote(text))
 
     if (!built) {
-      const system = `Você é atendente da papelaria ${settings.companyName} no WhatsApp. Responda a mensagem do cliente em português do Brasil, curto (até 4 linhas), acolhedor, como uma pessoa da loja.
+      const system = `${persona}
+
+Você atende a papelaria ${settings.companyName} no WhatsApp. Responda a mensagem do cliente em português do Brasil, curto (até 4 linhas), como uma pessoa da loja.
 Regras: use só os dados da loja abaixo; nunca invente preço, estoque ou prazo; se o cliente quiser orçamento, peça para mandar a lista de material (texto ou foto); se não souber, diga que vai verificar e já responde.
 ${storeFacts(settings)}`
       let reply = ""
@@ -172,7 +175,9 @@ ${storeFacts(settings)}`
     try {
       opening = (
         await ai(
-          `Você é atendente da papelaria ${settings.companyName} no WhatsApp. Escreva SÓ uma abertura curta (no máximo 2 linhas) para vir antes de um orçamento que já está pronto logo abaixo. Cumprimente pelo primeiro nome se houver. Não escreva preços, itens nem totais. Português do Brasil, tom acolhedor, pode usar 1 emoji.`,
+          `${persona}
+
+Você atende a papelaria ${settings.companyName} no WhatsApp. Escreva SÓ uma abertura curta (no máximo 2 linhas) para vir antes de um orçamento que já está pronto logo abaixo. Cumprimente pelo primeiro nome se houver. Não escreva preços, itens nem totais.`,
           `Cliente${first ? ` (${first})` : ""} escreveu: ${text.slice(0, 600)}`,
         )
       ).trim()

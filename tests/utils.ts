@@ -28,6 +28,7 @@ export async function cleanupDatabase() {
       await prisma.schoolList.deleteMany();
       await prisma.school.deleteMany();
       await prisma.quoteRequest.deleteMany();
+      await prisma.copilotExample.deleteMany();
       await prisma.broadcastRecipient.deleteMany();
       await prisma.broadcast.deleteMany();
       await prisma.whatsAppMessage.deleteMany();

@@ -385,6 +385,8 @@ model Settings {
   companyPhone                 String   @default("")
   /// horário de funcionamento (texto livre) — usado pelo copiloto do atendimento
   storeHours                   String   @default("Segunda a sexta: 8h às 18h · Sábado: 8h às 13h")
+  /// tom de voz da atendente do WhatsApp (vazio = o padrão carismático de src/lib/copilotStyle.ts)
+  copilotPersona               String   @default("")
   receiptFooter                String   @default("Obrigado pela preferencia! Troca em ate 7 dias com este comprovante.")
   receiptShowCompany           Boolean  @default(true)
   receiptWidth                 String   @default("80mm")
@@ -623,4 +625,15 @@ model QuoteRequest {
   @@index([phone])
   @@index([createdAt])
   @@index([status])
+}
+
+/// Resposta que o atendente aprovou (copiou/colocou no WhatsApp), com as
+/// correções dele — a IA usa as mais recentes como exemplo de tom.
+model CopilotExample {
+  id           String   @id @default(uuid())
+  customerText String
+  aiReply      String   @default("")
+  finalReply   String
+  createdAt    DateTime @default(now())
+  @@index([createdAt])
 }

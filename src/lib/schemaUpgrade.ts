@@ -9,7 +9,7 @@
 // (IF NOT EXISTS), então rodar em 3 PCs ao mesmo tempo é seguro.
 //
 // Mantenha em sincronia com prisma/migrations/20260924120000_reports_ai/migration.sql
-// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists, 20261021120000_whatsapp_contacts, 20261022120000_novidades_ia e 20261022140000_quote_requests).
+// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists, 20261021120000_whatsapp_contacts, 20261022120000_novidades_ia, 20261022140000_quote_requests e 20261022160000_copilot_learning).
 import { prisma } from "@/lib/prisma"
 
 export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
@@ -209,6 +209,18 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_phone_idx" ON "QuoteRequest"("phone")`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_createdAt_idx" ON "QuoteRequest"("createdAt")`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_status_idx" ON "QuoteRequest"("status")`,
+
+  // --- 0.4.0: tom de voz e aprendizado do copiloto ---
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "copilotPersona" TEXT NOT NULL DEFAULT ''`,
+  `CREATE TABLE IF NOT EXISTS "CopilotExample" (
+    "id" TEXT NOT NULL,
+    "customerText" TEXT NOT NULL,
+    "aiReply" TEXT NOT NULL DEFAULT '',
+    "finalReply" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "CopilotExample_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "CopilotExample_createdAt_idx" ON "CopilotExample"("createdAt")`,
 ]
 
 let upgrade: Promise<void> | null = null
