@@ -10,6 +10,8 @@ export type StoreSettings = {
   companyDoc: string;
   companyAddress: string;
   companyPhone: string;
+  /** horário de funcionamento (o copiloto do atendimento usa) */
+  storeHours: string;
   receiptFooter: string;
   receiptShowCompany: boolean;
   receiptWidth: '58mm' | '80mm';
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   companyDoc: '',
   companyAddress: '',
   companyPhone: '',
+  storeHours: 'Segunda a sexta: 8h às 18h · Sábado: 8h às 13h',
   receiptFooter: 'Obrigado pela preferencia! Troca em ate 7 dias com este comprovante.',
   receiptShowCompany: true,
   receiptWidth: '80mm',

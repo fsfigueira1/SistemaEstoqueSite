@@ -26,7 +26,7 @@ export type QuoteSummary = {
 }
 
 export type QuoteDetail = QuoteSummary & {
-  items: Array<QuoteItem & { now: { price: number; stock: number; active: boolean; name: string } | null }>
+  items: Array<QuoteItem & { now: { price: number; stock: number; active: boolean; name: string; code: string } | null }>
   toConfirm: string[]
   message: string
 }
@@ -114,7 +114,7 @@ export const QuoteRequestService = {
     const items = asItems(q.items)
     const ids = [...new Set(items.map((i) => i.productId).filter((x): x is string => !!x))]
     const products = ids.length
-      ? await prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, salePrice: true, stockQuantity: true, status: true } })
+      ? await prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, salePrice: true, stockQuantity: true, status: true, barcode: true, sku: true } })
       : []
     const byId = new Map(products.map((p) => [p.id, p]))
     return {
@@ -123,7 +123,7 @@ export const QuoteRequestService = {
         const p = i.productId ? byId.get(i.productId) : undefined
         return {
           ...i,
-          now: p ? { price: Math.round(toNum(p.salePrice) * 100) / 100, stock: p.stockQuantity, active: p.status === "ACTIVE", name: p.name } : null,
+          now: p ? { price: Math.round(toNum(p.salePrice) * 100) / 100, stock: p.stockQuantity, active: p.status === "ACTIVE", name: p.name, code: p.barcode || p.sku } : null,
         }
       }),
       toConfirm: asStrings(q.toConfirm),

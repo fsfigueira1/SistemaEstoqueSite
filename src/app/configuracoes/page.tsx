@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { errorText } from '@/lib/friendlyError';
 import Layout, { PageHeader } from '@/components/Layout';
-import PriceSearchSettings from '@/components/settings/PriceSearchSettings';
+import PriceSearchSettings, { Field, Section } from '@/components/settings/PriceSearchSettings';
 import AiSettings from '@/components/settings/AiSettings';
 import ReceiptWidthPreview from '@/components/settings/ReceiptWidthPreview';
 import FeeSettings from '@/components/settings/FeeSettings';
@@ -129,6 +129,16 @@ export default function ConfiguracoesPage() {
             <Field label="Telefone">
               <input value={form.companyPhone} onChange={(e) => set('companyPhone', e.target.value)} className={inp} placeholder="(00) 00000-0000" />
             </Field>
+            <div className="sm:col-span-2">
+              <Field label="Horário de funcionamento">
+                <input
+                  value={form.storeHours}
+                  onChange={(e) => set('storeHours', e.target.value)}
+                  className={inp}
+                  placeholder="Segunda a sexta: 8h às 18h · Sábado: 8h às 13h"
+                />
+              </Field>
+            </div>
             <div className="sm:col-span-2">
               <Field label="Endereço">
                 <input value={form.companyAddress} onChange={(e) => set('companyAddress', e.target.value)} className={inp} placeholder="Rua, número — bairro, cidade/UF" />
@@ -322,36 +332,3 @@ export default function ConfiguracoesPage() {
 const inp =
   'w-full rounded-lg border border-border bg-card px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40 disabled:opacity-60';
 
-function Section({
-  icon,
-  title,
-  desc,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-      <div className="mb-4 flex items-start gap-3">
-        <span className="rounded-lg bg-accent-soft p-2 text-primary">{icon}</span>
-        <div>
-          <h2 className="text-lg text-foreground">{title}</h2>
-          {desc && <p className="text-xs text-muted-foreground">{desc}</p>}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-foreground/90">{label}</label>
-      {children}
-    </div>
-  );
-}

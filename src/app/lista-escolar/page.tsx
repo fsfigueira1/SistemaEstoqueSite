@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Copy, GraduationCap, MessageCircle, Save, ShoppingCart } from 'lucide-react';
+import { Check, ClipboardCheck, Copy, GraduationCap, MessageCircle, Save, ShoppingCart } from 'lucide-react';
 import Layout, { PageHeader } from '@/components/Layout';
 import ListInput from '@/components/lista/ListInput';
 import QuoteRow, { type Row } from '@/components/lista/QuoteRow';
@@ -64,6 +64,7 @@ export default function ListaEscolarPage() {
   const build = async () => {
     setBuilding(true);
     setErr(null);
+    setQuoteSaved(null);
     setOpenedList(null);
     try {
       const r = await fetch('/api/school-list/quote', {
@@ -117,6 +118,36 @@ export default function ListaEscolarPage() {
   const totals = useMemo(() => quoteTotals(rows), [rows]);
   const takes = useMemo(() => allocate(rows), [rows]);
   const message = () => quoteMessage(store, title.trim(), rows, brl);
+
+  // salva em Orçamentos pedidos (para achar quando o cliente vier buscar)
+  const [quoteSaved, setQuoteSaved] = useState<string | null>(null);
+  const saveQuote = async () => {
+    const name = window.prompt('Nome do cliente para salvar o orçamento:', title.split('—')[0].trim());
+    if (!name || !name.trim()) return;
+    setErr(null);
+    try {
+      const r = await fetch('/api/quote-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          phone,
+          title: title.trim() || 'lista escolar',
+          items: rows
+            .map((row, i) => ({ qty: row.qty, text: row.text, productId: row.product?.id ?? null, price: row.product?.salePrice ?? null, take: takes[i] ?? 0, skip: row.skip }))
+            .filter((i) => !i.skip && i.productId),
+          toConfirm: rows.filter((row) => !row.skip && !row.product).map((row) => `${row.qty} × ${row.text}`),
+          total: totals.total,
+          message: message(),
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.success) throw new Error(errorText(data, 'Não consegui salvar o orçamento'));
+      setQuoteSaved(data.data.id);
+    } catch (e) {
+      setErr(errorText(e, 'Não consegui salvar o orçamento'));
+    }
+  };
 
   const copy = async () => {
     try {
@@ -230,6 +261,19 @@ export default function ListaEscolarPage() {
                 >
                   <Save className="h-4 w-4 text-primary" /> Salvar como lista da escola
                 </button>
+                {quoteSaved ? (
+                  <a href={`/orcamentos?id=${quoteSaved}`} className="inline-flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm text-success hover:underline">
+                    <ClipboardCheck className="h-4 w-4" /> Orçamento salvo
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={saveQuote}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted"
+                  >
+                    <ClipboardCheck className="h-4 w-4 text-primary" /> Salvar orçamento
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={copy}

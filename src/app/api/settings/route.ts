@@ -9,6 +9,7 @@ const ALLOWED = [
   "companyDoc",
   "companyAddress",
   "companyPhone",
+  "storeHours",
   "receiptFooter",
   "receiptShowCompany",
   "receiptWidth",
