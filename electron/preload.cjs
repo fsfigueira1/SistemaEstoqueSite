@@ -28,6 +28,16 @@ contextBridge.exposeInMainWorld(
     // Example: Safe method to close window
     closeWindow: () => ipcRenderer.send('close-window'),
 
+    // WhatsApp Web dentro do Atendimento: mostrar/esconder na área da tela,
+    // ler a conversa aberta e colar a resposta na caixa (nunca envia).
+    whatsapp: {
+      show: (bounds) => ipcRenderer.invoke('wa-show', bounds),
+      hide: () => ipcRenderer.invoke('wa-hide'),
+      read: () => ipcRenderer.invoke('wa-read-chat'),
+      insert: (text) => ipcRenderer.invoke('wa-insert', text),
+      reload: () => ipcRenderer.invoke('wa-reload'),
+    },
+
     // Configuração do banco (janela de setup do Electron)
     setDatabaseUrl: (url) => ipcRenderer.send('set-database-url', url),
 
