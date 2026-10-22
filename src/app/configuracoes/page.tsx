@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { errorText } from '@/lib/friendlyError';
 import Layout, { PageHeader } from '@/components/Layout';
 import PriceSearchSettings from '@/components/settings/PriceSearchSettings';
+import AiSettings from '@/components/settings/AiSettings';
 import ReceiptWidthPreview from '@/components/settings/ReceiptWidthPreview';
 import FeeSettings from '@/components/settings/FeeSettings';
 import BackupSettings from '@/components/settings/BackupSettings';
@@ -25,6 +26,7 @@ export default function ConfiguracoesPage() {
   // chave da IA: nunca vem do servidor; o campo só serve para trocar
   const [aiKey, setAiKey] = useState('');
   const [shoppingKey, setShoppingKey] = useState('');
+  const [nvidiaKey, setNvidiaKey] = useState('');
 
   // PIN
   const [pinCur, setPinCur] = useState('');
@@ -49,10 +51,12 @@ export default function ConfiguracoesPage() {
       const next = await saveSettings(form, {
         ...(aiKey.trim() ? { aiApiKey: aiKey.trim() } : {}),
         ...(shoppingKey.trim() ? { shoppingApiKey: shoppingKey.trim() } : {}),
+        ...(nvidiaKey.trim() ? { nvidiaApiKey: nvidiaKey.trim() } : {}),
       });
       setForm(next);
       setAiKey('');
       setShoppingKey('');
+      setNvidiaKey('');
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
@@ -65,6 +69,14 @@ export default function ConfiguracoesPage() {
     if (!window.confirm('Remover a chave do Claude?')) return;
     try {
       setForm(await saveSettings(form, { aiApiKeyClear: true }));
+    } catch (e) {
+      setSaveErr(errorText(e, 'Não foi possível salvar'));
+    }
+  };
+  const removeNvidia = async () => {
+    if (!window.confirm('Remover a chave da NVIDIA? O ajudante e a leitura da foto param até colar outra.')) return;
+    try {
+      setForm(await saveSettings(form, { nvidiaApiKeyClear: true }));
     } catch (e) {
       setSaveErr(errorText(e, 'Não foi possível salvar'));
     }
@@ -141,6 +153,18 @@ export default function ConfiguracoesPage() {
           }}
           onRemoveAi={removeKey}
           onRemoveShopping={removeShopping}
+        />
+
+        {/* IA do ajudante e da foto da lista */}
+        <AiSettings
+          form={form}
+          set={set}
+          nvidiaKey={nvidiaKey}
+          onNvidiaKey={(v) => {
+            setNvidiaKey(v);
+            setSaved(false);
+          }}
+          onRemoveNvidia={removeNvidia}
         />
 
         {/* Taxas da maquininha */}

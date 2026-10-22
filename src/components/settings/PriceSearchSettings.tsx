@@ -171,7 +171,7 @@ export default function PriceSearchSettings({
   );
 }
 
-function Section({
+export function Section({
   icon,
   title,
   desc,
@@ -196,7 +196,7 @@ function Section({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-foreground/90">{label}</label>
@@ -205,7 +205,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function ProviderCard({
+export function ProviderCard({
   active,
   onClick,
   title,
@@ -237,7 +237,7 @@ function ProviderCard({
   );
 }
 
-function SecretBox({
+export function SecretBox({
   label,
   isSet,
   hint,

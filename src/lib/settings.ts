@@ -19,6 +19,9 @@ export type StoreSettings = {
   storeProfile: string;
   storeCity: string;
   aiModel: string;
+  /** IA do ajudante e da foto da lista */
+  aiProvider: 'nvidia' | 'claude';
+  nvidiaModel: string;
   priceAlertPercent: number;
   // fonte da pesquisa de preço: Google Shopping (grátis) ou Claude (pago)
   priceProvider: 'shopping' | 'claude';
@@ -42,6 +45,8 @@ export type StoreSettings = {
   aiKeyHint?: string;
   shoppingKeySet?: boolean;
   shoppingKeyHint?: string;
+  nvidiaKeySet?: boolean;
+  nvidiaKeyHint?: string;
 };
 
 const CACHE_KEY = 'lacolaria_settings';
@@ -61,6 +66,8 @@ export const DEFAULT_SETTINGS: StoreSettings = {
     'Papelaria nova, bem localizada, com curadoria e toque gourmet: produtos selecionados, atendimento caprichado e embalagem bonita. O cliente aceita pagar um pouco acima da média, desde que o preço seja justificável.',
   storeCity: '',
   aiModel: 'claude-sonnet-5',
+  aiProvider: 'nvidia',
+  nvidiaModel: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
   priceAlertPercent: 10,
   priceProvider: 'shopping',
   priceMarkupPercent: 10,
@@ -125,7 +132,14 @@ export async function loadSettings(): Promise<StoreSettings> {
  */
 export async function saveSettings(
   patch: Partial<StoreSettings>,
-  extra?: { aiApiKey?: string; aiApiKeyClear?: boolean; shoppingApiKey?: string; shoppingApiKeyClear?: boolean },
+  extra?: {
+    aiApiKey?: string;
+    aiApiKeyClear?: boolean;
+    shoppingApiKey?: string;
+    shoppingApiKeyClear?: boolean;
+    nvidiaApiKey?: string;
+    nvidiaApiKeyClear?: boolean;
+  },
 ): Promise<StoreSettings> {
   const next = { ...readCache(), ...patch };
   let data: { success?: boolean; data?: unknown; error?: unknown } | null = null;

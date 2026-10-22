@@ -17,6 +17,8 @@ const ALLOWED = [
   "storeProfile",
   "storeCity",
   "aiModel",
+  "aiProvider",
+  "nvidiaModel",
   "priceAlertPercent",
   "reportReminderEnabled",
   "reportReminderTime",
@@ -70,6 +72,14 @@ export async function PUT(request: Request) {
     if (typeof data.aiModel === "string" && !AI_MODELS.includes(data.aiModel)) {
       delete data.aiModel
     }
+    if (data.aiProvider !== undefined && !["nvidia", "claude"].includes(String(data.aiProvider))) {
+      delete data.aiProvider
+    }
+    if (data.nvidiaModel !== undefined) {
+      const m = String(data.nvidiaModel).trim()
+      if (m && m.length <= 200) data.nvidiaModel = m
+      else delete data.nvidiaModel
+    }
     if (data.priceProvider !== undefined && !["shopping", "claude"].includes(String(data.priceProvider))) {
       delete data.priceProvider
     }
@@ -101,6 +111,10 @@ export async function PUT(request: Request) {
       data.shoppingApiKey = body.shoppingApiKey.trim()
     }
     if (body.shoppingApiKeyClear === true) data.shoppingApiKey = ""
+    if (typeof body.nvidiaApiKey === "string" && body.nvidiaApiKey.trim()) {
+      data.nvidiaApiKey = body.nvidiaApiKey.trim()
+    }
+    if (body.nvidiaApiKeyClear === true) data.nvidiaApiKey = ""
 
     const settings = await prisma.settings.update({ where: { id: SETTINGS_ID }, data })
     return NextResponse.json({ success: true, data: publicSettings(settings) })
