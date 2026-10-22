@@ -43,6 +43,7 @@ Quando era orçamento, ele fica salvo em **Orçamentos pedidos** com o nome e o 
 | "O WhatsApp ainda não está conectado" | Escaneie o QR code (passo 1) ou espere carregar. |
 | "Abra a conversa do cliente…" | Clique na conversa do cliente na lista do WhatsApp e tente de novo. |
 | "Não consegui ler a conversa" | O WhatsApp pode ter mudado a página. Use a aba **Colar mensagem**: copie o texto do cliente, cole lá e gere a resposta; depois **Copiar resposta** e cole no WhatsApp. Avise para ajustarmos. |
+| "A conversa aberta não é a de …" | Você trocou de conversa depois de gerar. Volte para a conversa do cliente e clique de novo (proteção para não mandar o orçamento para a pessoa errada). |
 | "Colocar no WhatsApp" não escreve nada | Clique na caixa de mensagem do WhatsApp e tente de novo, ou use **Copiar resposta** e cole com Ctrl+V. |
 | Nome ou número vazio | Normal para alguns contatos (o WhatsApp esconde o número). Preencha à mão se quiser salvar. |
 
