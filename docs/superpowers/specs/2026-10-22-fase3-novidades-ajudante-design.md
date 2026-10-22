@@ -8,7 +8,7 @@ A conta da dona na Meta foi bloqueada depois de uma invasão. Sem a API oficial,
 
 Decisões da dona (22/10/2026):
 - **Novidades:** o painel organiza contatos e consentimento e **ajuda a enviar pelo WhatsApp Business do celular**: lista de transmissão (arquivo .vcf de contatos + mensagem copiada) ou um por um (links prontos). Quando a Meta voltar, a mesma tela ganha o envio automático.
-- **Orçamento automático:** vai para o **chat do site** (NVIDIA), usando o motor de orçamento do robô. É um plano separado, depois deste, porque mexe nos arquivos do chat do site.
+- **Orçamento:** só pelo WhatsApp. ~~Chat do site com orçamento~~: **cancelado pela dona em 22/10/2026**. O chat do site responde só perguntas básicas. Enquanto a API da Meta não volta, o orçamento sai pela tela Lista Escolar do sistema (botão WhatsApp). O robô da fase 2 fica pronto e parado até a Meta liberar.
 - **Ajudante com IA no sistema (NVIDIA):** responde sobre **relatórios e vendas**, **estoque**, e sugere **ideias e textos** (ex.: texto de novidade com o que tem em estoque). Não cobre "como usar o sistema". **Só lê** dados, nunca altera.
 - **Foto da lista escolar:** passa a ser lida pela **NVIDIA** (o modelo do site lê imagens). O Claude continua como opção em Configurações.
 - A **chave da NVIDIA** é cadastrada pela dona em Configurações (fica em `Settings`, no banco, como a do Claude), para valer nos 3 PCs. Ninguém grava chave em arquivo do repositório.
