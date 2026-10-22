@@ -181,7 +181,7 @@ it('payload estranho não quebra', () => {
     - `type ItemSite = { qtd: number; descricao: string; sku: string | null; secao: "material" | "uniforme" | null }`
     - `type GrupoSite = { titulo: string; itens: ItemSite[] }`
     - `parseOrcamentoSite(texto: string): { versao: 1; grupos: GrupoSite[] } | null`: `null` se a última linha não vazia (depois de `trim`, aceitando `\r\n`) não for exatamente `#ORC-SITE v1`. Item = `^- (\d+)x (.+?)(?: \[SKU ([^\]]+)\])?$`. `*…*` abre grupo; `Material escolar:`/`Uniforme:` definem `secao`; outras linhas são ignoradas.
-  - `ORCAR_UNIFORME_DO_SITE = false` (constante em `bot.ts`): **pendente de decisão da dona**. Com `false`, itens de `Uniforme` entram como "a loja confirma" (sem preço). Com `true`, orça igual material.
+  - `ORCAR_UNIFORME_DO_SITE = false` (constante em `bot.ts`): **decidido pela dona em 21/10: a loja confirma o uniforme na 1ª versão**; o botão do site continua mandando o pedido completo (não `#L-XXXX`). Com `false`, itens de `Uniforme` entram como "a loja confirma" (sem preço). Com `true`, orça igual material.
   - `extractListCode(text: string): string | null`: acha `#L-XXXX` ou `L-XXXX` em qualquer caixa → `"L-XXXX"` maiúsculo.
   - `looksLikeList(text: string): boolean`: `parseList(text).length >= 2 || /^\s*\d+\s+\S/m.test(text)`
   - `type ContactState = { id: string; isNew: boolean; optInAskedAt: Date | null; botPausedUntil: Date | null }`
