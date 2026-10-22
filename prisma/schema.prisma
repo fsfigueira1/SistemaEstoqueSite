@@ -383,6 +383,8 @@ model Settings {
   companyDoc                   String   @default("")
   companyAddress               String   @default("")
   companyPhone                 String   @default("")
+  /// horário de funcionamento (texto livre) — usado pelo copiloto do atendimento
+  storeHours                   String   @default("Segunda a sexta: 8h às 18h · Sábado: 8h às 13h")
   receiptFooter                String   @default("Obrigado pela preferencia! Troca em ate 7 dias com este comprovante.")
   receiptShowCompany           Boolean  @default(true)
   receiptWidth                 String   @default("80mm")
@@ -596,4 +598,29 @@ model BroadcastRecipient {
   contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
   @@id([broadcastId, contactId])
   @@index([contactId])
+}
+
+/// Orçamento pedido pelo cliente (copiloto do WhatsApp ou Lista Escolar).
+/// Guarda o preço do momento; a tela mostra também o preço de agora.
+model QuoteRequest {
+  id        String   @id @default(uuid())
+  name      String   @default("")
+  phone     String?
+  /// whatsapp | balcao
+  source    String   @default("whatsapp")
+  title     String   @default("")
+  /// [{ qty, text, productId, price, take }] — price/take do momento do orçamento
+  items     Json
+  /// itens que a loja confirma (sem SKU, uniforme, não reconhecido)
+  toConfirm Json     @default("[]")
+  total     Decimal  @default(0)
+  /// aberto | separado | retirado | cancelado
+  status    String   @default("aberto")
+  /// resposta enviada ao cliente (como foi montada)
+  message   String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([phone])
+  @@index([createdAt])
+  @@index([status])
 }

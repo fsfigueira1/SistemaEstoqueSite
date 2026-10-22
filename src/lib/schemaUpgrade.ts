@@ -9,7 +9,7 @@
 // (IF NOT EXISTS), então rodar em 3 PCs ao mesmo tempo é seguro.
 //
 // Mantenha em sincronia com prisma/migrations/20260924120000_reports_ai/migration.sql
-// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists, 20261021120000_whatsapp_contacts e 20261022120000_novidades_ia).
+// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists, 20261021120000_whatsapp_contacts, 20261022120000_novidades_ia e 20261022140000_quote_requests).
 import { prisma } from "@/lib/prisma"
 
 export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
@@ -188,6 +188,27 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
     CONSTRAINT "BroadcastRecipient_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
   `CREATE INDEX IF NOT EXISTS "BroadcastRecipient_contactId_idx" ON "BroadcastRecipient"("contactId")`,
+
+  // --- 0.4.0: orçamentos pedidos (atendimento) e horário da loja ---
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "storeHours" TEXT NOT NULL DEFAULT 'Segunda a sexta: 8h às 18h · Sábado: 8h às 13h'`,
+  `CREATE TABLE IF NOT EXISTS "QuoteRequest" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL DEFAULT '',
+    "phone" TEXT,
+    "source" TEXT NOT NULL DEFAULT 'whatsapp',
+    "title" TEXT NOT NULL DEFAULT '',
+    "items" JSONB NOT NULL,
+    "toConfirm" JSONB NOT NULL DEFAULT '[]',
+    "total" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'aberto',
+    "message" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "QuoteRequest_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "QuoteRequest_phone_idx" ON "QuoteRequest"("phone")`,
+  `CREATE INDEX IF NOT EXISTS "QuoteRequest_createdAt_idx" ON "QuoteRequest"("createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "QuoteRequest_status_idx" ON "QuoteRequest"("status")`,
 ]
 
 let upgrade: Promise<void> | null = null
