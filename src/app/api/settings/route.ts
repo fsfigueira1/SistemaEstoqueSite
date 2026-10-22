@@ -10,6 +10,7 @@ const ALLOWED = [
   "companyAddress",
   "companyPhone",
   "storeHours",
+  "copilotPersona",
   "receiptFooter",
   "receiptShowCompany",
   "receiptWidth",
@@ -73,6 +74,7 @@ export async function PUT(request: Request) {
     if (typeof data.aiModel === "string" && !AI_MODELS.includes(data.aiModel)) {
       delete data.aiModel
     }
+    if (data.copilotPersona !== undefined) data.copilotPersona = String(data.copilotPersona).slice(0, 2000)
     if (data.aiProvider !== undefined && !["nvidia", "claude"].includes(String(data.aiProvider))) {
       delete data.aiProvider
     }

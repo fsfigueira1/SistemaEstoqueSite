@@ -6,10 +6,13 @@
 // atendente). Testado com página simulada em src/lib/whatsappDom.test.ts.
 //
 // Quando o WhatsApp mudar a página e a leitura parar, ajuste SÓ os seletores.
+/* global module */
 "use strict";
 
 const SELECTORS = {
   main: "#main",
+  /** lista de conversas: só existe com o WhatsApp conectado */
+  side: "#side",
   headerTitle: "#main header span[title]",
   row: '#main [role="row"]',
   incoming: ".message-in",
@@ -17,14 +20,14 @@ const SELECTORS = {
   text: "[data-pre-plain-text] .selectable-text",
   idHolder: "[data-id]",
   compose: '#main footer div[contenteditable="true"]',
-  qr: 'canvas[aria-label*="QR" i], [data-ref]',
 };
 
 /** Conversa aberta: nome, telefone (se der) e mensagens na ordem. */
 function readOpenChat(doc, S) {
   S = S || SELECTORS;
   const main = doc.querySelector(S.main);
-  if (!main) return { ok: false, reason: doc.querySelector(S.qr) ? "nao-conectado" : "sem-conversa" };
+  // sem a lista de conversas = QR code na tela ou ainda carregando
+  if (!main) return { ok: false, reason: doc.querySelector(S.side) ? "sem-conversa" : "nao-conectado" };
 
   const textOf = (node) => {
     let out = "";
@@ -82,13 +85,13 @@ function insertIntoCompose(doc, text, S) {
   try {
     data = new view.DataTransfer();
     data.setData("text/plain", text);
-  } catch (_e) {
+  } catch {
     data = { types: ["text/plain"], getData: (t) => (t === "text/plain" || t === "Text" ? text : "") };
   }
   let ev;
   try {
     ev = new view.ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
-  } catch (_e) {
+  } catch {
     ev = null;
   }
   if (!ev || !ev.clipboardData) {

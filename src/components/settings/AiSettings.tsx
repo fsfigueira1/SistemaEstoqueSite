@@ -6,6 +6,7 @@
 
 import { Bot } from 'lucide-react';
 import type { StoreSettings } from '@/lib/settings';
+import { DEFAULT_PERSONA } from '@/lib/copilotStyle';
 import { ProviderCard, Section, SecretBox } from './PriceSearchSettings';
 
 export default function AiSettings({
@@ -54,6 +55,27 @@ export default function AiSettings({
             </>
           }
         />
+        <div className="rounded-xl border border-border bg-muted/40 p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-foreground">Tom de voz do atendimento (WhatsApp)</p>
+            {form.copilotPersona.trim() && (
+              <button type="button" onClick={() => set('copilotPersona', '')} className="text-xs text-primary hover:underline">
+                Voltar ao padrão
+              </button>
+            )}
+          </div>
+          <textarea
+            value={form.copilotPersona}
+            onChange={(e) => set('copilotPersona', e.target.value)}
+            rows={6}
+            maxLength={2000}
+            placeholder={DEFAULT_PERSONA}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm leading-relaxed"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Vazio = o jeito padrão (super carismática). A IA também aprende com as respostas que você aprova no Atendimento. Preço nunca vem da IA.
+          </p>
+        </div>
       </div>
     </Section>
   );

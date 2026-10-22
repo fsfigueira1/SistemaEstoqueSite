@@ -1,5 +1,6 @@
 // Validação do que a tela manda para o WhatsApp embutido (sem depender do
 // Electron, para testar). Testado em src/lib/whatsappIpc.test.ts.
+/* global module */
 "use strict";
 
 const MAX = 10000;
@@ -22,7 +23,7 @@ function isWhatsAppUrl(url) {
   try {
     const u = new URL(url);
     return u.protocol === "https:" && u.hostname === "web.whatsapp.com";
-  } catch (_e) {
+  } catch {
     return false;
   }
 }
@@ -35,7 +36,7 @@ function isAppSender(senderUrl, appOrigin, isMainFrame) {
   if (!isMainFrame) return false;
   try {
     return new URL(senderUrl).origin === new URL(appOrigin).origin;
-  } catch (_e) {
+  } catch {
     return false;
   }
 }

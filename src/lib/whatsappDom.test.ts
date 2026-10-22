@@ -43,6 +43,8 @@ describe("readOpenChat", () => {
 
   it("sem conversa aberta", () => {
     expect(dom.readOpenChat(page('<div id="app"><div id="side"></div></div>'))).toEqual({ ok: false, reason: "sem-conversa" })
+    // tela do QR sem canvas ainda (o QR aparece depois) ou carregando: sem lista de conversas = não conectado
+    expect(dom.readOpenChat(page('<div id="app"><div>Escaneie para entrar</div></div>'))).toEqual({ ok: false, reason: "nao-conectado" })
     expect(dom.readOpenChat(page('<div id="app"><canvas aria-label="Scan this QR code to link a device!"></canvas><div data-ref="2@abc"></div></div>'))).toEqual({
       ok: false,
       reason: "nao-conectado",
