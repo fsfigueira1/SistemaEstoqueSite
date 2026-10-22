@@ -42,7 +42,7 @@ export default function ListaEscolarPage() {
     loadSettings()
       .then((s) => {
         setStore(s.companyName || 'loja');
-        setAiAvailable(Boolean(s.aiKeySet));
+        setAiAvailable(Boolean(s.aiKeySet || s.nvidiaKeySet));
       })
       .catch(() => {});
     try {
