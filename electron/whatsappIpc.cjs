@@ -27,4 +27,17 @@ function isWhatsAppUrl(url) {
   }
 }
 
-module.exports = { validBounds, validText, isWhatsAppUrl };
+/**
+ * Só a tela do próprio sistema (quadro principal, mesma origem do servidor
+ * embutido) pode mostrar o WhatsApp, ler a conversa ou colar texto nele.
+ */
+function isAppSender(senderUrl, appOrigin, isMainFrame) {
+  if (!isMainFrame) return false;
+  try {
+    return new URL(senderUrl).origin === new URL(appOrigin).origin;
+  } catch (_e) {
+    return false;
+  }
+}
+
+module.exports = { validBounds, validText, isWhatsAppUrl, isAppSender };

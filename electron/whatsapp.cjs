@@ -8,7 +8,7 @@
 
 const { WebContentsView, BrowserWindow, ipcMain, session, shell } = require("electron");
 const { readOpenChat, insertIntoCompose, toScript } = require("./whatsappDom.cjs");
-const { validBounds, validText, isWhatsAppUrl } = require("./whatsappIpc.cjs");
+const { validBounds, validText, isWhatsAppUrl, isAppSender } = require("./whatsappIpc.cjs");
 
 const PARTITION = "persist:whatsapp";
 const URL_WA = "https://web.whatsapp.com/";
@@ -56,8 +56,13 @@ function attach(win) {
   return view;
 }
 
-function registerWhatsApp() {
+/** appOrigin: endereço do servidor embutido (ex.: http://localhost:4123). */
+function registerWhatsApp(appOrigin) {
+  // só a tela do próprio sistema (quadro principal) fala com o WhatsApp
+  const fromApp = (e) => isAppSender(e.senderFrame ? e.senderFrame.url : "", appOrigin, Boolean(e.senderFrame && e.senderFrame === e.sender.mainFrame));
+
   ipcMain.handle("wa-show", (e, b) => {
+    if (!fromApp(e)) return false;
     const bounds = validBounds(b);
     const win = BrowserWindow.fromWebContents(e.sender);
     if (!bounds || !win) return false;
@@ -67,12 +72,14 @@ function registerWhatsApp() {
     return true;
   });
 
-  ipcMain.handle("wa-hide", () => {
+  ipcMain.handle("wa-hide", (e) => {
+    if (!fromApp(e)) return false;
     if (view) view.setVisible(false);
     return true;
   });
 
-  ipcMain.handle("wa-read-chat", async () => {
+  ipcMain.handle("wa-read-chat", async (e) => {
+    if (!fromApp(e)) return { ok: false, reason: "erro" };
     if (!view) return { ok: false, reason: "fechado" };
     try {
       return await view.webContents.executeJavaScript(toScript(readOpenChat), true);
@@ -81,7 +88,8 @@ function registerWhatsApp() {
     }
   });
 
-  ipcMain.handle("wa-insert", async (_e, t) => {
+  ipcMain.handle("wa-insert", async (e, t) => {
+    if (!fromApp(e)) return false;
     const text = validText(t);
     if (!view || text == null) return false;
     try {
@@ -93,7 +101,8 @@ function registerWhatsApp() {
     }
   });
 
-  ipcMain.handle("wa-reload", () => {
+  ipcMain.handle("wa-reload", (e) => {
+    if (!fromApp(e)) return false;
     if (view) view.webContents.loadURL(URL_WA);
     return true;
   });

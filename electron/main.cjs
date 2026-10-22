@@ -707,7 +707,7 @@ app.on("before-quit", () => {
 });
 
 // ---------------- IPC ----------------
-registerWhatsApp(); // WhatsApp Web dentro do Atendimento (electron/whatsapp.cjs)
+registerWhatsApp(BASE_URL); // WhatsApp Web dentro do Atendimento (electron/whatsapp.cjs); só aceita pedidos do próprio sistema
 ipcMain.handle("ping", () => "pong");
 ipcMain.handle("get-app-version", () => app.getVersion());
 ipcMain.on("set-database-url", () => {}); // registrado dinamicamente acima

@@ -23,4 +23,14 @@ describe("validação do IPC do WhatsApp", () => {
     expect(ipc.isWhatsAppUrl("https://web.whatsapp.com.evil.com/")).toBe(false)
     expect(ipc.isWhatsAppUrl("http://web.whatsapp.com/")).toBe(false)
   })
+
+  it("só aceita pedidos da tela do próprio sistema", () => {
+    const app = "http://localhost:4123"
+    expect(ipc.isAppSender("http://localhost:4123/atendimento", app, true)).toBe(true)
+    expect(ipc.isAppSender("http://localhost:4123/atendimento", app, false)).toBe(false) // iframe
+    expect(ipc.isAppSender("https://evil.example/atendimento", app, true)).toBe(false)
+    expect(ipc.isAppSender("http://localhost:9999/", app, true)).toBe(false)
+    expect(ipc.isAppSender("data:text/html,<p>x</p>", app, true)).toBe(false)
+    expect(ipc.isAppSender("", app, true)).toBe(false)
+  })
 })
