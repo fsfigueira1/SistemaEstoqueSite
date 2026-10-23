@@ -3,8 +3,23 @@ import { SaleService } from "@/services/saleService"
 import { getSystemUserId } from "@/lib/systemUser"
 import type { PaymentMethod } from "@/generated/prisma/enums"
 import { friendlyError } from "@/lib/friendlyError"
+import { InsufficientStockError } from "@/lib/cartStock"
 
 const isTransient = (m: string) => m === "Sem conexão" || m.startsWith("Sistema ocupado")
+
+// Produto acabou (outro caixa vendeu antes): 409 dizendo qual e quanto sobrou,
+// para o PDV marcar o item no carrinho e não deixar finalizar sem tirá-lo.
+const stockResponse = (e: InsufficientStockError) =>
+  NextResponse.json(
+    {
+      error: `Estoque insuficiente: ${e.productName} (tem ${e.available} em estoque)`,
+      code: e.code,
+      productId: e.productId,
+      productName: e.productName,
+      available: e.available,
+    },
+    { status: 409 },
+  )
 
 // POST /api/sales/checkout
 // Cria e conclui a venda numa única chamada. Ou tudo dá certo (venda COMPLETED,
@@ -119,6 +134,7 @@ export async function POST(request: Request) {
       // responde 503 para tentar de novo daqui a pouco — aí cai no "já existe".
       const code = (createErr as { code?: string })?.code
       const msg = createErr instanceof Error ? createErr.message : String(createErr)
+      if (createErr instanceof InsufficientStockError) return stockResponse(createErr)
       if (clientId && (code === "P2002" || /unique constraint/i.test(msg)) && /clientId/i.test(msg + JSON.stringify((createErr as { meta?: unknown })?.meta ?? ""))) {
         return NextResponse.json({ error: "Venda em andamento — tente de novo" }, { status: 503 })
       }
@@ -153,6 +169,7 @@ export async function POST(request: Request) {
       } else {
         // desfaz a venda pendente (e solta o clientId) para não deixar lixo
         await SaleService.abandonPendingSale(sale.id).catch(() => {})
+        if (completeErr instanceof InsufficientStockError) return stockResponse(completeErr)
         const fe = friendlyError(completeErr)
         return NextResponse.json({ error: fe.message }, { status: isTransient(fe.message) ? 503 : 409 })
       }

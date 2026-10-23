@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto"
 import { prisma, Prisma } from "../lib/prisma"
+import { InsufficientStockError } from "../lib/cartStock"
 import { SaleStatus, PaymentStatus, PaymentMethod, StockMovementType, ProductStatus, SalePayment } from "../generated/prisma/client.ts"
 
 // Define input types
@@ -97,7 +98,7 @@ export class SaleService {
         throw new Error('Preço inválido')
       }
       if (item.productId) {
-        const product = byId.get(item.productId) as { name: string; stockQuantity: number; status: string } | undefined
+        const product = byId.get(item.productId) as { id: string; name: string; stockQuantity: number; status: string } | undefined
         if (!product) {
           throw new Error(`Product not found: ${item.productId}`)
         }
@@ -105,7 +106,7 @@ export class SaleService {
         // enquanto o balcão estava sem internet). Deixa ir a negativo e segue.
         const need = wanted.get(item.productId) ?? Number(item.quantity)
         if (!input.queued && product.stockQuantity < need) {
-          throw new Error(`Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, requested: ${need}`)
+          throw new InsufficientStockError(product.id, product.name, product.stockQuantity, need)
         }
         if (!input.queued && product.status !== ProductStatus.ACTIVE) {
           throw new Error(`Cannot sell inactive or discontinued product: ${product.name}`)
@@ -841,7 +842,8 @@ export class SaleService {
             data: { stockQuantity: { decrement: it.quantity } }
           })
           if (r.count !== 1) {
-            throw new Error(`Insufficient stock for product ${it.name}`)
+            const cur = await tx.product.findUnique({ where: { id: it.productId }, select: { stockQuantity: true } })
+            throw new InsufficientStockError(it.productId, it.name, cur?.stockQuantity ?? 0, it.quantity)
           }
         }
       }
