@@ -292,9 +292,13 @@ export default function PDVPage() {
   const removeItem = (id: string) => setCarrinho((prev) => prev.filter((i) => i.id !== id));
 
   // ---------- Leitor de código de barras ----------
-  const scanBarcode = async () => {
-    const code = barcode.trim();
+  // O código é lido do campo na hora do Enter e o campo já é limpo: o leitor
+  // pode mandar o próximo código enquanto este ainda está sendo buscado (banco
+  // lento) sem que um apague o outro.
+  const scanBarcode = async (raw: string) => {
+    const code = raw.trim();
     if (!code) return;
+    setBarcode('');
     setScanStatus('scanning');
     setError(null);
     try {
@@ -314,13 +318,12 @@ export default function PDVPage() {
       if (product) {
         addToCart(product);
         setScanStatus('added');
-        setBarcode('');
       } else {
         setScanStatus('not-found');
         setError(
           serverAnswered
-            ? 'Produto não encontrado para esse código'
-            : 'Produto não encontrado (sem internet, buscando no catálogo em cache)',
+            ? `Produto não encontrado para o código ${code}`
+            : `Produto não encontrado para o código ${code} (sem internet, buscando no catálogo em cache)`,
         );
       }
     } finally {
@@ -812,7 +815,7 @@ export default function PDVPage() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        scanBarcode();
+                        scanBarcode(e.currentTarget.value);
                       }
                     }}
                     placeholder="Aproxime o leitor ou digite o código e pressione Enter"
