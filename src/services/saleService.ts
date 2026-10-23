@@ -25,6 +25,11 @@ type CreateSaleInput = {
   queued?: boolean
 }
 
+// Estoque é sempre mexido na mesma ordem de produto: duas vendas/estornos ao
+// mesmo tempo com os mesmos produtos não se travam no banco (deadlock).
+const byProductId = (a: { productId: string | null }, b: { productId: string | null }) =>
+  (a.productId ?? '') < (b.productId ?? '') ? -1 : (a.productId ?? '') > (b.productId ?? '') ? 1 : 0
+
 const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100
 
 export class SaleService {
@@ -553,14 +558,16 @@ export class SaleService {
         throw new Error('Cannot cancel sale with paid payments')
       }
 
-      // Update sale status
-      const updatedSale = await tx.sale.update({
-        where: { id },
-        data: {
-          status: SaleStatus.CANCELLED,
-          updatedAt: new Date()
-        }
+      // Só cancela se ainda estiver pendente: se finalizaram ao mesmo tempo,
+      // a venda concluída (estoque baixado, dinheiro no caixa) não vira "cancelada"
+      const claimed = await tx.sale.updateMany({
+        where: { id, status: SaleStatus.PENDING },
+        data: { status: SaleStatus.CANCELLED, updatedAt: new Date() }
       })
+      if (claimed.count !== 1) {
+        throw new Error('Cannot cancel a completed sale')
+      }
+      const updatedSale = await tx.sale.findUnique({ where: { id } })
 
       // Note: SaleItem model doesn't have a status field, so we can't update it
       // The relationship is maintained through the saleId foreign key
@@ -815,7 +822,14 @@ export class SaleService {
       // 9. Baixar estoque. Venda no balcão (online): só baixa se ainda tem —
       // dois PCs vendendo a última unidade ao mesmo tempo não deixam negativo.
       // Venda da fila offline: baixa sempre (já aconteceu).
+      // uma baixa por produto (o mesmo produto pode vir em 2 linhas), em ordem
+      const perProduct = new Map<string, { productId: string; quantity: number; name: string }>()
       for (const it of itemsWithStockUpdate) {
+        const cur = perProduct.get(it.productId)
+        if (cur) cur.quantity += it.quantity
+        else perProduct.set(it.productId, { ...it })
+      }
+      for (const it of [...perProduct.values()].sort(byProductId)) {
         if (opts.queued) {
           await tx.product.update({
             where: { id: it.productId },
@@ -962,7 +976,7 @@ export class SaleService {
       }
 
       // 7. Devolver estoque (aumentar quantidade dos produtos)
-      for (const item of sale.items) {
+      for (const item of [...sale.items].sort(byProductId)) {
         if (!item.productId) continue // item avulso — nunca baixou estoque
         // Update product stock (increment)
         await tx.product.update({
