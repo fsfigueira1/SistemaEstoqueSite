@@ -74,7 +74,18 @@ export function personalize(text: string, name: string | null): string {
 
 export const waLink = (phone: string, text: string) => `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
 
-const vcfEscape = (s: string) => s.replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;")
+// quebra de linha e outros caracteres de controle viram espaço: num nome
+// importado de planilha, eles criariam campos novos no cartão (outro telefone)
+const vcfEscape = (s: string) =>
+  s
+    // eslint-disable-next-line no-control-regex -- é justamente o que precisa sair
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/ {2,}/g, " ")
+    .trim()
+    .slice(0, 120)
+    .replace(/\\/g, "\\\\")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;")
 
 /** Arquivo .vcf (vCard 3.0) para importar os contatos no celular. */
 export function buildVcf(contacts: Array<{ name: string | null; phone: string }>): string {

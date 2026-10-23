@@ -48,6 +48,12 @@ describe('mensagem', () => {
     expect(v).toContain('FN:Cliente 0909')
   })
 
+  it('buildVcf: quebra de linha no nome não cria campo novo no cartão', () => {
+    const v = buildVcf([{ name: 'Ana\r\nTEL;TYPE=CELL:+5511900000000\nX', phone: '5517999998888' }])
+    expect(v.split('\r\n').filter((l) => l.startsWith('TEL'))).toEqual(['TEL;TYPE=CELL:+5517999998888'])
+    expect(v).toContain('FN:Ana TEL\\;TYPE=CELL:+5511900000000 X')
+  })
+
 describe('correções da revisão', () => {
   it('telefone com 0 na frente vira 55 + DDD', () => {
     expect(parseContacts('Ana\t0 17 99999-8888\nBeto\t(017) 3228-0909').rows).toEqual([
