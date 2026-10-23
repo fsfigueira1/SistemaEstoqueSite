@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { errorText } from '@/lib/friendlyError';
 import Layout, { PageHeader } from '@/components/Layout';
-import PriceSearchSettings from '@/components/settings/PriceSearchSettings';
+import PriceSearchSettings, { Field, Section } from '@/components/settings/PriceSearchSettings';
+import AiSettings from '@/components/settings/AiSettings';
 import ReceiptWidthPreview from '@/components/settings/ReceiptWidthPreview';
 import FeeSettings from '@/components/settings/FeeSettings';
 import BackupSettings from '@/components/settings/BackupSettings';
@@ -25,6 +26,7 @@ export default function ConfiguracoesPage() {
   // chave da IA: nunca vem do servidor; o campo só serve para trocar
   const [aiKey, setAiKey] = useState('');
   const [shoppingKey, setShoppingKey] = useState('');
+  const [nvidiaKey, setNvidiaKey] = useState('');
 
   // PIN
   const [pinCur, setPinCur] = useState('');
@@ -49,10 +51,12 @@ export default function ConfiguracoesPage() {
       const next = await saveSettings(form, {
         ...(aiKey.trim() ? { aiApiKey: aiKey.trim() } : {}),
         ...(shoppingKey.trim() ? { shoppingApiKey: shoppingKey.trim() } : {}),
+        ...(nvidiaKey.trim() ? { nvidiaApiKey: nvidiaKey.trim() } : {}),
       });
       setForm(next);
       setAiKey('');
       setShoppingKey('');
+      setNvidiaKey('');
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
@@ -65,6 +69,14 @@ export default function ConfiguracoesPage() {
     if (!window.confirm('Remover a chave do Claude?')) return;
     try {
       setForm(await saveSettings(form, { aiApiKeyClear: true }));
+    } catch (e) {
+      setSaveErr(errorText(e, 'Não foi possível salvar'));
+    }
+  };
+  const removeNvidia = async () => {
+    if (!window.confirm('Remover a chave da NVIDIA? O ajudante e a leitura da foto param até colar outra.')) return;
+    try {
+      setForm(await saveSettings(form, { nvidiaApiKeyClear: true }));
     } catch (e) {
       setSaveErr(errorText(e, 'Não foi possível salvar'));
     }
@@ -118,6 +130,16 @@ export default function ConfiguracoesPage() {
               <input value={form.companyPhone} onChange={(e) => set('companyPhone', e.target.value)} className={inp} placeholder="(00) 00000-0000" />
             </Field>
             <div className="sm:col-span-2">
+              <Field label="Horário de funcionamento">
+                <input
+                  value={form.storeHours}
+                  onChange={(e) => set('storeHours', e.target.value)}
+                  className={inp}
+                  placeholder="Segunda a sexta: 8h às 18h · Sábado: 8h às 13h"
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
               <Field label="Endereço">
                 <input value={form.companyAddress} onChange={(e) => set('companyAddress', e.target.value)} className={inp} placeholder="Rua, número — bairro, cidade/UF" />
               </Field>
@@ -141,6 +163,18 @@ export default function ConfiguracoesPage() {
           }}
           onRemoveAi={removeKey}
           onRemoveShopping={removeShopping}
+        />
+
+        {/* IA do ajudante e da foto da lista */}
+        <AiSettings
+          form={form}
+          set={set}
+          nvidiaKey={nvidiaKey}
+          onNvidiaKey={(v) => {
+            setNvidiaKey(v);
+            setSaved(false);
+          }}
+          onRemoveNvidia={removeNvidia}
         />
 
         {/* Taxas da maquininha */}
@@ -298,36 +332,3 @@ export default function ConfiguracoesPage() {
 const inp =
   'w-full rounded-lg border border-border bg-card px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40 disabled:opacity-60';
 
-function Section({
-  icon,
-  title,
-  desc,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-      <div className="mb-4 flex items-start gap-3">
-        <span className="rounded-lg bg-accent-soft p-2 text-primary">{icon}</span>
-        <div>
-          <h2 className="text-lg text-foreground">{title}</h2>
-          {desc && <p className="text-xs text-muted-foreground">{desc}</p>}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-foreground/90">{label}</label>
-      {children}
-    </div>
-  );
-}

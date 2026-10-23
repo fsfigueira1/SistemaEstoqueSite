@@ -21,6 +21,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const { spawn, spawnSync } = require("node:child_process");
 const { autoUpdater } = require("electron-updater");
+const { registerWhatsApp } = require("./whatsapp.cjs");
 
 app.disableHardwareAcceleration();
 process.env.ELECTRON_RUNNING = "true";
@@ -706,6 +707,7 @@ app.on("before-quit", () => {
 });
 
 // ---------------- IPC ----------------
+registerWhatsApp(BASE_URL); // WhatsApp Web dentro do Atendimento (electron/whatsapp.cjs); só aceita pedidos do próprio sistema
 ipcMain.handle("ping", () => "pong");
 ipcMain.handle("get-app-version", () => app.getVersion());
 ipcMain.on("set-database-url", () => {}); // registrado dinamicamente acima

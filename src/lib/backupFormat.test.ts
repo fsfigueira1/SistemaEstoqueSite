@@ -36,6 +36,11 @@ describe("backup", () => {
     expect(stripSecrets("Product", [{ id: "1" }])).toEqual([{ id: "1" }])
   })
 
+  it("não leva a chave da NVIDIA", () => {
+    const rows = stripSecrets("Settings", [{ id: "app", nvidiaApiKey: "nvapi-x", companyName: "L" }])
+    expect(rows[0].nvidiaApiKey).toBe("")
+  })
+
   it("mantém só os mais novos e nunca mexe em outros arquivos", () => {
     const names = [
       "lacolaria-backup-2026-09-01-1000.json.gz",

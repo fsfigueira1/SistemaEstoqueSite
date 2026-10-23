@@ -9,7 +9,7 @@
 // (IF NOT EXISTS), então rodar em 3 PCs ao mesmo tempo é seguro.
 //
 // Mantenha em sincronia com prisma/migrations/20260924120000_reports_ai/migration.sql
-// (e as seguintes, como 20261014120000_product_labels).
+// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists, 20261021120000_whatsapp_contacts, 20261022120000_novidades_ia, 20261022140000_quote_requests e 20261022160000_copilot_learning).
 import { prisma } from "@/lib/prisma"
 
 export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
@@ -94,6 +94,133 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
     CONSTRAINT "ProductLabel_pkey" PRIMARY KEY ("productId"),
     CONSTRAINT "ProductLabel_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+
+  // --- 0.4.0: listas escolares salvas ---
+  `CREATE TABLE IF NOT EXISTS "School" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "School_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "School_slug_key" ON "School"("slug")`,
+  `CREATE TABLE IF NOT EXISTS "SchoolList" (
+    "id" TEXT NOT NULL,
+    "schoolId" TEXT NOT NULL,
+    "grade" TEXT NOT NULL,
+    "schoolYear" INTEGER NOT NULL,
+    "code" TEXT NOT NULL,
+    "sourceText" TEXT NOT NULL DEFAULT '',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "SchoolList_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "SchoolList_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "SchoolList_code_key" ON "SchoolList"("code")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "SchoolList_schoolId_grade_schoolYear_key" ON "SchoolList"("schoolId", "grade", "schoolYear")`,
+  `CREATE TABLE IF NOT EXISTS "SchoolListItem" (
+    "id" TEXT NOT NULL,
+    "listId" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "raw" TEXT NOT NULL,
+    "text" TEXT NOT NULL,
+    "qty" INTEGER NOT NULL,
+    "productId" TEXT,
+    CONSTRAINT "SchoolListItem_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "SchoolListItem_listId_fkey" FOREIGN KEY ("listId") REFERENCES "SchoolList"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "SchoolListItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS "SchoolListItem_listId_idx" ON "SchoolListItem"("listId")`,
+  `CREATE INDEX IF NOT EXISTS "SchoolListItem_productId_idx" ON "SchoolListItem"("productId")`,
+
+  // --- 0.4.0: contatos do WhatsApp ---
+  `CREATE TABLE IF NOT EXISTS "Contact" (
+    "id" TEXT NOT NULL,
+    "phone" TEXT NOT NULL,
+    "name" TEXT,
+    "source" TEXT NOT NULL DEFAULT 'whatsapp',
+    "optInAt" TIMESTAMP(3),
+    "optOutAt" TIMESTAMP(3),
+    "optInAskedAt" TIMESTAMP(3),
+    "botPausedUntil" TIMESTAMP(3),
+    "customerId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "Contact_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "Contact_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Contact_phone_key" ON "Contact"("phone")`,
+  `CREATE TABLE IF NOT EXISTS "WhatsAppMessage" (
+    "id" TEXT NOT NULL,
+    "metaId" TEXT,
+    "contactId" TEXT NOT NULL,
+    "direction" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "body" TEXT NOT NULL DEFAULT '',
+    "status" TEXT NOT NULL DEFAULT 'received',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "WhatsAppMessage_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "WhatsAppMessage_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "WhatsAppMessage_metaId_key" ON "WhatsAppMessage"("metaId")`,
+  `CREATE INDEX IF NOT EXISTS "WhatsAppMessage_contactId_createdAt_idx" ON "WhatsAppMessage"("contactId", "createdAt")`,
+
+  // --- 0.4.0: novidades e IA da NVIDIA ---
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "aiProvider" TEXT NOT NULL DEFAULT 'nvidia'`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "nvidiaApiKey" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "nvidiaModel" TEXT NOT NULL DEFAULT 'nvidia/nemotron-3.5-super-vl-120b-a12b'`,
+  `CREATE TABLE IF NOT EXISTS "Broadcast" (
+    "id" TEXT NOT NULL,
+    "text" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Broadcast_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE TABLE IF NOT EXISTS "BroadcastRecipient" (
+    "broadcastId" TEXT NOT NULL,
+    "contactId" TEXT NOT NULL,
+    "sentAt" TIMESTAMP(3),
+    CONSTRAINT "BroadcastRecipient_pkey" PRIMARY KEY ("broadcastId","contactId"),
+    CONSTRAINT "BroadcastRecipient_broadcastId_fkey" FOREIGN KEY ("broadcastId") REFERENCES "Broadcast"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "BroadcastRecipient_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS "BroadcastRecipient_contactId_idx" ON "BroadcastRecipient"("contactId")`,
+
+  // --- 0.4.0: orçamentos pedidos (atendimento) e horário da loja ---
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "storeHours" TEXT NOT NULL DEFAULT 'Segunda a sexta: 8h às 18h · Sábado: 8h às 13h'`,
+  `CREATE TABLE IF NOT EXISTS "QuoteRequest" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL DEFAULT '',
+    "phone" TEXT,
+    "source" TEXT NOT NULL DEFAULT 'whatsapp',
+    "title" TEXT NOT NULL DEFAULT '',
+    "items" JSONB NOT NULL,
+    "toConfirm" JSONB NOT NULL DEFAULT '[]',
+    "total" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'aberto',
+    "message" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "QuoteRequest_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "QuoteRequest_phone_idx" ON "QuoteRequest"("phone")`,
+  `CREATE INDEX IF NOT EXISTS "QuoteRequest_createdAt_idx" ON "QuoteRequest"("createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "QuoteRequest_status_idx" ON "QuoteRequest"("status")`,
+
+  // --- 0.4.0: tom de voz e aprendizado do copiloto ---
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "copilotPersona" TEXT NOT NULL DEFAULT ''`,
+  `CREATE TABLE IF NOT EXISTS "CopilotExample" (
+    "id" TEXT NOT NULL,
+    "customerText" TEXT NOT NULL,
+    "aiReply" TEXT NOT NULL DEFAULT '',
+    "finalReply" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "CopilotExample_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "CopilotExample_createdAt_idx" ON "CopilotExample"("createdAt")`,
 ]
 
 let upgrade: Promise<void> | null = null

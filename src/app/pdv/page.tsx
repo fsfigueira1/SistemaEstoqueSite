@@ -29,6 +29,7 @@ import {
 import { enqueueSale } from '@/lib/offline/saleQueue';
 import { useOfflineStatus } from '@/components/OfflineSync';
 import { errorText } from '@/lib/friendlyError';
+import { applyStockShortage, stockShortages } from '@/lib/cartStock';
 import PaymentPanel from '@/components/pdv/PaymentPanel';
 import { takePdvPrefill } from '@/lib/pdvPrefill';
 import { planPayments, toCheckoutPayments, type PartInput, type PlannedPart } from '@/lib/payments';
@@ -249,11 +250,13 @@ export default function PDVPage() {
     setCarrinho((prev) => {
       const existing = prev.find((i) => i.id === p.id);
       if (existing) {
-        if (existing.quantidade >= toNumber(p.stockQuantity)) {
-          setError(`Estoque insuficiente para ${p.name}`);
-          return prev;
+        const stock = toNumber(p.stockQuantity);
+        if (existing.quantidade >= stock) {
+          setError(`Estoque insuficiente para ${p.name} (tem ${stock} em estoque)`);
+          // guarda o estoque atual: se já passou do que tem, o item fica marcado
+          return prev.map((i) => (i.id === p.id ? { ...i, estoque: stock } : i));
         }
-        return prev.map((i) => (i.id === p.id ? { ...i, quantidade: i.quantidade + 1 } : i));
+        return prev.map((i) => (i.id === p.id ? { ...i, quantidade: i.quantidade + 1, estoque: stock } : i));
       }
       if (toNumber(p.stockQuantity) <= 0) {
         setError(`${p.name} está sem estoque`);
@@ -275,12 +278,14 @@ export default function PDVPage() {
   }, []);
 
   const setQty = (id: string, delta: number) => {
+    if (delta < 0) setError(null); // corrigindo a quantidade: o aviso antigo sai (o do item continua se ainda faltar)
     setCarrinho((prev) =>
       prev.flatMap((i) => {
         if (i.id !== id) return [i];
         const q = i.quantidade + delta;
         if (q <= 0) return [];
-        if (q > i.estoque) {
+        // só trava aumentar: diminuir sempre pode (é como se corrige falta de estoque)
+        if (delta > 0 && q > i.estoque && !i.avulso) {
           setError(`Só há ${i.estoque} em estoque de ${i.nome}`);
           return [i];
         }
@@ -289,12 +294,19 @@ export default function PDVPage() {
     );
   };
 
-  const removeItem = (id: string) => setCarrinho((prev) => prev.filter((i) => i.id !== id));
+  const removeItem = (id: string) => {
+    setError(null);
+    setCarrinho((prev) => prev.filter((i) => i.id !== id));
+  };
 
   // ---------- Leitor de código de barras ----------
-  const scanBarcode = async () => {
-    const code = barcode.trim();
+  // O código é lido do campo na hora do Enter e o campo já é limpo: o leitor
+  // pode mandar o próximo código enquanto este ainda está sendo buscado (banco
+  // lento) sem que um apague o outro.
+  const scanBarcode = async (raw: string) => {
+    const code = raw.trim();
     if (!code) return;
+    setBarcode('');
     setScanStatus('scanning');
     setError(null);
     try {
@@ -314,13 +326,12 @@ export default function PDVPage() {
       if (product) {
         addToCart(product);
         setScanStatus('added');
-        setBarcode('');
       } else {
         setScanStatus('not-found');
         setError(
           serverAnswered
-            ? 'Produto não encontrado para esse código'
-            : 'Produto não encontrado (sem internet, buscando no catálogo em cache)',
+            ? `Produto não encontrado para o código ${code}`
+            : `Produto não encontrado para o código ${code} (sem internet, buscando no catálogo em cache)`,
         );
       }
     } finally {
@@ -498,9 +509,17 @@ export default function PDVPage() {
   };
 
   // ---------- Finalizar venda ----------
+  // itens pedindo mais do que há em estoque: bloqueiam o Finalizar
+  const shortages = stockShortages(carrinho);
+  const shortById = new Map(shortages.map((x) => [x.id, x]));
+
   const finalizarVenda = async () => {
     if (carrinho.length === 0) {
       setError('O carrinho está vazio');
+      return;
+    }
+    if (shortages.length > 0) {
+      setError('Estoque insuficiente — tire ou diminua os itens marcados em vermelho para finalizar');
       return;
     }
     if (plan.error) {
@@ -634,6 +653,11 @@ export default function PDVPage() {
         await queueIt(cashSessionId);
         return;
       }
+      // produto acabou (outro caixa vendeu antes): marca o item no carrinho
+      if (res.status === 409 && data?.code === 'INSUFFICIENT_STOCK' && data.productId) {
+        setCarrinho((prev) => applyStockShortage(prev, { productId: data.productId, available: Number(data.available) || 0 }));
+        throw new Error(`${data.error}. Tire ou diminua o item marcado em vermelho para finalizar.`);
+      }
       if (!res.ok || !data.success) {
         throw new Error(
           errorText(data, 'Venda não finalizada'),
@@ -740,7 +764,10 @@ export default function PDVPage() {
             ) : (
               <div className="grid max-h-[45vh] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
                 {carrinho.map((i) => (
-                  <div key={i.id} className="rounded-lg border border-border p-4">
+                  <div
+                    key={i.id}
+                    className={`rounded-lg border p-4 ${shortById.has(i.id) ? 'border-2 border-danger bg-danger/5' : 'border-border'}`}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate text-base font-semibold text-foreground">{i.nome}</p>
@@ -784,6 +811,14 @@ export default function PDVPage() {
                         {formatCurrency(i.preco * i.quantidade)}
                       </span>
                     </div>
+                    {shortById.has(i.id) && (
+                      <p role="alert" className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-danger">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        {i.estoque <= 0
+                          ? 'Estoque insuficiente — acabou. Tire do carrinho.'
+                          : `Estoque insuficiente — só tem ${i.estoque}. Diminua ou tire.`}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -812,7 +847,7 @@ export default function PDVPage() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        scanBarcode();
+                        scanBarcode(e.currentTarget.value);
                       }
                     }}
                     placeholder="Aproxime o leitor ou digite o código e pressione Enter"
@@ -980,10 +1015,18 @@ export default function PDVPage() {
                   interestPercent={cfg.cardInterestPercent || 0}
                 />
 
+                {shortages.length > 0 && (
+                  <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg border-2 border-danger bg-danger/10 p-3 text-sm font-semibold text-danger">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                    <span>
+                      Estoque insuficiente: {shortages.map((x) => `${x.nome} (tem ${x.estoque})`).join(', ')}. Tire ou diminua para finalizar a venda.
+                    </span>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={finalizarVenda}
-                  disabled={isProcessing || carrinho.length === 0}
+                  disabled={isProcessing || carrinho.length === 0 || shortages.length > 0}
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-heading text-base font-bold text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 >
                   {isProcessing ? (

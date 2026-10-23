@@ -139,6 +139,26 @@ describe('Checkout robusto', () => {
     await Promise.allSettled([open(), open(), open()]);
     expect(await prisma.cashSession.count({ where: { cashRegisterId: reg.id, status: 'OPEN' } })).toBe(1);
   }, 60_000);
+
+  it('estoque insuficiente: 409 dizendo qual produto e quanto tem', async () => {
+    await prisma.product.update({ where: { id: product.id }, data: { stockQuantity: 2 } });
+    const r = await post(body('cid-sem-estoque', 3));
+    expect(r.status).toBe(409);
+    const j = await r.json();
+    expect(j).toMatchObject({ code: 'INSUFFICIENT_STOCK', productId: product.id, available: 2 });
+    expect(j.error).toMatch(/Estoque insuficiente/);
+    expect(j.error).toMatch(/Caneta/);
+    expect(await stockOf(product.id)).toBe(2);
+  }, 60_000);
+
+  it('última unidade em 2 PCs: quem perde recebe 409 com o estoque que sobrou', async () => {
+    const [a, b] = await Promise.all([post(body('cid-pc1', 6)), post(body('cid-pc2', 6))]);
+    const lost = [a, b].find((r) => r.status !== 201)!;
+    expect([a, b].filter((r) => r.status === 201)).toHaveLength(1);
+    expect(lost.status).toBe(409);
+    expect(await lost.json()).toMatchObject({ code: 'INSUFFICIENT_STOCK', productId: product.id, available: 4 });
+    expect(await prisma.sale.count({ where: { status: 'PENDING' } })).toBe(0);
+  }, 60_000);
 });
 
 describe('Atualização do banco', () => {

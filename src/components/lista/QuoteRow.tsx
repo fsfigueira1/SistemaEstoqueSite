@@ -15,6 +15,8 @@ export type Row = {
   skip: boolean;
   product: CatalogProduct | null;
   options: CatalogProduct[];
+  /** lista salva reaberta: produto gravado, mesmo que hoje esteja inativo */
+  savedProductId?: string | null;
 };
 
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);

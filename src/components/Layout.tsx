@@ -17,9 +17,13 @@ import {
   ClipboardList,
   GraduationCap,
   SpellCheck,
+  Megaphone,
+  MessagesSquare,
+  ClipboardCheck,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import DailyAssistant, { openDailyAssistant } from '@/components/DailyAssistant';
+import AssistantChat from '@/components/AssistantChat';
 
 // Navegação em grupos: o que se usa no balcão primeiro, gestão depois.
 const groups: Array<{ title: string; items: Array<{ name: string; href: string; icon: typeof LayoutDashboard }> }> = [
@@ -30,6 +34,9 @@ const groups: Array<{ title: string; items: Array<{ name: string; href: string; 
       { name: 'PDV', href: '/pdv', icon: ShoppingCart },
       { name: 'Vendas', href: '/vendas', icon: Receipt },
       { name: 'Lista escolar', href: '/lista-escolar', icon: GraduationCap },
+      { name: 'Atendimento', href: '/atendimento', icon: MessagesSquare },
+      { name: 'Orçamentos', href: '/orcamentos', icon: ClipboardCheck },
+      { name: 'Novidades', href: '/novidades', icon: Megaphone },
     ],
   },
   {
@@ -157,6 +164,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </div>
 
       <DailyAssistant />
+      <AssistantChat />
     </div>
   );
 }

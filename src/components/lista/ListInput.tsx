@@ -65,7 +65,7 @@ export default function ListInput({
         <h2 className="text-lg text-foreground">A lista</h2>
         <div className="flex flex-wrap items-center gap-3">
           {aiAvailable && (
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Melhor para letra de mão (usa a chave do Claude)">
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Melhor para letra de mão (usa a IA de Configurações)">
               <input type="checkbox" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} className="h-3.5 w-3.5" />
               <Sparkles className="h-3.5 w-3.5 text-bow" /> Ler com IA
             </label>

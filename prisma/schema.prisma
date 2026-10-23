@@ -233,6 +233,7 @@ model Product {
   saleItems          SaleItem[]          @relation("ProductSaleItems")
   stockMovements     StockMovement[]     @relation("ProductStockMovements")
   label              ProductLabel?
+  schoolListItems    SchoolListItem[]
   @@index([sku])
   @@index([barcode])
   @@index([categoryId])
@@ -264,6 +265,7 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   sales     Sale[]   @relation("SaleCustomer")
+  contacts  Contact[]
   @@index([name])
   @@index([email])
   @@index([phone])
@@ -381,6 +383,10 @@ model Settings {
   companyDoc                   String   @default("")
   companyAddress               String   @default("")
   companyPhone                 String   @default("")
+  /// horário de funcionamento (texto livre) — usado pelo copiloto do atendimento
+  storeHours                   String   @default("Segunda a sexta: 8h às 18h · Sábado: 8h às 13h")
+  /// tom de voz da atendente do WhatsApp (vazio = o padrão carismático de src/lib/copilotStyle.ts)
+  copilotPersona               String   @default("")
   receiptFooter                String   @default("Obrigado pela preferencia! Troca em ate 7 dias com este comprovante.")
   receiptShowCompany           Boolean  @default(true)
   receiptWidth                 String   @default("80mm")
@@ -392,6 +398,10 @@ model Settings {
   storeCity                    String   @default("")
   /// Chave da API do Claude (Anthropic). Nunca é devolvida pela API de configurações.
   aiApiKey                     String   @default("")
+  /// nvidia | claude — quem lê a foto da lista e responde no ajudante
+  aiProvider                   String   @default("nvidia")
+  nvidiaApiKey                 String   @default("")
+  nvidiaModel                  String   @default("nvidia/nemotron-3.5-super-vl-120b-a12b")
   aiModel                      String   @default("claude-sonnet-5")
   /// % acima do preço atual que dispara o aviso de "mercado em alta".
   priceAlertPercent            Float    @default(10)
@@ -482,4 +492,148 @@ model ProductLabel {
   labelPrintedAt DateTime?
   updatedAt      DateTime  @default(now()) @updatedAt
   product        Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+/// Escola cuja lista de material a loja salvou (ver savedListService.ts).
+/// O slug junta grafias diferentes do mesmo nome ("Colégio São José" =
+/// "colegio sao jose").
+model School {
+  id        String       @id @default(uuid())
+  name      String
+  slug      String       @unique
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  lists     SchoolList[]
+}
+
+/// Lista de material de uma série num ano letivo. O código curto ("L-3A7K")
+/// vai no botão do site e na mensagem do WhatsApp — não muda quando a lista
+/// é salva de novo. Preço e estoque não ficam gravados: o orçamento recalcula.
+model SchoolList {
+  id         String           @id @default(uuid())
+  schoolId   String
+  grade      String
+  schoolYear Int
+  code       String           @unique
+  sourceText String           @default("")
+  active     Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  school     School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  items      SchoolListItem[]
+  @@unique([schoolId, grade, schoolYear])
+}
+
+/// Item da lista salva; sem produto = "não temos".
+model SchoolListItem {
+  id        String     @id @default(uuid())
+  listId    String
+  position  Int
+  raw       String
+  text      String
+  qty       Int
+  productId String?
+  list      SchoolList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  product   Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  @@index([listId])
+  @@index([productId])
+}
+
+/// Contato do WhatsApp (robô e novidades). Telefone só com dígitos e DDI
+/// ("5517999998888"). Só recebe novidades quem respondeu SIM (optInAt) e
+/// não saiu depois (optOutAt). botPausedUntil: um atendente respondeu pelo
+/// celular, o robô fica quieto nessa conversa até lá.
+model Contact {
+  id             String            @id @default(uuid())
+  phone          String            @unique
+  name           String?
+  /// whatsapp | cliente | planilha
+  source         String            @default("whatsapp")
+  optInAt        DateTime?
+  optOutAt       DateTime?
+  optInAskedAt   DateTime?
+  botPausedUntil DateTime?
+  customerId     String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  customer       Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  messages       WhatsAppMessage[]
+  recipients     BroadcastRecipient[]
+}
+
+/// Mensagem do WhatsApp (entrada e saída). metaId = id da Meta ("wamid..."),
+/// único — é o que impede responder duas vezes quando a Meta reenvia.
+model WhatsAppMessage {
+  id        String   @id @default(uuid())
+  metaId    String?  @unique
+  contactId String
+  /// in | out
+  direction String
+  /// text | image | template | other
+  type      String
+  body      String   @default("")
+  /// received | sent | delivered | read | failed
+  status    String   @default("received")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  @@index([contactId, createdAt])
+}
+
+/// Novidade enviada pelo WhatsApp do celular (lista de transmissão ou um por
+/// um). Guarda o texto sem o rodapé de saída (entra na hora de enviar).
+model Broadcast {
+  id         String               @id @default(uuid())
+  text       String
+  createdAt  DateTime             @default(now())
+  recipients BroadcastRecipient[]
+}
+
+/// Quem estava recebendo novidades quando o envio foi criado; sentAt = a
+/// loja marcou que mandou.
+model BroadcastRecipient {
+  broadcastId String
+  contactId   String
+  sentAt      DateTime?
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  @@id([broadcastId, contactId])
+  @@index([contactId])
+}
+
+/// Orçamento pedido pelo cliente (copiloto do WhatsApp ou Lista Escolar).
+/// Guarda o preço do momento; a tela mostra também o preço de agora.
+model QuoteRequest {
+  id        String   @id @default(uuid())
+  name      String   @default("")
+  phone     String?
+  /// whatsapp | balcao
+  source    String   @default("whatsapp")
+  title     String   @default("")
+  /// [{ qty, text, productId, price, take }] — price/take do momento do orçamento
+  items     Json
+  /// itens que a loja confirma (sem SKU, uniforme, não reconhecido)
+  toConfirm Json     @default("[]")
+  total     Decimal  @default(0)
+  /// aberto | separado | retirado | cancelado
+  status    String   @default("aberto")
+  /// resposta enviada ao cliente (como foi montada)
+  message   String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([phone])
+  @@index([createdAt])
+  @@index([status])
+}
+
+/// Resposta que o atendente aprovou (copiou/colocou no WhatsApp), com as
+/// correções dele — a IA usa as mais recentes como exemplo de tom.
+model CopilotExample {
+  id           String   @id @default(uuid())
+  customerText String
+  aiReply      String   @default("")
+  finalReply   String
+  createdAt    DateTime @default(now())
+  @@index([createdAt])
 }

@@ -10,7 +10,7 @@ export const BACKUP_FILE_RE = /^lacolaria-backup-\d{4}-\d{2}-\d{2}-\d{4}(-\d{1,3
 
 /** Colunas que nunca vão para o arquivo (chaves de API). */
 export const SECRET_COLUMNS: Record<string, string[]> = {
-  Settings: ["aiApiKey", "shoppingApiKey"],
+  Settings: ["aiApiKey", "shoppingApiKey", "nvidiaApiKey"],
 }
 
 export type BackupFile = {

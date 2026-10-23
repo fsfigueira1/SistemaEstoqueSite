@@ -90,6 +90,13 @@ export class PurchaseService {
       }
     }
 
+    for (const item of input.items) {
+      if ((item.unitPrice === undefined || item.unitPrice === null) &&
+          (item.unitCost === undefined || item.unitCost === null)) {
+        throw new Error('Either unitPrice or unitCost must be provided for each item')
+      }
+    }
+
     // Use transaction to ensure consistency
     return prisma.$transaction(async (tx) => {
       // Calculate total amount
@@ -147,43 +154,21 @@ export class PurchaseService {
         }
       })
 
-      // Create purchase order items
-      const createdItems = []
-      for (const item of input.items) {
-        // Support both unitPrice and unitCost (backward compatibility with tests)
-        // Validate that at least one is provided
-        if ((item.unitPrice === undefined || item.unitPrice === null) &&
-            (item.unitCost === undefined || item.unitCost === null)) {
-          throw new Error('Either unitPrice or unitCost must be provided for each item')
-        }
-
-        // Prefer unitPrice when both are provided, otherwise use unitCost
-        const unitPrice = ((item.unitPrice !== undefined && item.unitPrice !== null)
-          ? item.unitPrice
-          : (item.unitCost !== undefined && item.unitCost !== null)
-            ? item.unitCost
-            : 0) as number
-
-        const quantity = Number(item.quantity)
-        const itemSubtotal = unitPrice * quantity
-
-        // Apply per-item discount
-        const itemDiscount = item.discountAmount !== undefined && item.discountAmount !== null
-          ? Number(item.discountAmount)
-          : 0
-        const itemTotal = itemSubtotal - itemDiscount
-
-        const purchaseOrderItem = await tx.purchaseOrderItem.create({
-          data: {
+      // Itens num comando só: com o banco na nuvem, um insert por item
+      // estourava o tempo da transação (5s) em pedido grande
+      const createdItems = await tx.purchaseOrderItem.createManyAndReturn({
+        data: input.items.map((item) => {
+          const unitPrice = Number(item.unitPrice ?? item.unitCost)
+          const itemDiscount = item.discountAmount !== undefined && item.discountAmount !== null ? Number(item.discountAmount) : 0
+          return {
             purchaseOrderId: purchaseOrder.id,
             productId: item.productId,
             quantity: item.quantity,
-            unitPrice: new Prisma.Decimal(Number(unitPrice)),
-            totalPrice: new Prisma.Decimal(itemTotal)
+            unitPrice: new Prisma.Decimal(unitPrice),
+            totalPrice: new Prisma.Decimal(unitPrice * Number(item.quantity) - itemDiscount)
           }
         })
-        createdItems.push(purchaseOrderItem)
-      }
+      })
 
       return {
         purchaseOrder: {
