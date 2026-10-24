@@ -140,6 +140,18 @@ export default function ConfiguracoesPage() {
               </Field>
             </div>
             <div className="sm:col-span-2">
+              <Field label="Informações para o atendimento (a IA do WhatsApp responde com base nisto)">
+                <textarea
+                  value={form.storeInfo}
+                  onChange={(e) => set('storeInfo', e.target.value)}
+                  rows={4}
+                  maxLength={2000}
+                  className={inp}
+                  placeholder="Formas de pagamento, retirada, serviços, o que a loja não faz…"
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
               <Field label="Endereço">
                 <input value={form.companyAddress} onChange={(e) => set('companyAddress', e.target.value)} className={inp} placeholder="Rua, número — bairro, cidade/UF" />
               </Field>

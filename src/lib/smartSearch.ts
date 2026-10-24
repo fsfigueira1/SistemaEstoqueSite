@@ -120,8 +120,8 @@ interface IndexedDoc<T> {
 }
 
 export interface SearchIndex<T> {
-  /** Itens que casam, do mais parecido para o menos. Busca vazia devolve tudo. */
-  search: (query: string) => T[];
+  /** Itens que casam, do mais parecido para o menos. Busca vazia devolve tudo. strict: só os que têm todas as palavras. */
+  search: (query: string, opts?: { strict?: boolean }) => T[];
 }
 
 /**
@@ -137,7 +137,7 @@ export function buildSearchIndex<T>(items: T[], fields: (item: T) => Array<strin
   });
 
   return {
-    search(query: string): T[] {
+    search(query: string, opts?: { strict?: boolean }): T[] {
       const tokens = parseQuery(query);
       if (!tokens.length) return items;
 
@@ -153,7 +153,7 @@ export function buildSearchIndex<T>(items: T[], fields: (item: T) => Array<strin
       const all = docs.map((_, i) => i);
       const strict = all.filter((i) => scores[i].every((s) => s > 0));
       const result = order(strict);
-      if (tokens.length < 2) return result.map((i) => docs[i].item);
+      if (tokens.length < 2 || opts?.strict) return result.map((i) => docs[i].item);
 
       // Sobra: o tipo do produto ("caderno") pode não estar no nome
       // ("BATMAN FORONI 10x1"). Se achou pouco e o resto da busca é bem
@@ -173,8 +173,13 @@ export function buildSearchIndex<T>(items: T[], fields: (item: T) => Array<strin
 }
 
 /** Atalho para buscar uma vez (sem guardar o índice). */
-export function smartSearch<T>(items: T[], query: string, fields: (item: T) => Array<string | null | undefined>): T[] {
-  return buildSearchIndex(items, fields).search(query);
+export function smartSearch<T>(
+  items: T[],
+  query: string,
+  fields: (item: T) => Array<string | null | undefined>,
+  opts?: { strict?: boolean },
+): T[] {
+  return buildSearchIndex(items, fields).search(query, opts);
 }
 
 /** Campos pesquisáveis padrão de um produto. */

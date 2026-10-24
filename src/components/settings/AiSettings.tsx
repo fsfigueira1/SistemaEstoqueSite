@@ -76,6 +76,48 @@ export default function AiSettings({
             Vazio = o jeito padrão (super carismática). A IA também aprende com as respostas que você aprova no Atendimento. Preço nunca vem da IA.
           </p>
         </div>
+        <div className="rounded-xl border border-border bg-muted/40 p-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <input type="checkbox" checked={form.waAutoEnabled} onChange={(e) => set('waAutoEnabled', e.target.checked)} className="h-4 w-4" />
+            Resposta automática do WhatsApp
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Só no aplicativo do balcão, com o WhatsApp conectado no Atendimento. A IA responde sozinha orçamentos e perguntas simples, 4 a 7
+            minutos depois da mensagem; o resto fica em &quot;Precisa de você&quot;. O WhatsApp não permite robôs: mesmo com o atraso, existe
+            risco de bloqueio do número.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-4">
+            {(
+              [
+                ['waAutoWeekdays', 'Seg a sex'],
+                ['waAutoSaturday', 'Sábado'],
+                ['waAutoSunday', 'Domingo'],
+              ] as const
+            ).map(([k, label]) => (
+              <label key={k} className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">{label}</span>
+                <input
+                  value={form[k]}
+                  onChange={(e) => set(k, e.target.value)}
+                  placeholder="fechado"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                />
+              </label>
+            ))}
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-muted-foreground">Máximo por hora</span>
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={form.waAutoMaxPerHour}
+                onChange={(e) => set('waAutoMaxPerHour', Number(e.target.value) || 1)}
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">Horário no formato 08:00-18:00. Vazio = não responde nesse dia.</p>
+        </div>
       </div>
     </Section>
   );

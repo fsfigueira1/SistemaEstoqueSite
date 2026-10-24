@@ -36,6 +36,12 @@ contextBridge.exposeInMainWorld(
       read: () => ipcRenderer.invoke('wa-read-chat'),
       insert: (text, expected) => ipcRenderer.invoke('wa-insert', text, expected),
       reload: () => ipcRenderer.invoke('wa-reload'),
+      auto: {
+        status: () => ipcRenderer.invoke('wa-auto-status'),
+        refresh: () => ipcRenderer.invoke('wa-auto-refresh'),
+        cancel: (name) => ipcRenderer.invoke('wa-auto-cancel', name),
+        dismiss: (name) => ipcRenderer.invoke('wa-auto-dismiss', name),
+      },
     },
 
     // Configuração do banco (janela de setup do Electron)

@@ -387,6 +387,15 @@ model Settings {
   storeHours                   String   @default("Segunda a sexta: 8h às 18h · Sábado: 8h às 13h")
   /// tom de voz da atendente do WhatsApp (vazio = o padrão carismático de src/lib/copilotStyle.ts)
   copilotPersona               String   @default("")
+  /// informações para o atendimento (pagamento, retirada, serviços) — a IA responde com base nisso
+  storeInfo                    String   @default("Pagamento: Pix, cartão de débito, cartão de crédito e dinheiro, na loja. Parcelamento no cartão: a loja confirma.\nLoja física: o cliente retira na loja. Não entregamos e não temos pagamento online.\nOrçamento vale pelo preço de agora, sujeito à disponibilidade na retirada.")
+  /// resposta automática do WhatsApp (copiloto envia sozinho, com atraso) — começa desligada
+  waAutoEnabled                Boolean  @default(false)
+  waAutoMaxPerHour             Int      @default(20)
+  /// faixas "HH:MM-HH:MM" no horário de Brasília; vazio = não responde nesse dia
+  waAutoWeekdays               String   @default("08:00-18:00")
+  waAutoSaturday               String   @default("08:00-13:00")
+  waAutoSunday                 String   @default("")
   receiptFooter                String   @default("Obrigado pela preferencia! Troca em ate 7 dias com este comprovante.")
   receiptShowCompany           Boolean  @default(true)
   receiptWidth                 String   @default("80mm")
