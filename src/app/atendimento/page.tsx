@@ -14,6 +14,7 @@ import Layout, { PageHeader } from '@/components/Layout';
 import WhatsAppPane from '@/components/atendimento/WhatsAppPane';
 import ReplyPanel, { type Draft } from '@/components/atendimento/ReplyPanel';
 import LearnedExamples from '@/components/atendimento/LearnedExamples';
+import AutoReplyPanel from '@/components/atendimento/AutoReplyPanel';
 import { errorText } from '@/lib/friendlyError';
 import { whatsappNumber } from '@/lib/restock';
 import { waLink } from '@/lib/contacts';
@@ -195,6 +196,7 @@ export default function AtendimentoPage() {
           <div className="grid h-[calc(100vh-14rem)] min-h-[520px] gap-4 lg:grid-cols-[1.4fr_1fr]">
             <WhatsAppPane />
             <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
+              <AutoReplyPanel />
               <section className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
                 {generateButton}
                 {err && <p className="text-sm font-medium text-danger">{err}</p>}

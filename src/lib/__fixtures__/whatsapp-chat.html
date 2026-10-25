@@ -1,53 +1,82 @@
 <!doctype html>
-<!-- Página simulada com a estrutura do WhatsApp Web usada pelo copiloto (só para testes). -->
+<!-- Página simulada com a estrutura do WhatsApp Web (out/2026) usada pelo
+     atendimento — só a forma, com nomes e textos inventados. Mensagem da loja
+     tem o tracinho de status ("Lida"/"Entregue"/"Enviada"), "Você:" e a ponta
+     "tail-out"; mensagem do cliente tem "tail-in" (só a primeira de um grupo)
+     e o nome. Mensagem longa vem cortada com "Ler mais". -->
 <html>
   <body>
     <div id="app">
-      <div id="side"><div role="grid"></div></div>
+      <div id="side">
+        <div id="pane-side">
+          <div role="grid" aria-label="Lista de conversas">
+            <div role="row">
+              <div role="gridcell" tabindex="-1"><div tabindex="-1"><div data-testid="cell-frame-container">
+                <div><div role="gridcell"><div data-testid="cell-frame-title"><div><div><span title="Ana Souza">Ana Souza</span></div></div></div></div>
+                <div data-testid="cell-frame-secondary"><div><span>3 lápis preto</span></div><div role="gridcell"><span><span aria-label="2 mensagens não lidas">2</span></span></div></div></div>
+              </div></div></div>
+            </div>
+            <div role="row">
+              <div role="gridcell" tabindex="-1"><div tabindex="-1"><div data-testid="cell-frame-container">
+                <div><div role="gridcell"><div data-testid="cell-frame-title"><div><div><span title="+55 17 98888-7777">+55 17 98888-7777</span></div></div></div></div>
+                <div data-testid="cell-frame-secondary"><div><span>Obrigado!</span></div></div></div>
+              </div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div id="main">
         <header>
-          <div><span dir="auto" title="Ana Souza">Ana Souza</span></div>
+          <div><div title="Dados do perfil"><span dir="auto" title="Ana Souza">Ana Souza</span></div></div>
         </header>
-        <div role="application">
-          <div role="row">
-            <div data-id="false_5517999998888@c.us_A1">
-              <div class="message-in">
-                <div class="copyable-text" data-pre-plain-text="[09:58, 22/10/2026] Ana Souza: ">
-                  <span class="selectable-text copyable-text"><span>Oi! Vocês têm caderno?</span></span>
-                </div>
-              </div>
+        <div>
+          <div role="row"><div><span>HOJE</span></div></div>
+          <div tabindex="-1" data-id="3EB0AAAA1111" data-testid="conv-msg-3EB0AAAA1111">
+            <div data-testid="msg-container">
+              <span data-testid="tail-in" data-icon="tail-in"><svg><title>tail-in</title></svg></span>
+              <span aria-label="Ana Souza:"></span>
+              <div><div class="copyable-text" data-pre-plain-text="[09:58, 22/10/2026] Ana Souza: ">
+                <span class="selectable-text copyable-text" data-testid="selectable-text"><span>Oi! Vocês têm caderno?</span></span>
+              </div></div>
+              <div data-testid="msg-meta"><span>09:58</span></div>
             </div>
           </div>
-          <div role="row">
-            <div data-id="true_5517999998888@c.us_A2">
-              <div class="message-out">
-                <div class="copyable-text" data-pre-plain-text="[10:00, 22/10/2026] Laçolaria: ">
-                  <span class="selectable-text copyable-text"><span>Temos sim! Me manda a lista 😊</span></span>
-                </div>
-              </div>
+          <div tabindex="-1" data-id="3EB0BBBB2222" data-testid="conv-msg-3EB0BBBB2222">
+            <div data-testid="msg-container">
+              <span data-testid="tail-out" data-icon="tail-out"><svg><title>tail-out</title></svg></span>
+              <span aria-label="Você:"></span>
+              <div><div class="copyable-text" data-pre-plain-text="[10:00, 22/10/2026] Laçolaria: ">
+                <span class="selectable-text copyable-text" data-testid="selectable-text"><span>Temos sim! Me manda a lista </span><img alt="😊" src="data:," /></span>
+              </div></div>
+              <div data-testid="msg-meta"><span>10:00</span><span aria-label=" Lida "><svg><title>wds-ic-read</title></svg></span></div>
             </div>
           </div>
-          <div role="row">
-            <div data-id="false_5517999998888@c.us_A3">
-              <div class="message-in">
-                <div class="copyable-text" data-pre-plain-text="[10:05, 22/10/2026] Ana Souza: ">
-                  <span class="selectable-text copyable-text"><span>2 cadernos 96 folhas</span></span>
-                </div>
-              </div>
+          <div tabindex="-1" data-id="3EB0CCCC3333" data-testid="conv-msg-3EB0CCCC3333">
+            <div data-testid="msg-container">
+              <span data-testid="tail-in" data-icon="tail-in"><svg><title>tail-in</title></svg></span>
+              <span aria-label="Ana Souza:"></span>
+              <div><div class="copyable-text" data-pre-plain-text="[10:05, 22/10/2026] Ana Souza: ">
+                <span class="selectable-text copyable-text" data-testid="selectable-text"><span>2 cadernos 96 folhas</span></span>
+                <span class="selectable-text copyable-text" data-testid="selectable-text"><span>1 borracha</span></span>
+              </div></div>
+              <div data-testid="msg-meta"><span>10:05</span></div>
             </div>
           </div>
-          <div role="row">
-            <div data-id="false_5517999998888@c.us_A4">
-              <div class="message-in">
-                <div class="copyable-text" data-pre-plain-text="[10:05, 22/10/2026] Ana Souza: ">
-                  <span class="selectable-text copyable-text"><span>3 lápis preto</span></span>
-                </div>
-              </div>
+          <div tabindex="-1" data-id="3EB0DDDD4444" data-testid="conv-msg-3EB0DDDD4444">
+            <div data-testid="msg-container">
+              <span aria-label="Ana Souza:"></span>
+              <div><div class="copyable-text" data-pre-plain-text="[10:05, 22/10/2026] Ana Souza: ">
+                <span class="selectable-text copyable-text" data-testid="selectable-text"><span>3 lápis preto</span></span>
+                <div role="button" data-testid="caption-read-more-button">Ler mais</div>
+              </div></div>
+              <div data-testid="msg-meta"><span>10:05</span></div>
             </div>
           </div>
         </div>
         <footer>
-          <div contenteditable="true" role="textbox" data-tab="10"><p><br /></p></div>
+          <div><div role="button" aria-label="Anexar"></div></div>
+          <div contenteditable="true" role="textbox" data-tab="10" data-lexical-editor="true" aria-label="Digite uma mensagem para Ana Souza"><p><br /></p></div>
+          <button aria-label="Enviar"><span data-icon="wds-ic-send-filled"></span></button>
         </footer>
       </div>
     </div>

@@ -8,7 +8,8 @@
 "use strict";
 
 const { WebContentsView, BrowserWindow, ipcMain, session, shell } = require("electron");
-const { readOpenChat, sameChat, insertIntoCompose, toScript } = require("./whatsappDom.cjs");
+const { readOpenChat, sameChat, insertIntoCompose, expandReadMore, toScript } = require("./whatsappDom.cjs");
+const { createAutoReply } = require("./whatsappAuto.cjs");
 const { validBounds, validText, isWhatsAppUrl, isAppSender, allowPermission } = require("./whatsappIpc.cjs");
 
 const PARTITION = "persist:whatsapp";
@@ -19,6 +20,8 @@ const USER_AGENT = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 
 let view = null;
 let host = null;
+// última vez que o atendente mexeu no WhatsApp (o robô não tira a conversa da frente dele)
+let lastUserInput = 0;
 
 function createView() {
   const ses = session.fromPartition(PARTITION);
@@ -26,7 +29,8 @@ function createView() {
   ses.setPermissionRequestHandler((_wc, permission, callback, details) => callback(allowPermission(permission, details && details.requestingUrl)));
   ses.setPermissionCheckHandler((_wc, permission, origin) => allowPermission(permission, origin));
   const v = new WebContentsView({
-    webPreferences: { partition: PARTITION, contextIsolation: true, nodeIntegration: false, sandbox: true },
+    // backgroundThrottling: false — escondido, o WhatsApp continua recebendo (resposta automática)
+    webPreferences: { partition: PARTITION, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });
   const wc = v.webContents;
   wc.setUserAgent(USER_AGENT);
@@ -39,12 +43,24 @@ function createView() {
     event.preventDefault();
     if (/^https?:\/\//i.test(url)) shell.openExternal(url).catch(() => {});
   });
+  // sem tamanho o WhatsApp não desenha as mensagens novas (robô com a tela de Atendimento fechada)
+  v.setBounds({ x: 0, y: 0, width: 1280, height: 900 });
+  v.setVisible(false);
+  wc.on("before-input-event", () => {
+    lastUserInput = Date.now();
+  });
   wc.loadURL(URL_WA);
   return v;
 }
 
-function attach(win) {
+/** A visão do WhatsApp, criada na primeira vez (mesmo sem a tela de Atendimento aberta). */
+function ensureView() {
   if (!view) view = createView();
+  return view;
+}
+
+function attach(win) {
+  ensureView();
   if (host !== win) {
     if (host && !host.isDestroyed()) host.contentView.removeChildView(view);
     win.contentView.addChildView(view);
@@ -92,6 +108,8 @@ function registerWhatsApp(appOrigin) {
     if (!fromApp(e)) return { ok: false, reason: "erro" };
     if (!view) return { ok: false, reason: "fechado" };
     try {
+      // mensagem longa (lista de material) vem cortada com "Ler mais"
+      if (await view.webContents.executeJavaScript(toScript(expandReadMore), true)) await new Promise((r) => setTimeout(r, 800));
       return await view.webContents.executeJavaScript(toScript(readOpenChat), true);
     } catch {
       return { ok: false, reason: "erro" };
@@ -120,6 +138,23 @@ function registerWhatsApp(appOrigin) {
   ipcMain.handle("wa-reload", (e) => {
     if (!fromApp(e)) return false;
     if (view) view.webContents.loadURL(URL_WA);
+    return true;
+  });
+
+  // resposta automática: o robô roda sempre; só age quando ligada em Configurações
+  const auto = createAutoReply({ appOrigin, ensureView, lastInputAt: () => lastUserInput });
+  ipcMain.handle("wa-auto-status", (e) => (fromApp(e) ? auto.snapshot() : null));
+  ipcMain.handle("wa-auto-refresh", async (e) => {
+    if (!fromApp(e)) return null;
+    await auto.refresh();
+    return auto.snapshot();
+  });
+  ipcMain.handle("wa-auto-cancel", (e, name) => {
+    if (fromApp(e) && typeof name === "string") auto.cancel(name.slice(0, 200));
+    return true;
+  });
+  ipcMain.handle("wa-auto-dismiss", (e, name) => {
+    if (fromApp(e) && typeof name === "string") auto.dismiss(name.slice(0, 200));
     return true;
   });
 }

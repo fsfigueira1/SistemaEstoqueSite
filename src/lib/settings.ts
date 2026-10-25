@@ -14,6 +14,15 @@ export type StoreSettings = {
   storeHours: string;
   /** tom de voz da atendente do WhatsApp (vazio = padrão carismático) */
   copilotPersona: string;
+  /** informações para o atendimento (pagamento, retirada…) — a IA do WhatsApp responde com base nisso */
+  storeInfo: string;
+  /** resposta automática do WhatsApp (começa desligada) */
+  waAutoEnabled: boolean;
+  waAutoMaxPerHour: number;
+  /** "HH:MM-HH:MM" no horário de Brasília; vazio = não responde nesse dia */
+  waAutoWeekdays: string;
+  waAutoSaturday: string;
+  waAutoSunday: string;
   receiptFooter: string;
   receiptShowCompany: boolean;
   receiptWidth: '58mm' | '80mm';
@@ -63,6 +72,12 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   companyPhone: '',
   storeHours: 'Segunda a sexta: 8h às 18h · Sábado: 8h às 13h',
   copilotPersona: '',
+  storeInfo: 'Pagamento: Pix, cartão de débito, cartão de crédito e dinheiro, na loja. Parcelamento no cartão: a loja confirma.\nLoja física: o cliente retira na loja. Não entregamos e não temos pagamento online.\nOrçamento vale pelo preço de agora, sujeito à disponibilidade na retirada.',
+  waAutoEnabled: false,
+  waAutoMaxPerHour: 20,
+  waAutoWeekdays: '08:00-18:00',
+  waAutoSaturday: '08:00-13:00',
+  waAutoSunday: '',
   receiptFooter: 'Obrigado pela preferencia! Troca em ate 7 dias com este comprovante.',
   receiptShowCompany: true,
   receiptWidth: '80mm',

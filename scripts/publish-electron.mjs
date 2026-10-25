@@ -47,9 +47,48 @@ if (remote.stdout && remote.stdout.includes(`refs/tags/${tag}`)) {
   }
 }
 
+// Rascunho da versão no repositório de atualizações ANTES de enviar: o
+// electron-builder manda o instalador e o .blockmap em paralelo e, sem
+// rascunho, os dois tentavam criar a versão ao mesmo tempo (na 0.4.0 um deles
+// falhou e a versão ficou sem o instalador). Com o rascunho, os dois usam o
+// mesmo — e os PCs da loja só atualizam quando a dona clicar em "Publish release".
+const { owner, repo } = JSON.parse(readFileSync("package.json", "utf8")).build.publish[0];
+const gh = (path, init = {}) =>
+  fetch(`https://api.github.com/repos/${owner}/${repo}${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${process.env.GH_TOKEN}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" },
+  });
+const releases = await (await gh("/releases?per_page=30")).json();
+const existing = Array.isArray(releases) ? releases.find((r) => r.tag_name === tag) : null;
+let draftUrl = existing ? existing.html_url : null;
+if (existing && !existing.draft) {
+  console.error(`\nA versão ${tag} já está publicada em ${existing.html_url}.\nSuba a versão no package.json antes de publicar de novo.`);
+  process.exit(1);
+}
+if (!existing) {
+  const created = await gh("/releases", { method: "POST", body: JSON.stringify({ tag_name: tag, name: version, draft: true, target_commitish: "main" }) });
+  if (!created.ok) {
+    console.error(`\nNão consegui criar o rascunho da versão ${tag} no GitHub (${created.status}): ${await created.text()}`);
+    process.exit(1);
+  }
+  draftUrl = (await created.json()).html_url;
+  console.log(`rascunho ${tag} criado.`);
+}
+
 const result = run(
   "npx",
   ["electron-builder", "--win", "nsis", "--publish", "always"],
   { stdio: "inherit" },
 );
+if (result.status === 0) {
+  console.log(
+    [
+      "",
+      `Pronto: o instalador ${tag} subiu como RASCUNHO.`,
+      `Abra ${draftUrl}, confira os 3 arquivos (Lacolaria-Setup.exe, .blockmap e latest.yml)`,
+      'e clique em "Publish release" — só então os PCs da loja se atualizam.',
+      "",
+    ].join("\n"),
+  );
+}
 process.exit(result.status ?? 1);

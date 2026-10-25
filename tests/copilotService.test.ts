@@ -73,6 +73,54 @@ describe('CopilotService.draft', () => {
     expect(await prisma.quoteRequest.count()).toBe(0);
     expect(calls[0].system).toContain('Seg a sex 8h às 18h');
     expect(r.reply).toBe('Oi, Ana! Segue o seu orçamento 😊');
+    expect(r.fallback).toBeFalsy();
+  });
+
+  it('a IA recebe as informações da loja (pagamento etc.) e avisa quando caiu no texto reserva', async () => {
+    await prisma.settings.update({ where: { id: 'app' }, data: { storeInfo: 'Pagamento: Pix, débito, crédito e dinheiro, na loja.' } });
+    await CopilotService.draft({ name: 'Ana', phone: '', text: 'Vocês aceitam pix?' }, { ai });
+    expect(calls[0].system).toContain('Pagamento: Pix, débito, crédito e dinheiro, na loja.');
+    const r = await CopilotService.draft({ name: 'Ana', phone: '', text: 'Vocês aceitam pix?' }, { ai: failing });
+    expect(r.fallback).toBe(true);
+  });
+
+  it('"tem X?" busca no estoque: lista o que tem, com o preço do sistema', async () => {
+    const cat = await prisma.category.findFirst();
+    await prisma.product.createMany({
+      data: [
+        { name: 'Stabilo Boss Original Azul Pastel', sku: 'QST1', categoryId: cat!.id, salePrice: 14.9, stockQuantity: 12 },
+        { name: 'Stabilo Boss Original Azul Nevoa Pastel', sku: 'QST2', categoryId: cat!.id, salePrice: 14.9, stockQuantity: 0 },
+        { name: 'Marca Texto Multicolor Pastel Azul', sku: 'QMT1', categoryId: cat!.id, salePrice: 6, stockQuantity: 5 },
+      ],
+    });
+    const r = await CopilotService.draft({ name: 'Ana', phone: '', text: 'Oi! Tem stabilo pastel azul?' }, { ai });
+    expect(r.intent).toBe('product');
+    expect(r.productFound).toBe(true);
+    expect(r.reply).toContain('Stabilo Boss Original Azul Pastel — R$');
+    expect(r.reply).toContain('14,90');
+    expect(r.reply).not.toContain('Nevoa'); // sem estoque não entra como "temos"
+    expect(r.reply).not.toContain('Multicolor'); // achou o exato: não mistura outra marca
+    expect(calls.at(-1)!.system).toMatch(/abertura/i); // a IA só escreve a abertura
+    expect(await prisma.quoteRequest.count()).toBe(0);
+
+    // tipo do produto fora do nome do cadastro: "caderno do batman" acha "FORONI BATMAN 80 FOLHAS"
+    await prisma.product.create({ data: { name: 'FORONI BATMAN 80 FOLHAS', sku: 'QBAT', categoryId: cat!.id, salePrice: 29.9, stockQuantity: 4 } });
+    await prisma.product.create({ data: { name: 'Caderno Tilibra Frozen 96 folhas', sku: 'QFRZ', categoryId: cat!.id, salePrice: 19.9, stockQuantity: 4 } });
+    await prisma.product.create({ data: { name: 'Caderno Foroni Liso 96 folhas', sku: 'QLIS', categoryId: cat!.id, salePrice: 15.9, stockQuantity: 4 } });
+    const bat = await CopilotService.draft({ name: 'Ana', phone: '', text: 'Tem aquele caderno do batman?' }, { ai });
+    expect(bat.productFound).toBe(true);
+    expect(bat.reply).toContain('FORONI BATMAN 80 FOLHAS');
+    expect(bat.reply).not.toContain('Frozen');
+
+    const none = await CopilotService.draft({ name: 'Ana', phone: '', text: 'Vocês têm caneta de unicórnio dourada?' }, { ai });
+    expect(none.intent).toBe('product');
+    expect(none.productFound).toBe(false);
+    expect(none.reply).not.toMatch(/não temos/i); // nunca diz "não temos" sem conferir
+  });
+
+  it('a IA sabe que dia e hora é agora em Brasília (para "amanhã", "hoje", "está aberto?")', async () => {
+    await CopilotService.draft({ name: 'Ana', phone: '', text: 'Que horas abrem amanhã?' }, { ai, now: new Date('2026-10-24T14:15:00-03:00') });
+    expect(calls[0].system).toMatch(/Agora: sábado, 24\/10\/2026.*14:15/);
   });
 
   it('sem IA ainda responde', async () => {
@@ -134,5 +182,12 @@ describe('CopilotService.draft', () => {
     expect(b.quoteRequestId).toBe(a.quoteRequestId);
     expect(await prisma.quoteRequest.count()).toBe(1);
     expect(b.total).toBe(9.3);
+  });
+
+  it('parece lista mas nenhum item foi reconhecido: responde como mensagem comum, sem "vou conferir" vazio', async () => {
+    const r = await CopilotService.draft({ name: 'Ana', phone: '', text: 'Olá! Vim pelo site e quero um orçamento para retirar na loja:\n\nObrigado!\n#ORC-SITE v1' }, { ai });
+    expect(r.reply).not.toMatch(/conferir esses itens:?\s*$/);
+    expect(r.intent).toBe('other');
+    expect(await prisma.quoteRequest.count()).toBe(0);
   });
 });

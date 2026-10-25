@@ -4,7 +4,7 @@
 // No navegador comum devolve undefined e a tela usa o modo colar.
 
 export type WaChat =
-  | { ok: true; name: string; phone: string; messages: Array<{ from: 'cliente' | 'loja'; text: string }> }
+  | { ok: true; name: string; phone: string; messages: Array<{ from: 'cliente' | 'loja'; text: string; media?: boolean }> }
   | { ok: false; reason: 'sem-conversa' | 'nao-conectado' | 'fechado' | 'erro' };
 
 export type WhatsAppBridge = {
@@ -14,6 +14,24 @@ export type WhatsAppBridge = {
   /** cola só se a conversa aberta ainda for a do cliente esperado */
   insert: (text: string, expected: { name: string; phone: string }) => Promise<{ ok: boolean; reason?: 'outra-conversa' | 'sem-caixa' }>;
   reload: () => Promise<boolean>;
+  auto: {
+    status: () => Promise<AutoStatus | null>;
+    refresh: () => Promise<AutoStatus | null>;
+    cancel: (name: string) => Promise<boolean>;
+    dismiss: (name: string) => Promise<boolean>;
+  };
+};
+
+/** Situação do robô de resposta automática (electron/whatsappAuto.cjs). */
+export type AutoStatus = {
+  enabled: boolean;
+  inHours: boolean;
+  maxPerHour: number;
+  busy: boolean;
+  queue: Array<{ name: string; inSec: number }>;
+  human: Array<{ name: string; reason: string; at: number }>;
+  sent: Array<{ name: string; at: number; kind: string }>;
+  lastError: string | null;
 };
 
 export function whatsappBridge(): WhatsAppBridge | undefined {
@@ -27,7 +45,7 @@ export function customerTurn(messages: Array<{ from: 'cliente' | 'loja'; text: s
   messages.forEach((m, i) => {
     if (m.from === 'loja') last = i;
   });
-  const after = messages.slice(last + 1).filter((m) => m.from === 'cliente');
+  const after = messages.slice(last + 1).filter((m) => m.from === 'cliente' && m.text);
   return (last >= 0 ? after : after.slice(-6)).map((m) => m.text).join('\n');
 }
 

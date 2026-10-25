@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getServerSettings, publicSettings, SETTINGS_ID } from "@/lib/serverSettings"
 import { friendlyError } from "@/lib/friendlyError"
+import { parseRange } from "@/lib/autoReplyPolicy"
 
 const ALLOWED = [
   "companyName",
@@ -11,6 +12,12 @@ const ALLOWED = [
   "companyPhone",
   "storeHours",
   "copilotPersona",
+  "storeInfo",
+  "waAutoEnabled",
+  "waAutoMaxPerHour",
+  "waAutoWeekdays",
+  "waAutoSaturday",
+  "waAutoSunday",
   "receiptFooter",
   "receiptShowCompany",
   "receiptWidth",
@@ -75,6 +82,20 @@ export async function PUT(request: Request) {
       delete data.aiModel
     }
     if (data.copilotPersona !== undefined) data.copilotPersona = String(data.copilotPersona).slice(0, 2000)
+    if (data.storeInfo !== undefined) data.storeInfo = String(data.storeInfo).slice(0, 2000)
+    if (data.waAutoEnabled !== undefined) data.waAutoEnabled = data.waAutoEnabled === true
+    if (data.waAutoMaxPerHour !== undefined) {
+      const n = Number(data.waAutoMaxPerHour)
+      data.waAutoMaxPerHour = Number.isFinite(n) ? Math.min(60, Math.max(1, Math.round(n))) : 20
+    }
+    // vazio = fechado; senão precisa ser uma faixa válida (inválida: não grava)
+    const range = (v: unknown) => {
+      const t = String(v).trim()
+      return !t || parseRange(t) ? t : undefined
+    }
+    if (data.waAutoWeekdays !== undefined) data.waAutoWeekdays = range(data.waAutoWeekdays)
+    if (data.waAutoSaturday !== undefined) data.waAutoSaturday = range(data.waAutoSaturday)
+    if (data.waAutoSunday !== undefined) data.waAutoSunday = range(data.waAutoSunday)
     if (data.aiProvider !== undefined && !["nvidia", "claude"].includes(String(data.aiProvider))) {
       delete data.aiProvider
     }
