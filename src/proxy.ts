@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { COOKIE, SESSION_MS, authSecret, signToken, verifyToken } from '@/lib/authToken'
 import { canAccess, homeFor, isPublic } from '@/lib/access'
 import { ROLE_HEADER } from '@/lib/requestRole'
+import { sessionKeys } from '@/lib/authStamp'
 
 // Porta de entrada de tudo: confere o crachá assinado (login com usuário e
 // senha), aplica o que cada perfil pode abrir (src/lib/access.ts) e repassa
@@ -23,7 +24,15 @@ export async function proxy(request: NextRequest) {
     const msg = 'Login não configurado neste servidor (falta AUTH_SECRET)'
     return isApi ? NextResponse.json({ success: false, error: msg }, { status: 503 }) : new NextResponse(msg, { status: 503 })
   }
-  const session = await verifyToken(secret, request.cookies.get(COOKIE)?.value)
+  // chave de cada perfil inclui a senha atual: trocou a senha, o crachá velho cai
+  let keys: Awaited<ReturnType<typeof sessionKeys>>
+  try {
+    keys = await sessionKeys(secret)
+  } catch {
+    const msg = 'Sem conexão com o banco — tente de novo em instantes'
+    return isApi ? NextResponse.json({ success: false, error: msg }, { status: 503 }) : new NextResponse(msg, { status: 503 })
+  }
+  const session = await verifyToken(keys, request.cookies.get(COOKIE)?.value)
 
   if (isPublic(pathname)) {
     // já entrou e abriu a tela de login: vai para a tela inicial do perfil
@@ -50,7 +59,7 @@ export async function proxy(request: NextRequest) {
   const res = NextResponse.next({ request: { headers } })
   // renova a sessão (o robô usa crachá próprio, que não precisa de cookie novo)
   if (session.role !== 'ROBOT') {
-    res.cookies.set(COOKIE, await signToken(secret, session.role, Date.now() + SESSION_MS), {
+    res.cookies.set(COOKIE, await signToken(keys[session.role], session.role, Date.now() + SESSION_MS), {
       httpOnly: true,
       sameSite: 'lax',
       secure: request.nextUrl.protocol === 'https:',

@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { getServerSettings, SETTINGS_ID } from "@/lib/serverSettings"
 import type { Role } from "@/lib/authToken"
+import { resetAuthStamps } from "@/lib/authStamp"
 
 export const DEFAULT_USERS = { OWNER: "laçolaria", EMPLOYEE: "balcao" } as const
 export const ROLE_LABEL: Record<Role, string> = { OWNER: "Dono", EMPLOYEE: "Balcão", ROBOT: "Robô do WhatsApp" }
@@ -88,6 +89,8 @@ export const AuthService = {
     }
     if (!Object.keys(data).length) throw new Error("Informe o usuário ou a senha nova")
     await prisma.settings.update({ where: { id: SETTINGS_ID }, data })
+    // crachás antigos deste perfil deixam de valer (a chave inclui a senha)
+    resetAuthStamps()
     return this.users()
   },
 }
