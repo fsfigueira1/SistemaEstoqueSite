@@ -3,6 +3,8 @@ import pkg from "./package.json" with { type: "json" };
 
 const nextConfig: NextConfig = {
   images: { unoptimized: true },
+  // atualizações do Next só de segurança (next upgrade)
+  experimental: { agentUpgrade: "security" },
   // versão do app no rodapé do menu (vem do package.json)
   env: { NEXT_PUBLIC_APP_VERSION: pkg.version },
   // servidor auto-contido para empacotar no Electron
