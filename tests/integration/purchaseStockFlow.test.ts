@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion -- teste: dados montados à mão e resultados que o próprio teste garante */
 import { describe, beforeEach, afterEach, it, expect } from 'vitest';
 import { PurchaseService } from '@/services/purchaseService';
 import { StockService } from '@/services/stockService';
@@ -81,7 +82,8 @@ describe('Purchase → Stock Integration Flow', () => {
         expect(stockUpdate.product.id).toBe(item.productId);
         expect(stockUpdate.product.stockQuantity).toBe(10); // Initial 0 + 10
         expect(stockUpdate.stockMovement).toBeDefined();
-        expect(stockUpdate.stockMovement.type).toBe('PURCHASE');
+        // entrada manual do estoque (a compra de verdade entra pela importação da nota, como PURCHASE)
+        expect(stockUpdate.stockMovement.type).toBe('ADJUSTMENT_IN');
         expect(stockUpdate.stockMovement.quantity).toBe(item.quantity);
       }
 
@@ -169,7 +171,8 @@ describe('Purchase → Stock Integration Flow', () => {
         expect(stockUpdate.product.id).toBe(item.productId);
         expect(stockUpdate.product.stockQuantity).toBe(item.quantity); // Initial 0 + quantity
         expect(stockUpdate.stockMovement).toBeDefined();
-        expect(stockUpdate.stockMovement.type).toBe('PURCHASE');
+        // entrada manual do estoque (a compra de verdade entra pela importação da nota, como PURCHASE)
+        expect(stockUpdate.stockMovement.type).toBe('ADJUSTMENT_IN');
         expect(stockUpdate.stockMovement.quantity).toBe(item.quantity);
       }
 

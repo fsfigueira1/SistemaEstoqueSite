@@ -1,7 +1,8 @@
 'use client';
 
 // Relatórios — lista dos últimos dias com o que entrou por forma de pagamento
-// e se o caixa foi conferido. Cada dia abre a sua página (/relatorios/AAAA-MM-DD).
+// e se o caixa foi conferido. Cada dia abre a sua página (/relatorios/AAAA-MM-DD);
+// o mês inteiro, com os ajustes de estoque, em /relatorios/mes/AAAA-MM.
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -78,6 +79,12 @@ export default function RelatoriosPage() {
                 <option value={30}>Últimos 30 dias</option>
                 <option value={90}>Últimos 90 dias</option>
               </select>
+              <Link
+                href={`/relatorios/mes/${today.slice(0, 7)}`}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                Relatório do mês
+              </Link>
               <Link
                 href={`/relatorios/${today}`}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"

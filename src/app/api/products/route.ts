@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { ProductService } from "@/services/productService"
-import { friendlyError } from "@/lib/friendlyError"
+import { apiFailure } from "@/lib/apiResponse"
 
 // GET /api/products - List products with filters
 export async function GET(request: Request) {
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       data: result
     })
   } catch (error) {
-    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
+    return apiFailure(error)
   }
 }
 
@@ -89,6 +89,6 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (error) {
-    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
+    return apiFailure(error)
   }
 }

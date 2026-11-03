@@ -3,10 +3,13 @@
 import { useEffect, useState } from 'react';
 import { ClipboardCheck, Loader2, PackageMinus, PackagePlus, XCircle } from 'lucide-react';
 import { errorText } from '@/lib/friendlyError';
+import { OUT_REASONS, outReasonError, type StockOutReason } from '@/lib/stockReasons';
 
 // Ajuste de estoque de um produto: entrada, saída ou "contagem" (digita o que
 // tem na prateleira e o sistema lança a diferença). Usado no Estoque e no
 // cadastro de Produtos — tudo vira movimentação registrada, com observação.
+// Saída (e contagem que diminui) pede motivo + explicação: aparece no
+// relatório do mês (src/lib/stockReasons.ts).
 
 export type StockAdjustMode = 'add' | 'remove' | 'set';
 
@@ -107,6 +110,7 @@ export function StockAdjustModal({
   const [mode, setMode] = useState<StockAdjustMode>(initialMode);
   const [qty, setQty] = useState('');
   const [note, setNote] = useState('');
+  const [reason, setReason] = useState<StockOutReason | ''>('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const moves = useRecentMovements(product.id);
@@ -116,6 +120,8 @@ export function StockAdjustModal({
   const valid = qty.trim() !== '' && Number.isInteger(n) && (mode === 'set' ? n >= 0 : n > 0);
   let after: number | null = null;
   if (valid) after = mode === 'add' ? current + n : mode === 'remove' ? current - n : n;
+  // saiu do estoque sem ser venda: precisa dizer por quê
+  const isOut = mode === 'remove' || (mode === 'set' && after !== null && after < current);
 
   const submit = async () => {
     if (!valid) {
@@ -124,6 +130,11 @@ export function StockAdjustModal({
     }
     if (mode === 'set' && n === current) {
       setErr('O estoque já está com essa quantidade.');
+      return;
+    }
+    const why = isOut ? outReasonError(reason, note) : null;
+    if (why) {
+      setErr(why);
       return;
     }
     setSaving(true);
@@ -137,6 +148,7 @@ export function StockAdjustModal({
           productId: product.id,
           quantity: n,
           notes: note.trim() || (mode === 'set' ? 'Contagem de estoque' : undefined),
+          reason: isOut ? reason : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -222,7 +234,9 @@ export function StockAdjustModal({
           <span className="mt-1 block text-xs text-muted-foreground">
             {mode === 'set'
               ? 'Conte o que há na loja e digite o total — o sistema lança a diferença sozinho.'
-              : 'Use para compra sem pedido, perda, quebra ou correção.'}
+              : mode === 'remove'
+                ? 'Saída que não é venda: perda, quebra, furto, uso da loja, brinde.'
+                : 'Use para compra sem pedido ou correção.'}
           </span>
         </label>
 
@@ -233,13 +247,51 @@ export function StockAdjustModal({
           </p>
         )}
 
+        {isOut && (
+          <fieldset className="mt-4">
+            <legend className="mb-1.5 text-sm font-medium text-foreground">
+              Por que saiu? <span className="text-danger">*</span>
+            </legend>
+            <div className="grid grid-cols-2 gap-1.5">
+              {OUT_REASONS.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => {
+                    setReason(r.id);
+                    setErr(null);
+                  }}
+                  aria-pressed={reason === r.id}
+                  className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition-colors ${
+                    reason === r.id ? 'border-primary bg-accent-soft text-accent-soft-foreground' : 'border-border text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
         <label className="mt-4 block">
-          <span className="mb-1 block text-sm font-medium text-foreground">Observação</span>
+          <span className="mb-1 block text-sm font-medium text-foreground">
+            {isOut ? (
+              <>
+                Explicação <span className="text-danger">*</span> <span className="font-normal text-muted-foreground">(vai para o relatório do mês)</span>
+              </>
+            ) : (
+              'Observação'
+            )}
+          </span>
           <input
             value={note}
-            onChange={(e) => setNote(e.target.value)}
+            onChange={(e) => {
+              setNote(e.target.value);
+              setErr(null);
+            }}
+            maxLength={300}
             className="w-full rounded-lg border border-border px-3 py-2 focus:border-ring focus:ring-2 focus:ring-ring/40"
-            placeholder={mode === 'remove' ? 'Ex.: quebrou, vencido, uso interno' : 'Ex.: compra NF 12345, erro de digitação'}
+            placeholder={isOut ? 'Ex.: caiu da prateleira e rasgou a capa' : 'Ex.: compra NF 12345, erro de digitação'}
           />
         </label>
 

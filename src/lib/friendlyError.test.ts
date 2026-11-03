@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { simplifyMessage, errorText } from "./friendlyError"
+import { simplifyMessage, errorText, errorStatus } from "./friendlyError"
 
 describe("simplifyMessage", () => {
   const cases: Array<[string, string]> = [
@@ -51,5 +51,15 @@ describe("errorText", () => {
   })
   it("aceita exceções", () => {
     expect(errorText(new Error("Failed to fetch"))).toBe("Sem conexão")
+  })
+})
+
+describe("errorStatus (código HTTP certo)", () => {
+  it("não encontrado, já cadastrado, campo faltando e o resto", () => {
+    expect(errorStatus(new Error("Product not found"))).toEqual({ status: 404, code: "NOT_FOUND" })
+    expect(errorStatus(new Error("Category with this name already exists"))).toEqual({ status: 409, code: "CONFLICT" })
+    expect(errorStatus(new Error("Missing required fields: name, sku"))).toEqual({ status: 400, code: "VALIDATION_ERROR" })
+    expect(errorStatus(new Error("Escolha o motivo da saída"))).toEqual({ status: 400, code: "VALIDATION_ERROR" })
+    expect(errorStatus(new Error("Can't reach database server"))).toEqual({ status: 500, code: "ERRO" })
   })
 })

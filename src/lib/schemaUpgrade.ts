@@ -9,7 +9,7 @@
 // (IF NOT EXISTS), então rodar em 3 PCs ao mesmo tempo é seguro.
 //
 // Mantenha em sincronia com prisma/migrations/20260924120000_reports_ai/migration.sql
-// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists, 20261021120000_whatsapp_contacts, 20261022120000_novidades_ia, 20261022140000_quote_requests e 20261022160000_copilot_learning).
+// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists, 20261021120000_whatsapp_contacts, 20261022120000_novidades_ia, 20261022140000_quote_requests, 20261022160000_copilot_learning, 20261023120000_whatsapp_auto_reply, 20261102120000_whatsapp_agent e 20261103120000_login_users).
 import { prisma } from "@/lib/prisma"
 
 export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
@@ -229,6 +229,41 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "waAutoSaturday" TEXT NOT NULL DEFAULT '08:00-13:00'`,
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "waAutoSunday" TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "storeInfo" TEXT NOT NULL DEFAULT ('Pagamento: Pix, cartão de débito, cartão de crédito e dinheiro, na loja. Parcelamento no cartão: a loja confirma.' || chr(10) || 'Loja física: o cliente retira na loja. Não entregamos e não temos pagamento online.' || chr(10) || 'Orçamento vale pelo preço de agora, sujeito à disponibilidade na retirada.')`,
+
+  // --- 0.5.0: agente de IA do WhatsApp e chamar de volta ---
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "waWinbackEnabled" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "waWinbackDays" INTEGER NOT NULL DEFAULT 60`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "waWinbackPerDay" INTEGER NOT NULL DEFAULT 8`,
+  `CREATE TABLE IF NOT EXISTS "AgentEvent" (
+    "id" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "name" TEXT NOT NULL DEFAULT '',
+    "phone" TEXT NOT NULL DEFAULT '',
+    "intent" TEXT NOT NULL DEFAULT 'other',
+    "steps" JSONB NOT NULL DEFAULT '[]',
+    "customerText" TEXT NOT NULL DEFAULT '',
+    "reply" TEXT NOT NULL DEFAULT '',
+    "reason" TEXT NOT NULL DEFAULT '',
+    "quoteRequestId" TEXT,
+    "total" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'pronta',
+    "sentAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AgentEvent_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "AgentEvent_createdAt_idx" ON "AgentEvent"("createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "AgentEvent_phone_idx" ON "AgentEvent"("phone")`,
+  `CREATE INDEX IF NOT EXISTS "AgentEvent_kind_createdAt_idx" ON "AgentEvent"("kind", "createdAt")`,
+
+  // --- 0.5.0: login com usuário e senha; avisos da assistente ---
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "authOwnerUser" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "authOwnerHash" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "authEmployeeUser" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "authEmployeeHash" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "AgentEvent" ADD COLUMN IF NOT EXISTS "seenAt" TIMESTAMP(3)`,
+  // --- 0.5.0: Google Gemini (escolhida ou reserva da NVIDIA) ---
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "geminiModel" TEXT NOT NULL DEFAULT 'gemini-3.8-flash'`,
 ]
 
 let upgrade: Promise<void> | null = null

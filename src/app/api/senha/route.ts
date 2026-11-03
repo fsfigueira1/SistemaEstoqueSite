@@ -1,52 +1,47 @@
+import { NextResponse } from "next/server"
+import { AuthService, ROLE_LABEL } from "@/services/authService"
+import { COOKIE, SESSION_MS, authSecret, signToken } from "@/lib/authToken"
+import { homeFor } from "@/lib/access"
 import { friendlyError } from "@/lib/friendlyError"
-import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+import { isJsonRequest } from "@/lib/requireJson"
 
+// Freio contra chute de senha: 5 erros seguidos do mesmo endereço → espera 2 minutos.
+const FAILS = new Map<string, { n: number; until: number }>()
+const MAX_FAILS = 5
+const LOCK_MS = 2 * 60_000
+
+const clientKey = (request: Request) => request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local"
+
+// POST /api/senha { user, password } — entra e recebe o crachá (cookie assinado)
 export async function POST(request: Request) {
+  if (!isJsonRequest(request)) return NextResponse.json({ success: false, error: "Envie JSON" }, { status: 415 })
+  const key = clientKey(request)
+  const f = FAILS.get(key)
+  if (f && f.until > Date.now()) {
+    const s = Math.ceil((f.until - Date.now()) / 1000)
+    return NextResponse.json({ success: false, error: `Muitas tentativas. Tente de novo em ${s} segundos.` }, { status: 429 })
+  }
   try {
-    const { pin } = await request.json()
-
-    // Get PINs from environment variables
-    const ownerPin = process.env.OWNER_PASSWORD
-    const employeePin = process.env.EMPLOYEE_PASSWORD
-
-    // Check if PINs are set (in a real app, you would use a proper auth system)
-    if (!ownerPin || !employeePin) {
-      return NextResponse.json(
-        { error: 'Server configuration error' },
-        { status: 500 }
-      )
-    }
-
-    // Simple PIN check (in production, use bcrypt or similar)
-    let role: 'OWNER' | 'EMPLOYEE' | null = null
-    if (pin === ownerPin) {
-      role = 'OWNER'
-    } else if (pin === employeePin) {
-      role = 'EMPLOYEE'
-    }
-
+    const body = await request.json().catch(() => ({}))
+    const role = await AuthService.login(String(body?.user ?? ""), String(body?.password ?? ""))
     if (!role) {
-      return NextResponse.json(
-        { error: 'PIN incorreto' },
-        { status: 401 }
-      )
+      // depois de uma espera, a contagem recomeça
+      const n = (f && f.until === 0 ? f.n : 0) + 1
+      FAILS.set(key, n >= MAX_FAILS ? { n: 0, until: Date.now() + LOCK_MS } : { n, until: 0 })
+      return NextResponse.json({ success: false, error: "Usuário ou senha incorretos" }, { status: 401 })
     }
-
-    // Set a cookie with the role and a timestamp (or just role for simplicity)
-    // In a real app, you would use a signed JWT or session
-    const cookieValue = `${role}:${Date.now()}`
-    const response = NextResponse.json({ success: true, role })
-    const cookieStore = await cookies()
-    cookieStore.set('erp_auth', cookieValue, {
+    FAILS.delete(key)
+    const token = await signToken(await authSecret(), role, Date.now() + SESSION_MS)
+    const res = NextResponse.json({ success: true, data: { role, label: ROLE_LABEL[role], home: homeFor(role) } })
+    res.cookies.set(COOKIE, token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // use secure in production
-      maxAge: 60 * 60 * 8, // 8 hours
-      path: '/',
+      sameSite: "lax",
+      secure: request.url.startsWith("https:"),
+      maxAge: SESSION_MS / 1000,
+      path: "/",
     })
-
-    return response
+    return res
   } catch (error) {
-    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
+    return NextResponse.json({ success: false, error: friendlyError(error).message }, { status: 500 })
   }
 }

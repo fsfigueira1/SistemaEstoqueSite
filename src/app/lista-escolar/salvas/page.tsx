@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Check, Copy, Trash2 } from 'lucide-react';
 import Layout, { PageHeader } from '@/components/Layout';
+import AtendimentoTabs from '@/components/atendimento/AtendimentoTabs';
 import { errorText } from '@/lib/friendlyError';
 
 type Summary = {
@@ -86,6 +87,7 @@ export default function ListasSalvasPage() {
     <Layout>
       <div className="mx-auto max-w-6xl space-y-6 p-6">
         <PageHeader eyebrow="Balcão" title="Listas salvas" subtitle="Listas de material por escola e série — o orçamento sai com o preço do dia" />
+        <AtendimentoTabs />
 
         <Link href="/lista-escolar" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
           <ArrowLeft className="h-4 w-4" /> Voltar para a Lista escolar

@@ -6,3 +6,6 @@ export declare function chatCooldownOk(lastSentAt: number | undefined, now: numb
 export declare function userIdle(lastInputAt: number, now: number): boolean
 export declare function syncQueue(queue: Map<string, QueueItem>, chats: Array<{ name: string; unread: number }>, now: number, rand?: () => number): Map<string, QueueItem>
 export declare function nextDue(queue: Map<string, QueueItem>, now: number): QueueItem | null
+export declare function winbackGapMs(rand?: () => number): number
+export declare function winbackDue(lastAt: number, gapMs: number, now: number, queue: Map<string, QueueItem>): boolean
+export declare function historyFor(messages: Array<{ from: string; text: string; media?: boolean }>): Array<{ from: "cliente" | "loja"; text: string }>

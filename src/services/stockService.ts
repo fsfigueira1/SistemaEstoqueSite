@@ -1,6 +1,7 @@
 import { Prisma, StockMovementType } from "../generated/prisma/client"
 // Instância compartilhada do PrismaClient (Postgres) — evita abrir conexões extras
 import { prisma } from "../lib/prisma"
+import { outReason, outReasonError, reasonNote, type StockOutReason } from "../lib/stockReasons"
 
 // Define input types
 type StockAdjustmentInput = {
@@ -9,6 +10,8 @@ type StockAdjustmentInput = {
   performedById: string
   reference?: string | null
   notes?: string | null
+  /** contagem que DIMINUI o estoque precisa do motivo (src/lib/stockReasons.ts) */
+  reason?: StockOutReason | null
 }
 
 type StockOperationInput = {
@@ -17,8 +20,19 @@ type StockOperationInput = {
   performedById: string
   reference?: string | null
   notes?: string | null
+  /** saída: motivo obrigatório; a explicação vai em notes */
+  reason?: StockOutReason | null
 }
 
+/** Saída manual: motivo + explicação obrigatórios; devolve o tipo e a observação gravada. */
+function outMovement(input: { reason?: StockOutReason | null; notes?: string | null }) {
+  const err = outReasonError(input.reason, input.notes)
+  const r = outReason(input.reason)
+  if (err || !r) throw new Error(err ?? "Escolha o motivo da saída")
+  return { type: StockMovementType[r.type], notes: reasonNote(r.id, String(input.notes)) }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- API antiga (StockService.x) usada em muitas telas e testes
 export class StockService {
   // Get current stock for a product
   static async getStock(productId: string) {
@@ -56,7 +70,7 @@ export class StockService {
     }
 
     // Use transaction to ensure consistency
-    return prisma.$transaction(async (tx: any) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Update product stock
       const updatedProduct = await tx.product.update({
         where: { id: input.productId },
@@ -103,6 +117,8 @@ export class StockService {
       throw new Error('Cannot modify stock for inactive or discontinued product')
     }
 
+    const out = outMovement(input)
+
     // Check if sufficient stock exists
     const currentStock = await this.getStock(input.productId)
     if (currentStock.currentStock < input.quantity) {
@@ -110,7 +126,7 @@ export class StockService {
     }
 
     // Use transaction to ensure consistency
-    return prisma.$transaction(async (tx: any) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Update product stock
       const updatedProduct = await tx.product.update({
         where: { id: input.productId },
@@ -126,10 +142,10 @@ export class StockService {
         data: {
           productId: input.productId,
           quantity: input.quantity,
-          type: StockMovementType.ADJUSTMENT_OUT,
+          type: out.type,
           performedById: input.performedById,
           reference: input.reference,
-          notes: input.notes,
+          notes: out.notes,
           createdAt: new Date()
         }
       })
@@ -174,8 +190,11 @@ export class StockService {
       }
     }
 
+    // contagem que diminui = saída: precisa do motivo
+    const out = difference < 0 ? outMovement(input) : null
+
     // Use transaction to ensure consistency
-    return prisma.$transaction(async (tx: any) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Update product stock
       const updatedProduct = await tx.product.update({
         where: { id: input.productId },
@@ -191,10 +210,10 @@ export class StockService {
         data: {
           productId: input.productId,
           quantity: Math.abs(difference), // Always positive
-          type: difference > 0 ? StockMovementType.ADJUSTMENT_IN : StockMovementType.ADJUSTMENT_OUT,
+          type: out ? out.type : StockMovementType.ADJUSTMENT_IN,
           performedById: input.performedById,
           reference: input.reference,
-          notes: input.notes,
+          notes: out ? out.notes : input.notes,
           createdAt: new Date()
         }
       })
@@ -212,6 +231,8 @@ export class StockService {
     page?: number
     startDate?: Date
     endDate?: Date
+    /** só um tipo (ex.: LOSS) */
+    type?: StockMovementType | `${StockMovementType}`
   } = {}) {
     // Verify product exists
     const product = await prisma.product.findUnique({ where: { id: productId } })
@@ -228,7 +249,8 @@ export class StockService {
 
     const skip = (page - 1) * limit
     const where: Prisma.StockMovementWhereInput = {
-      productId
+      productId,
+      ...(options.type ? { type: options.type as StockMovementType } : {})
     }
 
     if (startDate) { where.createdAt = { gte: startDate } }
@@ -267,6 +289,23 @@ export class StockService {
       }
     }
   }
-}
 
-export default StockService
+  /** Ativos com estoque no mínimo ou abaixo (o painel mostra para repor). */
+  static async getLowStockProducts() {
+    const products = await prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: { stockQuantity: 'asc' },
+      select: { id: true, name: true, sku: true, stockQuantity: true, minStockLevel: true },
+    })
+    return products.filter((p) => p.stockQuantity <= p.minStockLevel)
+  }
+
+  /** Ativos zerados (inativos/descontinuados não entram). */
+  static async getOutOfStockProducts() {
+    return prisma.product.findMany({
+      where: { status: 'ACTIVE', stockQuantity: { lte: 0 } },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, sku: true, stockQuantity: true, minStockLevel: true },
+    })
+  }
+}

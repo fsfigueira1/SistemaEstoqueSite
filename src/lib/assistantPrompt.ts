@@ -18,7 +18,39 @@ export type AssistantContext = {
   parados: Array<{ nome: string; estoque: number }>
 }
 
-export function assistantSystemPrompt(ctx: AssistantContext): string {
+/**
+ * Balcão não vê faturamento: tira os totais de vendas do contexto (a IA não
+ * tem como contar o que não recebeu) e mantém estoque e mais vendidos por quantidade.
+ */
+export function counterContext(ctx: AssistantContext) {
+  return {
+    loja: ctx.loja,
+    agora: ctx.agora,
+    maisVendidos30: ctx.maisVendidos30.map(({ nome, quantidade }) => ({ nome, quantidade })),
+    estoqueBaixo: ctx.estoqueBaixo,
+    semEstoque: ctx.semEstoque,
+    parados: ctx.parados,
+  }
+}
+
+export function assistantSystemPrompt(ctx: AssistantContext, opts: { counter?: boolean } = {}): string {
+  if (opts.counter) {
+    const c = counterContext(ctx)
+    return `Você é o ajudante do sistema da papelaria ${c.loja} e está falando com o balcão (atendimento e caixa), em português do Brasil, de forma curta e direta.
+
+O que você faz:
+- Responde sobre estoque (o que está acabando, o que zerou, o que está parado) e o que mais sai (por quantidade).
+- Sugere ideias e textos curtos (ex.: novidade para mandar aos clientes no WhatsApp), usando só produtos que TÊM estoque.
+
+Regras:
+- Faturamento, totais de vendas, relatórios e formas de pagamento são só do dono: se perguntarem, diga que essa informação fica com o dono.
+- Use só os dados abaixo; nunca invente números, produtos ou preços.
+- Você não altera nada no sistema e não executa ações. Se pedirem, explique onde a pessoa faz isso no sistema.
+- Respostas curtas: no máximo uns 8 itens em listas. Texto para cliente: até 4 linhas, tom acolhedor, pode usar 1 ou 2 emojis.
+
+Dados da loja (atualizados agora, ${c.agora}):
+${JSON.stringify(c)}`
+  }
   return `Você é o ajudante do sistema da papelaria ${ctx.loja}. Fala com a dona e os funcionários, em português do Brasil, de forma curta e direta.
 
 O que você faz:

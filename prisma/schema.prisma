@@ -396,6 +396,18 @@ model Settings {
   waAutoWeekdays               String   @default("08:00-18:00")
   waAutoSaturday               String   @default("08:00-13:00")
   waAutoSunday                 String   @default("")
+  /// chamar de volta clientes parados (o robô envia sozinho) — começa desligado
+  waWinbackEnabled             Boolean  @default(false)
+  /// cliente sem comprar/pedir orçamento há tantos dias entra na lista
+  waWinbackDays                Int      @default(60)
+  /// máximo de mensagens de "chamar de volta" por dia
+  waWinbackPerDay              Int      @default(8)
+  /// login (vazio = o padrão: usuário de src/services/authService.ts e senha do ambiente
+  /// OWNER_PASSWORD/EMPLOYEE_PASSWORD). Senha só em hash bcrypt; nunca vai para o navegador.
+  authOwnerUser                String   @default("")
+  authOwnerHash                String   @default("")
+  authEmployeeUser             String   @default("")
+  authEmployeeHash             String   @default("")
   receiptFooter                String   @default("Obrigado pela preferencia! Troca em ate 7 dias com este comprovante.")
   receiptShowCompany           Boolean  @default(true)
   receiptWidth                 String   @default("80mm")
@@ -407,10 +419,13 @@ model Settings {
   storeCity                    String   @default("")
   /// Chave da API do Claude (Anthropic). Nunca é devolvida pela API de configurações.
   aiApiKey                     String   @default("")
-  /// nvidia | claude — quem lê a foto da lista e responde no ajudante
+  /// nvidia | gemini | claude — IA principal (a outra entre NVIDIA/Gemini fica de reserva; Claude só lê a foto da lista)
   aiProvider                   String   @default("nvidia")
   nvidiaApiKey                 String   @default("")
   nvidiaModel                  String   @default("nvidia/nemotron-3.5-super-vl-120b-a12b")
+  /// Chave do Google Gemini (AI Studio). Nunca é devolvida pela API de configurações.
+  geminiApiKey                 String   @default("")
+  geminiModel                  String   @default("gemini-3.8-flash")
   aiModel                      String   @default("claude-sonnet-5")
   /// % acima do preço atual que dispara o aviso de "mercado em alta".
   priceAlertPercent            Float    @default(10)
@@ -645,4 +660,34 @@ model CopilotExample {
   finalReply   String
   createdAt    DateTime @default(now())
   @@index([createdAt])
+}
+
+/// O que o agente de IA do WhatsApp fez: respondeu (reply), passou para o
+/// atendente (handoff) ou chamou de volta um cliente parado (winback).
+/// Alimenta o painel "IA hoje" e o histórico do Atendimento.
+model AgentEvent {
+  id             String   @id @default(uuid())
+  /// reply | handoff | winback | optout
+  kind           String
+  name           String   @default("")
+  /// só dígitos (pode faltar: contato salvo só com nome)
+  phone          String   @default("")
+  /// site | code | list | product | other
+  intent         String   @default("other")
+  /// passos que o agente fez ("buscando estoque", "montando orçamento"…)
+  steps          Json     @default("[]")
+  customerText   String   @default("")
+  reply          String   @default("")
+  reason         String   @default("")
+  quoteRequestId String?
+  total          Decimal  @default(0)
+  /// pronta | enviada | falhou | cancelada
+  status         String   @default("pronta")
+  sentAt         DateTime?
+  /// alguém da loja viu o aviso da assistente (tira do quadro de avisos)
+  seenAt         DateTime?
+  createdAt      DateTime @default(now())
+  @@index([createdAt])
+  @@index([phone])
+  @@index([kind, createdAt])
 }

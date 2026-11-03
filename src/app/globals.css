@@ -112,6 +112,11 @@
   --sidebar-muted: oklch(0.76 0.02 205);
   --sidebar-active: oklch(1 0 0 / 9%);
   --sidebar-border: oklch(1 0 0 / 9%);
+  /* gráficos: 3 primeiras cores da paleta validada (azul, laranja, verde-água) */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-grid: color-mix(in oklch, var(--border) 70%, transparent);
 }
 
 .dark {
@@ -155,6 +160,9 @@
   --sidebar-muted: oklch(0.72 0.02 195);
   --sidebar-active: oklch(1 0 0 / 7%);
   --sidebar-border: oklch(1 0 0 / 8%);
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
 }
 
 @layer base {

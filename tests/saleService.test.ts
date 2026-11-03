@@ -1,6 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion -- teste: dados montados à mão e resultados que o próprio teste garante */
 import { describe, beforeAll, afterAll, beforeEach, it, expect } from 'vitest';
 import { SaleService } from '../src/services/saleService';
-import { ProductService } from '../src/services/productService';
 import { CashSessionService } from '../src/services/cashSessionService';
 import { CashRegisterService } from '../src/services/cashRegisterService';
 import { prisma } from './setup';
@@ -799,6 +799,9 @@ describe('Sale Service', () => {
 
   describe('refundSale', () => {
     it('should refund a completed sale correctly', async () => {
+      // o produto é do beforeAll e os testes anteriores já venderam: parte do estoque de agora
+      const before = (await prisma.product.findUniqueOrThrow({ where: { id: testProduct.id } })).stockQuantity;
+
       // Create and complete a sale
       const result = await SaleService.createSale({
         cashSessionId: testCashSession.id,
@@ -828,14 +831,11 @@ describe('Sale Service', () => {
       expect(refundedSale.status).toBe('REFUNDED');
       expect(refundedSale.updatedAt).toBeDefined();
 
-      // Verify stock was restored (item quantity returned to inventory)
-      // Note: refundSale behavior may vary - check actual stock quantity
+      // o estorno devolve ao estoque exatamente o que a venda tirou
       const updatedProduct = await prisma.product.findUnique({
         where: { id: testProduct.id }
       });
-      // Original 100 - 1 (completed sale) + 1 (refund restores 1) = 100
-      // But due to test isolation setup, actual value may vary
-      expect(updatedProduct?.stockQuantity).toBeGreaterThanOrEqual(98);
+      expect(updatedProduct?.stockQuantity).toBe(before);
 
       // Verify cash movement was created for refund (WITHDRAWAL since refund removes cash)
       const movements = await prisma.cashMovement.findMany({

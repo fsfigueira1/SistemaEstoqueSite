@@ -1,4 +1,4 @@
-import { friendlyError } from "@/lib/friendlyError"
+import { apiFailure } from "@/lib/apiResponse"
 import { NextResponse } from "next/server"
 import { StockService } from "@/services/stockService"
 import { getSystemUserId } from "@/lib/systemUser"
@@ -13,7 +13,8 @@ export async function POST(request: Request) {
     // sempre o usuário de sistema, igual /api/sales.
     const { type, performedById: _ignored, ...rest } = data
     const performedById = await getSystemUserId()
-    const input = { ...rest, performedById }
+    // saída (e contagem que diminui): motivo + explicação — vão para o relatório do mês
+    const input = { ...rest, reason: typeof rest.reason === "string" ? rest.reason : null, performedById }
 
     let result;
 
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
       data: result
     })
 
-  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
+  } catch (error) { return apiFailure(error); }
 }
 
 // GET /api/stock/movement - Get stock movements with filtering and pagination
@@ -129,5 +130,5 @@ export async function GET(request: Request) {
       data: result
     })
 
-  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
+  } catch (error) { return apiFailure(error); }
 }

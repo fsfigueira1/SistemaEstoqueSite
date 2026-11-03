@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ClipboardCheck, Copy, GraduationCap, MessageCircle, Save, ShoppingCart } from 'lucide-react';
 import Layout, { PageHeader } from '@/components/Layout';
+import AtendimentoTabs from '@/components/atendimento/AtendimentoTabs';
 import ListInput from '@/components/lista/ListInput';
 import QuoteRow, { type Row } from '@/components/lista/QuoteRow';
 import SaveListDialog from '@/components/lista/SaveListDialog';
@@ -42,7 +43,7 @@ export default function ListaEscolarPage() {
     loadSettings()
       .then((s) => {
         setStore(s.companyName || 'loja');
-        setAiAvailable(Boolean(s.aiKeySet || s.nvidiaKeySet));
+        setAiAvailable(Boolean(s.aiKeySet || s.nvidiaKeySet || s.geminiKeySet));
       })
       .catch(() => {});
     try {
@@ -188,6 +189,7 @@ export default function ListaEscolarPage() {
           title="Lista escolar"
           subtitle="Cole a lista ou tire uma foto — o orçamento sai com o que tem na loja"
         />
+        <AtendimentoTabs />
 
         <OpenSavedList onOpen={openSaved} refreshKey={savedCount} />
 

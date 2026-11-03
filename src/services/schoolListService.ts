@@ -1,11 +1,11 @@
 // Lista de material escolar: monta o orçamento com os produtos ativos da loja
-// e, se houver chave da IA (NVIDIA ou Claude), lê a foto da lista (opcional —
+// e, se houver chave da IA (NVIDIA, Gemini ou Claude), lê a foto da lista (opcional —
 // sem chave, a foto é lida no próprio computador, na tela).
 import { prisma } from "@/lib/prisma"
 import { getServerSettings } from "@/lib/serverSettings"
 import { buildQuote, type CatalogProduct, type QuoteLine } from "@/lib/schoolList"
 import { pickAiProvider } from "@/lib/aiProvider"
-import { NVIDIA_DEFAULT_MODEL, nvidiaChat } from "@/lib/nvidia"
+import { llmChat } from "@/lib/llm"
 
 const API_URL = `${(process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/$/, "")}/v1/messages`
 
@@ -65,7 +65,7 @@ Responda somente com as linhas, sem comentários.`
 
 const cleanLines = (text: string) => text.replace(/```[a-z]*\n?|```/g, "").trim()
 
-/** Lê a foto da lista com a IA escolhida em Configurações (NVIDIA ou Claude). */
+/** Lê a foto da lista com a IA escolhida em Configurações (NVIDIA, Gemini ou Claude). */
 export async function readListWithAI(dataUrl: string): Promise<string> {
   const settings = await getServerSettings()
   const m = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl)
@@ -73,10 +73,8 @@ export async function readListWithAI(dataUrl: string): Promise<string> {
   if (m[2].length > 7_000_000) throw new Error("Foto grande demais — tire outra mais de perto")
   const provider = pickAiProvider(settings)
   if (!provider) throw new Error("Cadastre a chave da IA em Configurações para ler com IA")
-  if (provider === "nvidia") {
-    const text = await nvidiaChat({
-      apiKey: settings.nvidiaApiKey.trim(),
-      model: settings.nvidiaModel || NVIDIA_DEFAULT_MODEL,
+  if (provider === "llm") {
+    const text = await llmChat(settings, {
       messages: [
         {
           role: "user",

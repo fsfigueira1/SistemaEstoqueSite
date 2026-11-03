@@ -1,57 +1,63 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { COOKIE, SESSION_MS, authSecret, signToken, verifyToken } from '@/lib/authToken'
+import { canAccess, homeFor, isPublic } from '@/lib/access'
+import { ROLE_HEADER } from '@/lib/requestRole'
 
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
+// Porta de entrada de tudo: confere o crachá assinado (login com usuário e
+// senha), aplica o que cada perfil pode abrir (src/lib/access.ts) e repassa
+// o perfil para as rotas no cabeçalho x-erp-role. Sessão "deslizante": cada
+// uso renova; vence depois de 10 h parado.
+export async function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl
+  const isApi = pathname.startsWith('/api/')
+  // ninguém de fora escolhe o próprio perfil
+  const headers = new Headers(request.headers)
+  headers.delete(ROLE_HEADER)
 
-  // Public paths: password page and its API
-  const publicPaths = ['/senha', '/api/senha']
+  // sem segredo forte configurado ninguém entra (nunca um segredo fixo e adivinhável)
+  let secret: string
+  try {
+    secret = await authSecret()
+  } catch {
+    const msg = 'Login não configurado neste servidor (falta AUTH_SECRET)'
+    return isApi ? NextResponse.json({ success: false, error: msg }, { status: 503 }) : new NextResponse(msg, { status: 503 })
+  }
+  const session = await verifyToken(secret, request.cookies.get(COOKIE)?.value)
 
-  if (publicPaths.includes(pathname)) {
-    return NextResponse.next()
+  if (isPublic(pathname)) {
+    // já entrou e abriu a tela de login: vai para a tela inicial do perfil
+    if (pathname === '/senha' && session) return NextResponse.redirect(new URL(homeFor(session.role), request.url))
+    return NextResponse.next({ request: { headers } })
   }
 
-  // Check for auth cookie
-  const authCookie = request.cookies.get('erp_auth')
-  if (!authCookie) {
-    // No cookie
-    if (pathname.startsWith('/api/')) {
-      // API route: return 401
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-    // Non-API: redirect to password page
+  if (!session) {
+    if (isApi) return NextResponse.json({ success: false, error: 'Entre com usuário e senha' }, { status: 401 })
     const url = request.nextUrl.clone()
     url.pathname = '/senha'
+    url.search = pathname === '/' ? '' : `?redirect=${encodeURIComponent(pathname + search)}`
     return NextResponse.redirect(url)
   }
 
-  // Validate cookie format: we expect "role:timestamp"
-  const cookieValue = authCookie.value
-  if (!cookieValue) {
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-    const url = request.nextUrl.clone()
-    url.pathname = '/senha'
-    return NextResponse.redirect(url)
+  if (pathname === '/') return NextResponse.redirect(new URL(homeFor(session.role), request.url))
+
+  if (!canAccess(session.role, pathname, request.method)) {
+    if (isApi) return NextResponse.json({ success: false, error: 'Sem permissão para este perfil' }, { status: 403 })
+    return NextResponse.redirect(new URL(homeFor(session.role), request.url))
   }
 
-  // Sessão "deslizante": cada uso renova as 8h. Sem isso o PIN vencia no meio
-  // do expediente e o PDV passava a dizer "produto não encontrado"/"caixa
-  // fechado" (na verdade era 401). Só vence depois de 8h sem usar.
-  const res = NextResponse.next()
-  res.cookies.set('erp_auth', cookieValue, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 8,
-    path: '/',
-  })
+  headers.set(ROLE_HEADER, session.role)
+  const res = NextResponse.next({ request: { headers } })
+  // renova a sessão (o robô usa crachá próprio, que não precisa de cookie novo)
+  if (session.role !== 'ROBOT') {
+    res.cookies.set(COOKIE, await signToken(secret, session.role, Date.now() + SESSION_MS), {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+      maxAge: SESSION_MS / 1000,
+      path: '/',
+    })
+  }
   return res
 }
 
@@ -61,7 +67,7 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)',
-    // API sempre passa pelo PIN, mesmo com "." no caminho (ex.: e-mail)
+    // API sempre passa pelo login, mesmo com "." no caminho (ex.: e-mail)
     '/api/:path*',
   ],
 }

@@ -30,13 +30,16 @@ export function publicSettings(s: ServerSettings) {
   const key = (s.aiApiKey ?? "").trim()
   const shopping = (s.shoppingApiKey ?? "").trim()
   const nvidia = (s.nvidiaApiKey ?? "").trim()
+  const gemini = (s.geminiApiKey ?? "").trim()
   return {
-    ...(rest as Omit<ServerSettings, "aiApiKey" | "shoppingApiKey" | "nvidiaApiKey">),
+    ...(rest as Omit<ServerSettings, "aiApiKey" | "shoppingApiKey" | "nvidiaApiKey" | "geminiApiKey">),
     aiKeySet: key.length > 0,
     aiKeyHint: hint(key),
     shoppingKeySet: shopping.length > 0,
     shoppingKeyHint: hint(shopping),
     nvidiaKeySet: nvidia.length > 0,
     nvidiaKeyHint: hint(nvidia),
+    geminiKeySet: gemini.length > 0,
+    geminiKeyHint: hint(gemini),
   }
 }

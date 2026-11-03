@@ -1,21 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion -- teste: dados montados à mão e resultados que o próprio teste garante */
 import { describe, beforeEach, afterEach, it, expect } from 'vitest';
 import { AuditService } from '../src/services/auditService';
-import { ProductService } from '../src/services/productService';
 import { CashSessionService } from '../src/services/cashSessionService';
 import { CashRegisterService } from '../src/services/cashRegisterService';
-import { SaleService } from '../src/services/saleService';
-import { PurchaseService } from '../src/services/purchaseService';
-import { StockService } from '../src/services/stockService';
 import { prisma } from './setup';
 import { cleanupDatabase, createAdminUser, createTestUser } from './utils';
-// Import setup-db to ensure test database is properly initialized
-import './setup-db';
 
 describe('Audit Service', () => {
   let adminUser: any;
   let testUser: any;
   let testCashRegister: any;
-  let testCashSession: any;
   let testProduct: any;
 
   beforeEach(async () => {
@@ -52,7 +46,7 @@ describe('Audit Service', () => {
     });
 
     // Open a cash session for our tests
-    testCashSession = await CashSessionService.openCashSession({
+    await CashSessionService.openCashSession({
       cashRegisterId: testCashRegister.id,
       openedById: adminUser.id,
       openingAmount: 100
@@ -295,7 +289,7 @@ describe('Audit Service', () => {
 
     it('should filter by date range', async () => {
       // Create an audit log today
-      const todayLog = await AuditService.createAuditLog({
+      await AuditService.createAuditLog({
         userId: adminUser.id,
         action: 'TODAY_ACTION',
         entity: 'PRODUCT',
@@ -305,7 +299,7 @@ describe('Audit Service', () => {
       // Create an audit log yesterday (by manipulating timestamp)
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayLog = await prisma.auditLog.create({
+      await prisma.auditLog.create({
         data: {
           user: { connect: { id: adminUser.id } },
           action: 'YESTERDAY_ACTION',

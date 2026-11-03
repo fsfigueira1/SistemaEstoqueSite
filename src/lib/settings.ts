@@ -23,6 +23,10 @@ export type StoreSettings = {
   waAutoWeekdays: string;
   waAutoSaturday: string;
   waAutoSunday: string;
+  /** chamar de volta clientes parados (o robô envia sozinho; começa desligado) */
+  waWinbackEnabled: boolean;
+  waWinbackDays: number;
+  waWinbackPerDay: number;
   receiptFooter: string;
   receiptShowCompany: boolean;
   receiptWidth: '58mm' | '80mm';
@@ -33,8 +37,9 @@ export type StoreSettings = {
   storeCity: string;
   aiModel: string;
   /** IA do ajudante e da foto da lista */
-  aiProvider: 'nvidia' | 'claude';
+  aiProvider: 'nvidia' | 'gemini' | 'claude';
   nvidiaModel: string;
+  geminiModel: string;
   priceAlertPercent: number;
   // fonte da pesquisa de preço: Google Shopping (grátis) ou Claude (pago)
   priceProvider: 'shopping' | 'claude';
@@ -60,6 +65,8 @@ export type StoreSettings = {
   shoppingKeyHint?: string;
   nvidiaKeySet?: boolean;
   nvidiaKeyHint?: string;
+  geminiKeySet?: boolean;
+  geminiKeyHint?: string;
 };
 
 const CACHE_KEY = 'lacolaria_settings';
@@ -78,6 +85,9 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   waAutoWeekdays: '08:00-18:00',
   waAutoSaturday: '08:00-13:00',
   waAutoSunday: '',
+  waWinbackEnabled: false,
+  waWinbackDays: 60,
+  waWinbackPerDay: 8,
   receiptFooter: 'Obrigado pela preferencia! Troca em ate 7 dias com este comprovante.',
   receiptShowCompany: true,
   receiptWidth: '80mm',
@@ -89,6 +99,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   aiModel: 'claude-sonnet-5',
   aiProvider: 'nvidia',
   nvidiaModel: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
+  geminiModel: 'gemini-3.8-flash',
   priceAlertPercent: 10,
   priceProvider: 'shopping',
   priceMarkupPercent: 10,
@@ -160,6 +171,8 @@ export async function saveSettings(
     shoppingApiKeyClear?: boolean;
     nvidiaApiKey?: string;
     nvidiaApiKeyClear?: boolean;
+    geminiApiKey?: string;
+    geminiApiKeyClear?: boolean;
   },
 ): Promise<StoreSettings> {
   const next = { ...readCache(), ...patch };
@@ -182,21 +195,4 @@ export async function saveSettings(
   // não finge que salvou: a mudança não chegou ao banco (nem aos outros PCs)
   const msg = typeof data?.error === 'string' ? data.error : (data?.error as { message?: string })?.message;
   throw new Error(msg || 'Não foi possível salvar');
-}
-
-// ---- PIN local do PinLock (permanece por dispositivo) ----
-export function getLocalPin(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    return window.localStorage.getItem('app_pin');
-  } catch {
-    return null;
-  }
-}
-export function setLocalPin(pin: string) {
-  try {
-    window.localStorage.setItem('app_pin', pin);
-  } catch {
-    /* ignore */
-  }
 }

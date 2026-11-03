@@ -29,6 +29,7 @@ export async function cleanupDatabase() {
       await prisma.school.deleteMany();
       await prisma.quoteRequest.deleteMany();
       await prisma.copilotExample.deleteMany();
+      await prisma.agentEvent.deleteMany();
       await prisma.broadcastRecipient.deleteMany();
       await prisma.broadcast.deleteMany();
       await prisma.whatsAppMessage.deleteMany();
@@ -51,7 +52,6 @@ export async function cleanupDatabase() {
       return; // Success
     } catch (error) {
       lastError = error;
-      const errorMessage = (error as Error).message;
 
       if (attempt < 3) {
         // Wait before retrying with exponential backoff

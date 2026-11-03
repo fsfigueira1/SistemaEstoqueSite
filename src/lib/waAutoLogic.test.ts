@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion -- teste: dados montados à mão e resultados que o próprio teste garante */
 import { describe, it, expect } from "vitest"
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const L = require("../../electron/waAutoLogic.cjs") as typeof import("../../electron/waAutoLogic.cjs")
@@ -52,5 +53,33 @@ describe("regras do robô de resposta automática", () => {
     ])
     expect(L.nextDue(q, 1000)?.name).toBe("B")
     expect(L.nextDue(q, 50)).toBeNull()
+  })
+})
+
+describe("chamar de volta no robô", () => {
+  const MIN = 60_000
+  it("intervalo sorteado entre 12 e 25 minutos", () => {
+    expect(L.winbackGapMs(() => 0)).toBe(12 * MIN)
+    expect(L.winbackGapMs(() => 0.999)).toBeLessThan(25 * MIN)
+  })
+
+  it("só chama de volta depois do intervalo e sem resposta da fila vencendo", () => {
+    const empty = new Map()
+    expect(L.winbackDue(0, 15 * MIN, 100 * MIN, empty)).toBe(true)
+    expect(L.winbackDue(90 * MIN, 15 * MIN, 100 * MIN, empty)).toBe(false)
+    const busy = new Map([["Ana", { name: "Ana", dueAt: 101 * MIN }]])
+    expect(L.winbackDue(0, 15 * MIN, 100 * MIN, busy)).toBe(false)
+    const later = new Map([["Ana", { name: "Ana", dueAt: 110 * MIN }]])
+    expect(L.winbackDue(0, 15 * MIN, 100 * MIN, later)).toBe(true)
+  })
+
+  it("conversa para o agente: sem mídia, só as últimas 14", () => {
+    const msgs = [
+      { from: "cliente", text: "", media: true },
+      ...Array.from({ length: 20 }, (_, i) => ({ from: i % 2 ? "loja" : "cliente", text: `m${i}` })),
+    ]
+    const h = L.historyFor(msgs)
+    expect(h).toHaveLength(14)
+    expect(h[13]).toEqual({ from: "loja", text: "m19" })
   })
 })

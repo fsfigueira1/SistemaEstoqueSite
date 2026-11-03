@@ -27,6 +27,9 @@ export type AutoStatus = {
   enabled: boolean;
   inHours: boolean;
   maxPerHour: number;
+  /** chamar de volta ligado e em quantos segundos sai a próxima (null = desligado) */
+  winbackEnabled?: boolean;
+  winbackInSec?: number | null;
   busy: boolean;
   queue: Array<{ name: string; inSec: number }>;
   human: Array<{ name: string; reason: string; at: number }>;

@@ -15,28 +15,38 @@ import {
   X,
   NotebookPen,
   ClipboardList,
-  GraduationCap,
   SpellCheck,
-  Megaphone,
   MessagesSquare,
-  ClipboardCheck,
+  LogOut,
+  UserRound,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import DailyAssistant, { openDailyAssistant } from '@/components/DailyAssistant';
 import AssistantChat from '@/components/AssistantChat';
+import AgentAlerts from '@/components/AgentAlerts';
+import { canAccess } from '@/lib/access';
+import { logout, useMe } from '@/lib/useMe';
 
-// Navegação em grupos: o que se usa no balcão primeiro, gestão depois.
-const groups: Array<{ title: string; items: Array<{ name: string; href: string; icon: typeof LayoutDashboard }> }> = [
+// Navegação em grupos: o que se usa no balcão primeiro, gestão depois. Cada
+// perfil vê só o que pode abrir (src/lib/access.ts — o servidor barra o resto).
+// "Atendimento" reúne Lista escolar, Orçamentos, Novidades e Contatos como
+// guias (AtendimentoTabs); o item do menu fica aceso em qualquer uma delas.
+const groups: Array<{
+  title: string;
+  items: Array<{ name: string; href: string; icon: typeof LayoutDashboard; also?: string[] }>;
+}> = [
   {
     title: 'Balcão',
     items: [
       { name: 'Painel', href: '/dashboard', icon: LayoutDashboard },
       { name: 'PDV', href: '/pdv', icon: ShoppingCart },
       { name: 'Vendas', href: '/vendas', icon: Receipt },
-      { name: 'Lista escolar', href: '/lista-escolar', icon: GraduationCap },
-      { name: 'Atendimento', href: '/atendimento', icon: MessagesSquare },
-      { name: 'Orçamentos', href: '/orcamentos', icon: ClipboardCheck },
-      { name: 'Novidades', href: '/novidades', icon: Megaphone },
+      {
+        name: 'Atendimento',
+        href: '/atendimento',
+        icon: MessagesSquare,
+        also: ['/lista-escolar', '/orcamentos', '/novidades', '/contatos'],
+      },
     ],
   },
   {
@@ -56,6 +66,12 @@ const groups: Array<{ title: string; items: Array<{ name: string; href: string; 
 export default function Layout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const me = useMe();
+  const isOwner = me?.role === 'OWNER';
+  // menu só depois de saber o perfil (não pisca item que o balcão não pode abrir)
+  const visible = me
+    ? groups.map((g) => ({ ...g, items: g.items.filter((i) => canAccess(me.role, i.href)) })).filter((g) => g.items.length)
+    : [];
 
   const Rail = (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
@@ -76,7 +92,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <div className="mx-5 h-px bg-sidebar-border" />
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-        {groups.map((g) => (
+        {visible.map((g) => (
           <div key={g.title}>
             <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-muted/80">
               {g.title}
@@ -84,7 +100,9 @@ export default function Layout({ children }: { children: ReactNode }) {
             <div className="space-y-0.5">
               {g.items.map((item) => {
                 const Icon = item.icon;
-                const active = pathname === item.href || pathname?.startsWith(item.href + '/');
+                const active = [item.href, ...(item.also ?? [])].some(
+                  (h) => pathname === h || pathname?.startsWith(h + '/'),
+                );
                 return (
                   <Link
                     key={item.href}
@@ -113,19 +131,36 @@ export default function Layout({ children }: { children: ReactNode }) {
       </nav>
 
       <div className="space-y-2 px-3 pb-4">
-        <button
-          onClick={() => {
-            setOpen(false);
-            openDailyAssistant();
-          }}
-          className="flex w-full items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-active px-3 py-2.5 text-left transition-colors hover:border-primary/50"
-        >
-          <img src="/logo.png" alt="" className="h-8 w-8 rounded-lg bg-white object-cover" />
-          <span className="leading-tight">
-            <span className="block text-sm font-medium">Resumo do dia</span>
-            <span className="block text-[11px] text-sidebar-muted">Pergunte à assistente</span>
-          </span>
-        </button>
+        {isOwner && (
+          <button
+            onClick={() => {
+              setOpen(false);
+              openDailyAssistant();
+            }}
+            className="flex w-full items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-active px-3 py-2.5 text-left transition-colors hover:border-primary/50"
+          >
+            <img src="/logo.png" alt="" className="h-8 w-8 rounded-lg bg-white object-cover" />
+            <span className="leading-tight">
+              <span className="block text-sm font-medium">Resumo do dia</span>
+              <span className="block text-[11px] text-sidebar-muted">Pergunte à assistente</span>
+            </span>
+          </button>
+        )}
+        {me && (
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-sidebar-border px-3 py-2">
+            <span className="flex min-w-0 items-center gap-2 text-sm">
+              <UserRound className="h-4 w-4 shrink-0 text-sidebar-muted" />
+              <span className="truncate">{me.label}</span>
+            </span>
+            <button
+              type="button"
+              onClick={logout}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-sidebar-muted transition-colors hover:bg-sidebar-active hover:text-sidebar-foreground"
+            >
+              <LogOut className="h-3.5 w-3.5" /> Sair
+            </button>
+          </div>
+        )}
         <div className="flex items-center justify-between px-1">
           <ThemeToggle />
           <span className="text-[10px] text-sidebar-muted">v{process.env.NEXT_PUBLIC_APP_VERSION}</span>
@@ -163,8 +198,9 @@ export default function Layout({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1 overflow-auto">{children}</main>
       </div>
 
-      <DailyAssistant />
+      {isOwner && <DailyAssistant />}
       <AssistantChat />
+      {me && <AgentAlerts />}
     </div>
   );
 }

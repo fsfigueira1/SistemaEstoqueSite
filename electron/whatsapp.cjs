@@ -83,7 +83,7 @@ function attach(win) {
 }
 
 /** appOrigin: endereço do servidor embutido (ex.: http://localhost:4123). */
-function registerWhatsApp(appOrigin) {
+function registerWhatsApp(appOrigin, opts = {}) {
   // só a tela do próprio sistema (quadro principal) fala com o WhatsApp
   const fromApp = (e) => isAppSender(e.senderFrame ? e.senderFrame.url : "", appOrigin, Boolean(e.senderFrame && e.senderFrame === e.sender.mainFrame));
 
@@ -142,7 +142,7 @@ function registerWhatsApp(appOrigin) {
   });
 
   // resposta automática: o robô roda sempre; só age quando ligada em Configurações
-  const auto = createAutoReply({ appOrigin, ensureView, lastInputAt: () => lastUserInput });
+  const auto = createAutoReply({ appOrigin, ensureView, lastInputAt: () => lastUserInput, authCookie: opts.authCookie });
   ipcMain.handle("wa-auto-status", (e) => (fromApp(e) ? auto.snapshot() : null));
   ipcMain.handle("wa-auto-refresh", async (e) => {
     if (!fromApp(e)) return null;
