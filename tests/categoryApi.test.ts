@@ -103,8 +103,9 @@ describe('Category API Routes', () => {
     it('should return forbidden for user with insufficient role (balcão não cria categoria)', async () => {
       const { proxy } = await import('@/proxy');
       const { NextRequest } = await import('next/server');
-      const { authSecret, signToken } = await import('@/lib/authToken');
-      const cookie = `erp_auth=${await signToken(await authSecret(), 'EMPLOYEE', Date.now() + 60_000)}`;
+      const { signToken } = await import('@/lib/authToken');
+      const { sessionKey } = await import('@/lib/authStamp');
+      const cookie = `erp_auth=${await signToken(await sessionKey('EMPLOYEE'), 'EMPLOYEE', Date.now() + 60_000)}`;
       expect((await proxy(new NextRequest('http://localhost:3000/api/categories', { headers: { cookie } }))).status).toBe(200);
       expect((await proxy(new NextRequest('http://localhost:3000/api/categories', { method: 'POST', headers: { cookie } }))).status).toBe(403);
     });
@@ -329,8 +330,9 @@ describe('Category API Routes', () => {
     it('should return forbidden for user without admin role (balcão não apaga categoria)', async () => {
       const { proxy } = await import('@/proxy');
       const { NextRequest } = await import('next/server');
-      const { authSecret, signToken } = await import('@/lib/authToken');
-      const cookie = `erp_auth=${await signToken(await authSecret(), 'EMPLOYEE', Date.now() + 60_000)}`;
+      const { signToken } = await import('@/lib/authToken');
+      const { sessionKey } = await import('@/lib/authStamp');
+      const cookie = `erp_auth=${await signToken(await sessionKey('EMPLOYEE'), 'EMPLOYEE', Date.now() + 60_000)}`;
       expect((await proxy(new NextRequest('http://localhost:3000/api/categories/abc', { method: 'DELETE', headers: { cookie } }))).status).toBe(403);
     });
 

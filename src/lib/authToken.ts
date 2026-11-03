@@ -66,8 +66,15 @@ export async function signToken(secret: string, role: Role, expiresAt: number): 
   return `${body}.${await hmac(secret, body)}`
 }
 
-/** Crachá válido e dentro da validade → perfil; senão null. */
-export async function verifyToken(secret: string, token: string | undefined | null, now = Date.now()): Promise<{ role: Role; expiresAt: number } | null> {
+/**
+ * Crachá válido e dentro da validade → perfil; senão null. `secret` pode ser
+ * uma chave por perfil (src/lib/authStamp.ts: muda quando a senha muda).
+ */
+export async function verifyToken(
+  secret: string | Record<Role, string>,
+  token: string | undefined | null,
+  now = Date.now(),
+): Promise<{ role: Role; expiresAt: number } | null> {
   if (!token) return null
   const parts = token.split(".")
   if (parts.length !== 4 || parts[0] !== "v1") return null
@@ -75,6 +82,7 @@ export async function verifyToken(secret: string, token: string | undefined | nu
   if (!ROLES.includes(role as Role)) return null
   const expiresAt = Number(exp)
   if (!Number.isFinite(expiresAt) || expiresAt <= now) return null
-  if (!same(sig, await hmac(secret, `v1.${role}.${exp}`))) return null
+  const key = typeof secret === "string" ? secret : secret[role as Role]
+  if (!same(sig, await hmac(key, `v1.${role}.${exp}`))) return null
   return { role: role as Role, expiresAt }
 }
