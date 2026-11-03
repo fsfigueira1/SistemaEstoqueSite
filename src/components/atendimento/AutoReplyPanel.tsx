@@ -1,6 +1,6 @@
 'use client';
 
-// Resposta automática do WhatsApp no Atendimento: liga/desliga, a fila (com o
+// Agente de IA do WhatsApp no Atendimento: liga/desliga, a fila (com o
 // tempo que falta para cada resposta e "Cancelar"), o que precisa do atendente
 // e as últimas respostas enviadas. Quem responde é o robô do aplicativo
 // (electron/whatsappAuto.cjs); a regra fica em src/lib/autoReplyPolicy.ts.
@@ -57,7 +57,7 @@ export default function AutoReplyPanel() {
         <div className="flex items-center gap-2">
           <Bot className="h-5 w-5 text-primary" />
           <div>
-            <h2 className="text-base font-semibold text-foreground">Resposta automática</h2>
+            <h2 className="text-base font-semibold text-foreground">Agente de IA no WhatsApp</h2>
             <p className={`text-xs ${st.enabled && st.inHours ? 'text-success' : 'text-muted-foreground'}`}>{situacao}</p>
           </div>
         </div>
@@ -73,8 +73,11 @@ export default function AutoReplyPanel() {
       {err && <p className="text-xs font-medium text-danger">{err}</p>}
       {st.enabled && (
         <p className="text-xs text-muted-foreground">
-          Responde orçamentos e perguntas simples 4 a 7 minutos depois da mensagem (no máximo {st.maxPerHour} por hora). Se você abrir a
-          conversa antes, ela sai da fila.
+          Responde sozinho 4 a 7 minutos depois da mensagem: busca no estoque, monta orçamento e tira dúvidas (no máximo {st.maxPerHour} por
+          hora). Troca, defeito, reclamação e cobrança passam para você. Se você abrir a conversa antes, ela sai da fila.
+          {st.winbackEnabled && st.winbackInSec != null && st.inHours && (
+            <> Próximo &quot;chamar de volta&quot; em até {mmss(st.winbackInSec)}.</>
+          )}
         </p>
       )}
       {st.lastError && st.enabled && <p className="text-xs text-warning-foreground">Última falha: {st.lastError}</p>}

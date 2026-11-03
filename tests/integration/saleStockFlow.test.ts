@@ -1,8 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion -- teste: dados montados à mão e resultados que o próprio teste garante */
 import { describe, beforeEach, afterEach, it, expect } from 'vitest';
 import { SaleService } from '@/services/saleService';
 import { StockService } from '@/services/stockService';
-import { ProductService } from '@/services/productService';
-import { CustomerService } from '@/services/customerService';
 import { CashSessionService } from '@/services/cashSessionService';
 import { CashRegisterService } from '@/services/cashRegisterService';
 import { prisma } from '../setup';
@@ -74,7 +73,7 @@ describe('Sale → Stock Integration Flow', () => {
       });
 
       // Verify initial stock
-      let initialStock = await StockService.getStock(product.id);
+      const initialStock = await StockService.getStock(product.id);
       expect(initialStock.currentStock).toBe(10);
 
       // Create sale data
@@ -101,10 +100,13 @@ describe('Sale → Stock Integration Flow', () => {
 
       // 2. Update stock based on sale (subtract quantity)
       for (const item of saleData.items) {
-        const stockUpdate = await StockService.removeStock({
+        // saída manual: desde 11/2026 toda saída leva motivo + explicação
+        await StockService.removeStock({
           productId: item.productId,
           quantity: item.quantity,
-          performedById: adminUser.id
+          performedById: adminUser.id,
+          reason: 'outro',
+          notes: 'baixa da venda no teste de integração'
         });
         }
 
@@ -152,7 +154,7 @@ describe('Sale → Stock Integration Flow', () => {
       });
 
       // Verify initial stock
-      let initialStock = await StockService.getStock(product.id);
+      const initialStock = await StockService.getStock(product.id);
       expect(initialStock.currentStock).toBe(3);
 
       // Create sale data requesting more than available

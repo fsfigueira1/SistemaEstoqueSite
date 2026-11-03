@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { ProductService } from "@/services/productService"
-import { friendlyError } from "@/lib/friendlyError"
+import { apiFailure } from "@/lib/apiResponse"
 
 
 // GET /api/products/barcode/[code] - Get product by barcode
@@ -31,5 +31,5 @@ export async function GET(
       success: true,
       data: product
     })
-  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
+  } catch (error) { return apiFailure(error); }
 }

@@ -1,4 +1,4 @@
-import { friendlyError } from "@/lib/friendlyError"
+import { apiFailure } from "@/lib/apiResponse"
 import { NextResponse } from "next/server"
 import { CategoryService } from "@/services/categoryService"
 
@@ -28,7 +28,7 @@ export async function GET(
       data: category
     })
   } catch (error) {
-    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
+    return apiFailure(error)
   }
 }
 
@@ -46,7 +46,7 @@ export async function PUT(
       data: category
     })
   } catch (error) {
-    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
+    return apiFailure(error)
   }
 }
 
@@ -62,6 +62,6 @@ export async function DELETE(
       data: { deleted: true }
     })
   } catch (error) {
-    return NextResponse.json({ error: friendlyError(error).message }, { status: 500 })
+    return apiFailure(error)
   }
 }

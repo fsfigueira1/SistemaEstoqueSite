@@ -22,6 +22,7 @@ const http = require("node:http");
 const { spawn, spawnSync } = require("node:child_process");
 const { autoUpdater } = require("electron-updater");
 const { registerWhatsApp } = require("./whatsapp.cjs");
+const { signToken, newSecret } = require("./authToken.cjs");
 
 app.disableHardwareAcceleration();
 process.env.ELECTRON_RUNNING = "true";
@@ -129,6 +130,20 @@ function backupDir() {
   return readConfig().BACKUP_DIR || path.join(app.getPath("documents"), "Lacolaria Backups");
 }
 
+// Segredo do login (assina o crachá de quem entra e o do robô do WhatsApp).
+// Gerado uma vez e guardado na configuração deste PC; nunca vai para a tela.
+function authSecret() {
+  const cfg = readConfig();
+  if (typeof cfg.AUTH_SECRET === "string" && cfg.AUTH_SECRET.length >= 32) return cfg.AUTH_SECRET;
+  cfg.AUTH_SECRET = newSecret();
+  try {
+    writeConfig(cfg);
+  } catch (e) {
+    log("[main] não consegui guardar o segredo do login:", e);
+  }
+  return cfg.AUTH_SECRET;
+}
+
 function getEnvForServer() {
   const cfg = readConfig();
   return {
@@ -139,6 +154,7 @@ function getEnvForServer() {
     DATABASE_URL: cfg.DATABASE_URL || process.env.DATABASE_URL || "",
     OWNER_PASSWORD: cfg.OWNER_PASSWORD || process.env.OWNER_PASSWORD || "owner123",
     EMPLOYEE_PASSWORD: cfg.EMPLOYEE_PASSWORD || process.env.EMPLOYEE_PASSWORD || "emp123",
+    AUTH_SECRET: authSecret(),
     LACOLARIA_BACKUP_DIR: backupDir(),
   };
 }
@@ -161,7 +177,7 @@ function startServer() {
       cwd: path.join(__dirname, ".."),
       stdio: "inherit",
       shell: process.platform === "win32",
-      env: { ...process.env, PORT: String(PORT), LACOLARIA_BACKUP_DIR: backupDir() },
+      env: { ...process.env, PORT: String(PORT), AUTH_SECRET: authSecret(), LACOLARIA_BACKUP_DIR: backupDir() },
     });
   } else {
     const entry = serverEntry();
@@ -707,7 +723,9 @@ app.on("before-quit", () => {
 });
 
 // ---------------- IPC ----------------
-registerWhatsApp(BASE_URL); // WhatsApp Web dentro do Atendimento (electron/whatsapp.cjs); só aceita pedidos do próprio sistema
+// WhatsApp Web dentro do Atendimento (electron/whatsapp.cjs); só aceita pedidos do próprio sistema.
+// O robô entra no servidor com crachá próprio (perfil ROBOT, vale 10 min, renovado a cada pedido).
+registerWhatsApp(BASE_URL, { authCookie: () => `erp_auth=${signToken(authSecret(), "ROBOT", Date.now() + 10 * 60_000)}` });
 ipcMain.handle("ping", () => "pong");
 ipcMain.handle("get-app-version", () => app.getVersion());
 ipcMain.on("set-database-url", () => {}); // registrado dinamicamente acima

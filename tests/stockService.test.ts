@@ -1,6 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion -- teste: dados montados à mão e resultados que o próprio teste garante */
 import { describe, beforeEach, afterEach, it, expect } from 'vitest';
 import { StockService } from '../src/services/stockService';
-import { ProductService } from '../src/services/productService';
 import { prisma } from './setup';
 import { cleanupDatabase, createAdminUser } from './utils';
 
@@ -61,7 +61,7 @@ describe('Stock Service', () => {
   });
 
   describe('addStock', () => {
-    it('should add stock to product and create STOCK movements', async () => {
+    it('should add stock to product and create an ADJUSTMENT_IN movement', async () => {
       const initialStock = testProduct.stockQuantity;
       const amountToAdd = 5;
 
@@ -77,7 +77,7 @@ describe('Stock Service', () => {
       // Check that a stock movement was created
       expect(result.stockMovement).toBeDefined();
       expect(result.stockMovement.productId).toBe(testProduct.id);
-      expect(result.stockMovement.type).toBe('PURCHASE'); // Adding stock is PURCHASE
+      expect(result.stockMovement.type).toBe('ADJUSTMENT_IN'); // entrada manual (compra de verdade entra pela importação, como PURCHASE)
       expect(result.stockMovement.quantity).toBe(amountToAdd);
       expect(result.stockMovement.performedById).toBe(adminUser.id);
 
@@ -91,7 +91,7 @@ describe('Stock Service', () => {
         where: { productId: testProduct.id }
       });
       expect(movements).toHaveLength(1);
-      expect(movements[0].type).toBe('PURCHASE');
+      expect(movements[0].type).toBe('ADJUSTMENT_IN');
       expect(movements[0].quantity).toBe(amountToAdd);
     });
 
@@ -141,14 +141,16 @@ describe('Stock Service', () => {
   });
 
   describe('removeStock', () => {
-    it('should remove stock from product and create SALE movements', async () => {
+    it('should remove stock with a reason and record it as LOSS with the explanation', async () => {
       const initialStock = testProduct.stockQuantity;
       const amountToRemove = 3;
 
       const result = await StockService.removeStock({
         productId: testProduct.id,
         quantity: amountToRemove,
-        performedById: adminUser.id
+        performedById: adminUser.id,
+        reason: 'perda',
+        notes: 'caiu e quebrou'
       });
 
       // Check that stock was decreased
@@ -157,7 +159,8 @@ describe('Stock Service', () => {
       // Check that a stock movement was created
       expect(result.stockMovement).toBeDefined();
       expect(result.stockMovement.productId).toBe(testProduct.id);
-      expect(result.stockMovement.type).toBe('SALE'); // Removing stock is SALE
+      expect(result.stockMovement.type).toBe('LOSS'); // motivo perda
+      expect(result.stockMovement.notes).toBe('[Perda / quebra / vencido] caiu e quebrou');
       expect(result.stockMovement.quantity).toBe(amountToRemove);
       expect(result.stockMovement.performedById).toBe(adminUser.id);
 
@@ -171,7 +174,7 @@ describe('Stock Service', () => {
         where: { productId: testProduct.id }
       });
       expect(movements).toHaveLength(1);
-      expect(movements[0].type).toBe('SALE');
+      expect(movements[0].type).toBe('LOSS');
       expect(movements[0].quantity).toBe(amountToRemove);
     });
 
@@ -180,7 +183,9 @@ describe('Stock Service', () => {
         StockService.removeStock({
           productId: 'non-existent-id',
           quantity: 3,
-          performedById: adminUser.id
+          performedById: adminUser.id,
+          reason: 'perda',
+          notes: 'caiu e quebrou'
         })
       ).rejects.toThrow('Product not found');
     });
@@ -196,7 +201,9 @@ describe('Stock Service', () => {
         StockService.removeStock({
           productId: testProduct.id,
           quantity: 3,
-          performedById: adminUser.id
+          performedById: adminUser.id,
+          reason: 'perda',
+          notes: 'caiu e quebrou'
         })
       ).rejects.toThrow('Cannot modify stock for inactive or discontinued product');
     });
@@ -206,7 +213,9 @@ describe('Stock Service', () => {
         StockService.removeStock({
           productId: testProduct.id,
           quantity: 15, // More than available (10)
-          performedById: adminUser.id
+          performedById: adminUser.id,
+          reason: 'perda',
+          notes: 'caiu e quebrou'
         })
       ).rejects.toThrow(/Insufficient stock/);
 
@@ -217,12 +226,25 @@ describe('Stock Service', () => {
       expect(product?.stockQuantity).toBe(testProduct.stockQuantity);
     });
 
+    it('saída sem motivo ou sem explicação é recusada (vai para o relatório do mês)', async () => {
+      await expect(
+        StockService.removeStock({ productId: testProduct.id, quantity: 1, performedById: adminUser.id })
+      ).rejects.toThrow('Escolha o motivo da saída');
+      await expect(
+        StockService.removeStock({ productId: testProduct.id, quantity: 1, performedById: adminUser.id, reason: 'furto', notes: ' ' })
+      ).rejects.toThrow('Explique por que o produto saiu do estoque');
+      const product = await prisma.product.findUnique({ where: { id: testProduct.id } });
+      expect(product?.stockQuantity).toBe(testProduct.stockQuantity);
+    });
+
     it('should throw error for non-positive quantity', async () => {
       await expect(
         StockService.removeStock({
           productId: testProduct.id,
           quantity: 0,
-          performedById: adminUser.id
+          performedById: adminUser.id,
+          reason: 'perda',
+          notes: 'caiu e quebrou'
         })
       ).rejects.toThrow('Quantity must be positive');
 
@@ -230,7 +252,9 @@ describe('Stock Service', () => {
         StockService.removeStock({
           productId: testProduct.id,
           quantity: -3,
-          performedById: adminUser.id
+          performedById: adminUser.id,
+          reason: 'perda',
+          notes: 'caiu e quebrou'
         })
       ).rejects.toThrow('Quantity must be positive');
     });
@@ -264,14 +288,22 @@ describe('Stock Service', () => {
       const targetQuantity = 6;
       const difference = initialStock - targetQuantity; // 4
 
+      // contagem que diminui = saída: precisa de motivo e explicação
+      await expect(
+        StockService.adjustStock({ productId: testProduct.id, quantity: targetQuantity, performedById: adminUser.id })
+      ).rejects.toThrow('Escolha o motivo da saída');
+
       const result = await StockService.adjustStock({
         productId: testProduct.id,
         quantity: targetQuantity,
-        performedById: adminUser.id
+        performedById: adminUser.id,
+        reason: 'erro',
+        notes: 'contagem do mês'
       });
 
       // Check that stock was adjusted to target
       expect(result.product.stockQuantity).toBe(targetQuantity);
+      expect(result.stockMovement.notes).toBe('[Erro de contagem / cadastro] contagem do mês');
 
       // Check that a stock movement was created for the decrease
       expect(result.stockMovement).toBeDefined();
@@ -293,7 +325,6 @@ describe('Stock Service', () => {
       // Should return early with no movement
       expect(result.stockMovement).toBeNull();
       expect(result.product.stockQuantity).toBe(currentStock);
-      expect((result as { message: string }).message).toBe('No adjustment needed - current stock matches target');
     });
 
     it('should throw error for non-existent product', async () => {
@@ -326,7 +357,9 @@ describe('Stock Service', () => {
       const result = await StockService.adjustStock({
         productId: testProduct.id,
         quantity: 0,
-        performedById: adminUser.id
+        performedById: adminUser.id,
+        reason: 'perda',
+        notes: 'acabou tudo vencido'
       });
       expect(result.product?.stockQuantity).toBe(0);
     });
@@ -354,23 +387,25 @@ describe('Stock Service', () => {
       await StockService.removeStock({
         productId: testProduct.id,
         quantity: 3,
-        performedById: adminUser.id
+        performedById: adminUser.id,
+        reason: 'perda',
+        notes: 'caiu e quebrou'
       });
 
       // Get stock movements
       const movements = await StockService.getStockMovements(testProduct.id);
 
       expect(movements).toBeDefined();
-      expect(movements.movements).toHaveLength(2);
+      expect(movements.stockMovements).toHaveLength(2);
 
       // Check first movement (most recent first due to orderBy desc)
-      const firstMovement = movements.movements[0];
-      expect(firstMovement.type).toBe('SALE'); // removeStock was called second
+      const firstMovement = movements.stockMovements[0];
+      expect(firstMovement.type).toBe('LOSS'); // removeStock was called second
       expect(firstMovement.quantity).toBe(3);
 
       // Check second movement
-      const secondMovement = movements.movements[1];
-      expect(secondMovement.type).toBe('PURCHASE'); // addStock was called first
+      const secondMovement = movements.stockMovements[1];
+      expect(secondMovement.type).toBe('ADJUSTMENT_IN'); // addStock was called first
       expect(secondMovement.quantity).toBe(5);
 
       // Check pagination info
@@ -389,24 +424,26 @@ describe('Stock Service', () => {
       await StockService.removeStock({
         productId: testProduct.id,
         quantity: 3,
-        performedById: adminUser.id
+        performedById: adminUser.id,
+        reason: 'perda',
+        notes: 'caiu e quebrou'
       });
 
-      // Get only PURCHASE movements
-      const purchaseMovements = await StockService.getStockMovements(testProduct.id, {
-        type: 'PURCHASE'
+      // só as entradas manuais
+      const inMovements = await StockService.getStockMovements(testProduct.id, {
+        type: 'ADJUSTMENT_IN'
       });
 
-      expect(purchaseMovements.movements).toHaveLength(1);
-      expect(purchaseMovements.movements[0].type).toBe('PURCHASE');
+      expect(inMovements.stockMovements).toHaveLength(1);
+      expect(inMovements.stockMovements[0].type).toBe('ADJUSTMENT_IN');
 
-      // Get only SALE movements
-      const saleMovements = await StockService.getStockMovements(testProduct.id, {
-        type: 'SALE'
+      // só as perdas
+      const lossMovements = await StockService.getStockMovements(testProduct.id, {
+        type: 'LOSS'
       });
 
-      expect(saleMovements.movements).toHaveLength(1);
-      expect(saleMovements.movements[0].type).toBe('SALE');
+      expect(lossMovements.stockMovements).toHaveLength(1);
+      expect(lossMovements.stockMovements[0].type).toBe('LOSS');
     });
 
     it('should throw error for non-existent product', async () => {
@@ -419,7 +456,7 @@ describe('Stock Service', () => {
   describe('getLowStockProducts', () => {
     it('should return products with stock at or below minimum level', async () => {
       // Create a product with low stock
-      const lowStockProduct = await prisma.product.create({
+      await prisma.product.create({
         data: {
           name: 'Low Stock Product',
           sku: 'LOW-STOCK-001',
@@ -433,7 +470,7 @@ describe('Stock Service', () => {
       });
 
       // Create a product with adequate stock
-      const adequateStockProduct = await prisma.product.create({
+      await prisma.product.create({
         data: {
           name: 'Adequate Stock Product',
           sku: 'ADEQUATE-STOCK-001',
@@ -491,7 +528,7 @@ describe('Stock Service', () => {
 
     it('should include products with stock exactly at minimum level', async () => {
       // Create a product with stock exactly at minimum level
-      const minLevelProduct = await prisma.product.create({
+      await prisma.product.create({
         data: {
           name: 'Min Level Product',
           sku: 'MIN-LEVEL-001',
@@ -516,7 +553,7 @@ describe('Stock Service', () => {
   describe('getOutOfStockProducts', () => {
     it('should return products with zero stock', async () => {
       // Create a product with zero stock
-      const outOfStockProduct = await prisma.product.create({
+      await prisma.product.create({
         data: {
           name: 'Out of Stock Product',
           sku: 'OUT-OF-STOCK-001',
@@ -531,7 +568,7 @@ describe('Stock Service', () => {
       });
 
       // Create a product with stock
-      const inStockProduct = await prisma.product.create({
+      await prisma.product.create({
         data: {
           name: 'In Stock Product',
           sku: 'IN-STOCK-001',

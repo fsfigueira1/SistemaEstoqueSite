@@ -4,10 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Layout, { PageHeader } from '@/components/Layout';
 import {
-  DollarSign,
   ShoppingCart,
-  Receipt,
-  TrendingUp,
   Package,
   AlertTriangle,
   XCircle,
@@ -18,6 +15,7 @@ import {
 } from 'lucide-react';
 import { errorText } from '@/lib/friendlyError';
 import { LabelReminder } from '@/components/labels/LabelReminder';
+import DashboardCharts from '@/components/dashboard/DashboardCharts';
 
 type Stats = {
   totalProducts: number;
@@ -57,19 +55,35 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // tempo real (dono supervisionando): recarrega a cada 30 s, mantendo a tela
+  // enquanto busca; erro numa atualização não apaga o que já está aparecendo
+  const [tick, setTick] = useState(0);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   useEffect(() => {
+    let alive = true;
     (async () => {
       try {
         const res = await fetch('/api/dashboard/stats');
         const data = await res.json();
-        if (data.success) setStats(data.data);
-        else setError(errorText(data, 'Falha ao carregar indicadores'));
+        if (!alive) return;
+        if (data.success) {
+          setStats(data.data);
+          setError(null);
+          setUpdatedAt(new Date());
+        } else setError((e) => e ?? errorText(data, 'Falha ao carregar indicadores'));
       } catch {
-        setError('Sem conexão');
+        if (alive) setError((e) => e ?? 'Sem conexão');
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
+    return () => {
+      alive = false;
+    };
+  }, [tick]);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
   }, []);
 
   return (
@@ -79,12 +93,21 @@ export default function DashboardPage() {
           eyebrow={new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
           title="Painel"
           actions={
+            <>
+            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground" title="O painel se atualiza sozinho a cada 30 segundos">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60 motion-reduce:hidden" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+              </span>
+              Ao vivo{updatedAt ? ` · ${updatedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
+            </span>
             <Link
               href="/relatorios"
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:border-primary/40"
             >
               <NotebookPen className="h-4 w-4 text-primary" /> Relatório do dia
             </Link>
+            </>
           }
         />
 
@@ -99,46 +122,16 @@ export default function DashboardPage() {
           <div className="rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger">{error}</div>
         ) : stats ? (
           <>
-            {/* faixa do dia */}
-            <div className="overflow-hidden rounded-2xl border-2 border-primary/25 bg-accent-soft/50 shadow-sm">
-              <div className="grid divide-y divide-primary/15 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-                <div className="p-5">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-accent-soft-foreground">
-                    <DollarSign className="h-4 w-4" />
-                    Faturamento hoje
-                  </div>
-                  <div className="mt-1 font-heading text-3xl font-bold tabular-nums text-primary">
-                    {brl(stats.todayRevenue)}
-                  </div>
-                </div>
-                <div className="p-5">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <ShoppingCart className="h-4 w-4" />
-                    Vendas hoje
-                  </div>
-                  <div className="mt-1 font-heading text-3xl font-bold tabular-nums text-foreground">
-                    {stats.todaySalesCount}
-                  </div>
-                </div>
-                <div className="p-5">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <Receipt className="h-4 w-4" />
-                    Ticket médio
-                  </div>
-                  <div className="mt-1 font-heading text-3xl font-bold tabular-nums text-foreground">
-                    {brl(stats.todayAvgTicket)}
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* vendas: números com comparação e gráficos */}
+            <DashboardCharts refreshKey={tick} />
 
-            {/* estoque + mês */}
+            {/* estoque */}
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <Kpi
-                icon={<TrendingUp />}
-                label="Faturamento do mês"
-                value={brl(stats.monthRevenue)}
-                sub={`${stats.monthSalesCount} venda(s)`}
+                icon={<Boxes />}
+                label="Valor em estoque"
+                value={brl(stats.stockValue)}
+                sub="a preço de custo"
               />
               <Kpi
                 icon={<Package />}
@@ -162,7 +155,7 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               {/* vendas recentes */}
-              <div className="rounded-xl border border-border bg-card shadow-sm lg:col-span-2">
+              <div className="rounded-2xl border border-border bg-card shadow-sm lg:col-span-2">
                 <div className="flex items-center justify-between border-b border-border px-5 py-3">
                   <h2 className="text-lg text-foreground">Vendas recentes</h2>
                   <Link href="/vendas" className="flex items-center gap-1 text-sm text-primary hover:underline">
@@ -200,7 +193,7 @@ export default function DashboardPage() {
               </div>
 
               {/* alerta de estoque */}
-              <div className="rounded-xl border border-border bg-card shadow-sm">
+              <div className="rounded-2xl border border-border bg-card shadow-sm">
                 <div className="flex items-center justify-between border-b border-border px-5 py-3">
                   <h2 className="text-lg text-foreground">Repor estoque</h2>
                   <Link href="/compras" className="flex items-center gap-1 text-sm text-primary hover:underline">
@@ -212,16 +205,25 @@ export default function DashboardPage() {
                 ) : (
                   <ul className="divide-y divide-border">
                     {stats.lowStockList.map((p) => (
-                      <li key={p.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                        <span className="truncate pr-2 text-foreground">{p.nome}</span>
-                        <span
-                          className={`shrink-0 font-semibold ${
-                            p.estoque === 0 ? 'text-danger' : 'text-amber-600'
-                          }`}
-                        >
-                          {p.estoque}
-                          <span className="text-xs font-normal text-muted-foreground"> / {p.minimo}</span>
-                        </span>
+                      <li key={p.id} className="px-5 py-3 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="truncate pr-2 text-foreground">{p.nome}</span>
+                          <span
+                            className={`shrink-0 font-semibold tabular-nums ${
+                              p.estoque === 0 ? 'text-danger' : 'text-amber-600'
+                            }`}
+                          >
+                            {p.estoque}
+                            <span className="text-xs font-normal text-muted-foreground"> / mín. {p.minimo}</span>
+                          </span>
+                        </div>
+                        {/* quanto do mínimo ainda tem na prateleira */}
+                        <div className="mt-1.5 h-1.5 rounded-full bg-muted" aria-hidden>
+                          <div
+                            className={`h-1.5 rounded-full ${p.estoque === 0 ? 'bg-danger' : 'bg-amber-500'}`}
+                            style={{ width: `${p.minimo > 0 ? Math.max(3, Math.min(100, (p.estoque / p.minimo) * 100)) : 0}%` }}
+                          />
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -259,7 +261,7 @@ function Kpi({
 }) {
   const valueCls = tone === 'danger' ? 'text-danger' : tone === 'warn' ? 'text-amber-600' : 'text-foreground';
   return (
-    <div className={`rounded-xl border p-4 ${accent ? 'border-primary/30 bg-accent-soft' : 'border-border bg-card'}`}>
+    <div className={`rounded-2xl border p-4 shadow-sm ${accent ? 'border-primary/30 bg-accent-soft' : 'border-border bg-card'}`}>
       <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <span className="[&>svg]:h-4 [&>svg]:w-4">{icon}</span>
         {label}
@@ -284,7 +286,7 @@ function QuickLink({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-xl border border-border bg-card shadow-sm p-4 transition-colors hover:border-primary/40 hover:bg-accent-soft"
+      className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-accent-soft"
     >
       <span className="rounded-lg bg-accent-soft p-2 text-primary [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
       <span>

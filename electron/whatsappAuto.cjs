@@ -7,6 +7,10 @@
 // conversa antes; espera o atendente parar de mexer no WhatsApp; respeita o
 // limite por hora e o horário configurado. O que não for orçamento ou
 // pergunta simples vai para a lista "Precisa de você" do Atendimento.
+// Quem decide e escreve é o agente Nemotron (src/services/agentService.ts),
+// com a conversa inteira. Com "chamar de volta" ligado, nos intervalos (12 a
+// 25 min entre uma e outra, sem resposta na fila) abre a conversa de um
+// cliente parado e manda a mensagem que o agente escreveu para ele.
 /* global require, module, setInterval, AbortSignal */
 "use strict";
 
@@ -24,7 +28,7 @@ const STATUS_EVERY = 60_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const now = () => Date.now();
 
-function createAutoReply({ appOrigin, ensureView, lastInputAt }) {
+function createAutoReply({ appOrigin, ensureView, lastInputAt, authCookie }) {
   const state = {
     enabled: false,
     inHours: false,
@@ -34,6 +38,10 @@ function createAutoReply({ appOrigin, ensureView, lastInputAt }) {
     human: [], // { name, reason, at }
     sent: [], // { name, at, kind }
     sentTimes: [],
+    winbackEnabled: false,
+    winbackLastAt: 0,
+    winbackGap: L.winbackGapMs(),
+    winbackBusyUntil: 0,
     lastSentByChat: new Map(),
     handled: new Map(), // nome -> último texto do cliente já tratado
     cancelled: new Set(), // o atendente cancelou: fica de fora até a conversa ser lida
@@ -45,8 +53,8 @@ function createAutoReply({ appOrigin, ensureView, lastInputAt }) {
   const api = async (path, body, timeoutMs = 130_000) => {
     const r = await fetch(appOrigin + path, {
       method: body ? "POST" : "GET",
-      // o servidor só aceita pedidos do próprio PC; o cookie é o mesmo da tela
-      headers: { "content-type": "application/json", cookie: "erp_auth=auto:1" },
+      // crachá do robô (perfil ROBOT, assinado pelo aplicativo) — só abre as rotas dele
+      headers: { "content-type": "application/json", cookie: authCookie ? authCookie() : "" },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -59,6 +67,11 @@ function createAutoReply({ appOrigin, ensureView, lastInputAt }) {
   const log = (list, item, max) => {
     list.unshift(item);
     list.length = Math.min(list.length, max);
+  };
+  /** Passou para a loja sem chegar na IA: lista local + aviso da assistente (todas as telas). */
+  const handoff = (name, phone, reason) => {
+    log(state.human, { name, reason, at: now() }, 30);
+    api("/api/agent/handoff", { name, phone: phone || "", reason }, 15_000).catch(() => {});
   };
   const notify = (title, body) => {
     try {
@@ -75,6 +88,7 @@ function createAutoReply({ appOrigin, ensureView, lastInputAt }) {
       state.enabled = s.enabled;
       state.inHours = s.inHours;
       state.maxPerHour = s.maxPerHour;
+      state.winbackEnabled = Boolean(s.winbackEnabled);
       state.statusAt = now();
     } catch (e) {
       state.lastError = `Sem resposta do sistema: ${e.message}`;
@@ -94,13 +108,13 @@ function createAutoReply({ appOrigin, ensureView, lastInputAt }) {
     const same = chat.name ? chat.name === item.name : digits.length >= 10 && chat.phone.endsWith(digits.slice(-10));
     if (!same) return;
     if (chat.group) {
-      log(state.human, { name: item.name, reason: "conversa em grupo", at: now() }, 30);
+      handoff(item.name, chat.phone, "conversa em grupo");
       return;
     }
     const last = chat.messages[chat.messages.length - 1];
     if (!last || last.from !== "cliente") return; // alguém da loja já respondeu
     if (dom.newMedia(chat.messages, item.unread || 1)) {
-      log(state.human, { name: item.name, reason: "mandou foto, áudio ou figurinha — veja a conversa", at: now() }, 30);
+      handoff(item.name, chat.phone, "mandou foto, áudio ou figurinha — veja a conversa");
       notify("Atendimento: precisa de você", `${item.name} mandou foto ou áudio`);
       return;
     }
@@ -108,10 +122,11 @@ function createAutoReply({ appOrigin, ensureView, lastInputAt }) {
     if (!turn.trim() || state.handled.get(item.name) === turn) return;
     state.handled.set(item.name, turn);
     if (!L.rateOk(state.sentTimes, now(), state.maxPerHour)) {
-      log(state.human, { name: item.name, reason: `limite de ${state.maxPerHour} respostas por hora`, at: now() }, 30);
+      handoff(item.name, chat.phone, `limite de ${state.maxPerHour} respostas por hora`);
       return;
     }
-    const d = await api("/api/copilot/auto", { name: chat.name, phone: chat.phone, text: turn });
+    const d = await api("/api/copilot/auto", { name: chat.name, phone: chat.phone, text: turn, history: L.historyFor(chat.messages) });
+    const mark = (status) => (d.eventId ? api(`/api/agent/events/${d.eventId}`, { status }, 15_000).catch(() => {}) : null);
     if (d.action === "human") {
       log(state.human, { name: item.name, reason: d.reason, at: now() }, 30);
       notify("Atendimento: precisa de você", `${item.name}: ${d.reason}`);
@@ -121,14 +136,56 @@ function createAutoReply({ appOrigin, ensureView, lastInputAt }) {
     // antes de enviar: a conversa aberta ainda é a mesma e ninguém respondeu
     const again = await run(dom.readOpenChat);
     const lastAgain = again && again.ok ? again.messages[again.messages.length - 1] : null;
-    if (!again || !again.ok || !dom.sameChat(again, chat) || !lastAgain || lastAgain.from !== "cliente") return;
+    if (!again || !again.ok || !dom.sameChat(again, chat) || !lastAgain || lastAgain.from !== "cliente") {
+      await mark("cancelada");
+      return;
+    }
     await sleep(1500 + Math.random() * 2500); // "digitando"
-    if (!(await run(dom.insertIntoCompose, d.reply))) throw new Error("não achei a caixa de mensagem");
-    await sleep(1200);
-    if (!(await run(dom.sendCompose))) throw new Error("não achei o botão Enviar");
+    if (!(await run(dom.insertIntoCompose, d.reply)) || (await sleep(1200), !(await run(dom.sendCompose)))) {
+      await mark("falhou");
+      throw new Error("não achei a caixa de mensagem ou o botão Enviar");
+    }
+    await mark("enviada");
     state.sentTimes.push(now());
     state.lastSentByChat.set(item.name, now());
     log(state.sent, { name: item.name, at: now(), kind: d.intent === "other" ? "pergunta" : d.intent === "product" ? "produto" : "orçamento" }, 50);
+  }
+
+  /** Abre a conversa pelo número (recarrega o WhatsApp) e espera a caixa de mensagem. */
+  async function openByPhone(phone) {
+    ensureView().webContents.loadURL(`https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}`);
+    const tail = phone.slice(-10);
+    for (let i = 0; i < 45; i++) {
+      await sleep(2000);
+      const chat = await run(dom.readOpenChat).catch(() => null);
+      if (chat && chat.ok && !chat.group && (!chat.phone || chat.phone.endsWith(tail))) return chat;
+    }
+    return null;
+  }
+
+  /** Chamar de volta: pede ao sistema a próxima mensagem e envia. */
+  async function winback() {
+    state.winbackLastAt = now();
+    state.winbackGap = L.winbackGapMs();
+    const next = await api("/api/agent/winback/next", {});
+    if (!next) return;
+    const mark = (status) => api(`/api/agent/events/${next.eventId}`, { status }, 15_000).catch(() => {});
+    if (!L.userIdle(lastInputAt(), now())) return mark("cancelada");
+    const chat = await openByPhone(next.phone);
+    if (!chat) {
+      handoff(next.name, next.phone, "chamar de volta: não consegui abrir a conversa (número sem WhatsApp?)");
+      return mark("falhou");
+    }
+    // o cliente mandou mensagem e ninguém respondeu: não é hora de "chamar de volta"
+    const last = chat.messages[chat.messages.length - 1];
+    if (last && last.from === "cliente") return mark("cancelada");
+    await sleep(2000 + Math.random() * 3000);
+    if (!(await run(dom.insertIntoCompose, next.text)) || (await sleep(1200), !(await run(dom.sendCompose)))) {
+      await mark("falhou");
+      throw new Error("chamar de volta: não achei a caixa de mensagem");
+    }
+    await mark("enviada");
+    log(state.sent, { name: next.name, at: now(), kind: "chamar de volta" }, 50);
   }
 
   async function tick() {
@@ -153,7 +210,10 @@ function createAutoReply({ appOrigin, ensureView, lastInputAt }) {
       // já olhou e nada mudou (ex.: reação, ou o WhatsApp não marcou como lida): não reabre
       for (const q of [...state.queue.values()]) if (state.seen.get(q.name) === q.unread) state.queue.delete(q.name);
       const item = L.nextDue(state.queue, now());
-      if (!item) return;
+      if (!item) {
+        if (state.winbackEnabled && L.userIdle(lastInputAt(), now()) && L.winbackDue(state.winbackLastAt, state.winbackGap, now(), state.queue)) await winback();
+        return;
+      }
       if (!L.userIdle(lastInputAt(), now())) return; // tenta de novo na próxima volta
       if (!L.chatCooldownOk(state.lastSentByChat.get(item.name), now())) {
         state.queue.delete(item.name);
@@ -176,6 +236,8 @@ function createAutoReply({ appOrigin, ensureView, lastInputAt }) {
         enabled: state.enabled,
         inHours: state.inHours,
         maxPerHour: state.maxPerHour,
+        winbackEnabled: state.winbackEnabled,
+        winbackInSec: state.winbackEnabled ? Math.max(0, Math.round((state.winbackLastAt + state.winbackGap - now()) / 1000)) : null,
         busy: state.busy,
         queue: [...state.queue.values()].map((q) => ({ name: q.name, inSec: Math.max(0, Math.round((q.dueAt - now()) / 1000)) })),
         human: state.human,

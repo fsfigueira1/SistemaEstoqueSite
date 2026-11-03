@@ -1,13 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion -- teste: dados montados à mão e resultados que o próprio teste garante */
 import { describe, beforeEach, afterEach, it, expect } from 'vitest';
 import { SaleService } from '@/services/saleService';
 import { StockService } from '@/services/stockService';
 import { CashSessionService } from '@/services/cashSessionService';
 import { CashMovementService } from '@/services/cashMovementService';
 import { AuditService } from '@/services/auditService';
-import { ProductService } from '@/services/productService';
-import { CustomerService } from '@/services/customerService';
 import { prisma } from '../setup';
-import { PaymentMethod } from '@prisma/client';
 import { cleanupDatabase } from '../utils';
 
 describe('Complete PDV (Point of Sale) Flow', () => {
@@ -106,8 +104,8 @@ describe('Complete PDV (Point of Sale) Flow', () => {
       });
 
       // Verify initial stock levels
-      let initialStock1 = await StockService.getStock(product1.id);
-      let initialStock2 = await StockService.getStock(product2.id);
+      const initialStock1 = await StockService.getStock(product1.id);
+      const initialStock2 = await StockService.getStock(product2.id);
       expect(initialStock1.currentStock).toBe(50);
       expect(initialStock1.minStockLevel).toBe(10);
       expect(initialStock2.currentStock).toBe(30);
@@ -157,7 +155,7 @@ describe('Complete PDV (Point of Sale) Flow', () => {
         type: 'SALE', // Using actual movement type from enum
         amount: 55.0,
         processedById: adminUser.id,
-        performedById: customer.id, // This is correct - cash movements can be performed by customer
+        performedById: adminUser.id, // quem lança o caixa é um usuário do sistema (createdById → User)
         description: `Venda #${sale1.sale.id}`
       });
 
@@ -202,7 +200,7 @@ describe('Complete PDV (Point of Sale) Flow', () => {
         type: 'SALE',
         amount: 45.0,
         processedById: adminUser.id,
-        performedById: customer.id, // This is correct - cash movements can be performed by customer
+        performedById: adminUser.id, // quem lança o caixa é um usuário do sistema (createdById → User)
         description: `Venda #${sale2.sale.id}`
       });
 
@@ -230,9 +228,9 @@ describe('Complete PDV (Point of Sale) Flow', () => {
 
       // Verify cash processing through cash movements using CORRECT service
       const movements = await CashMovementService.getCashMovementsBySession(testCashSession.id);
-      expect(movements.movements).toHaveLength(3); // Opening + 2 sales
-      // Opening movement is created automatically by openCashSession
-      // Plus our 2 sale movements
+      // abertura + 2 lançadas sozinhas ao concluir cada venda (completeSale)
+      // + 2 que este teste lança à mão com createCashMovement
+      expect(movements.movements).toHaveLength(5);
 
       // Verify audit logs were created using CORRECT service
       const auditLogs = await AuditService.getAuditLogs({

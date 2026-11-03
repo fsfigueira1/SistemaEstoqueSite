@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion -- teste: dados montados à mão e resultados que o próprio teste garante */
 import { describe, beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { prisma } from './setup';
 import { cleanupDatabase, createAdminUser, createTestUser } from './utils';
@@ -28,18 +29,16 @@ vi.mock('@/lib/auth', () => ({
 
 describe('Product API Routes', () => {
   let adminUser: any;
-  let regularUser: any;
-  let userRoleUser: any; // USER role for testing insufficient permissions
   let testCategory: any;
   let testProduct: any;
 
   beforeEach(async () => {
     await cleanupDatabase();
     adminUser = await createAdminUser();
-    regularUser = await createTestUser(); // This creates a MANAGER user
+    await createTestUser(); // This creates a MANAGER user
 
     // Create a USER role user for testing insufficient permissions
-    userRoleUser = await prisma.user.create({
+    await prisma.user.create({
       data: {
         email: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@example.com`,
         name: 'Regular User',
@@ -102,34 +101,21 @@ describe('Product API Routes', () => {
       expect(json.data.products.length).toBeGreaterThan(0);
     });
 
-    it('should return unauthorized for unauthenticated request', async () => {
-      // Set current auth user for mock (null = unauthenticated)
-      currentAuthUser = null;
-
-      const { GET } = await getProductApiModule();
-      const request = new MockRequest('http://localhost:3000/api/products', 'GET');
-
-      const response = await GET(request as any);
-      const json = await response.json() as { success: boolean; error: any };
-
-      expect(response.status).toBe(401);
-      expect(json.success).toBe(false);
-      expect(json.error.code).toBe('UNAUTHORIZED');
+    // Quem barra é o src/proxy.ts (crachá assinado + perfil); os casos
+    // completos estão em tests/proxy.test.ts.
+    it('should return unauthorized for unauthenticated request (proxy do login)', async () => {
+      const { proxy } = await import('@/proxy');
+      const { NextRequest } = await import('next/server');
+      expect((await proxy(new NextRequest('http://localhost:3000/api/products'))).status).toBe(401);
     });
 
-    it('should return forbidden for user with insufficient role', async () => {
-      // Set current auth user for mock (USER role - insufficient for product listing)
-      currentAuthUser = userRoleUser;
-
-      const { GET } = await getProductApiModule();
-      const request = new MockRequest('http://localhost:3000/api/products?page=1&limit=10', 'GET');
-
-      const response = await GET(request as any);
-      const json = await response.json() as { success: boolean; error: any };
-
-      expect(response.status).toBe(403);
-      expect(json.success).toBe(false);
-      expect(json.error.code).toBe('FORBIDDEN');
+    it('should return forbidden for user with insufficient role (balcão só consulta)', async () => {
+      const { proxy } = await import('@/proxy');
+      const { NextRequest } = await import('next/server');
+      const { authSecret, signToken } = await import('@/lib/authToken');
+      const cookie = `erp_auth=${await signToken(await authSecret(), 'EMPLOYEE', Date.now() + 60_000)}`;
+      expect((await proxy(new NextRequest('http://localhost:3000/api/products', { headers: { cookie } }))).status).toBe(200);
+      expect((await proxy(new NextRequest('http://localhost:3000/api/products', { method: 'POST', headers: { cookie } }))).status).toBe(403);
     });
 
     it('should handle pagination correctly', async () => {
@@ -308,22 +294,17 @@ describe('Product API Routes', () => {
 
       expect(response.status).toBe(200);
       expect(json.success).toBe(true);
-      expect(json.data.deactivated).toBe(true);
+      // produto sem histórico é apagado de vez (com histórico: HAS_HISTORY → "Descontinuar")
+      expect(json.data.deleted).toBe(true);
+      expect(await prisma.product.findUnique({ where: { id: testProduct.id } })).toBeNull();
     });
 
-    it('should return forbidden for user without admin role', async () => {
-      // Set current auth user for mock
-      currentAuthUser = regularUser;
-
-      const { DELETE } = await getProductByIdApiModule();
-      const request = new MockRequest(`http://localhost:3000/api/products/${testProduct.id}`, 'DELETE');
-
-      const response = await DELETE(request as any, { params: { id: testProduct.id } });
-      const json = await response.json() as { success: boolean; error: any };
-
-      expect(response.status).toBe(403);
-      expect(json.success).toBe(false);
-      expect(json.error.code).toBe('FORBIDDEN');
+    it('should return forbidden for user without admin role (balcão não apaga produto)', async () => {
+      const { proxy } = await import('@/proxy');
+      const { NextRequest } = await import('next/server');
+      const { authSecret, signToken } = await import('@/lib/authToken');
+      const cookie = `erp_auth=${await signToken(await authSecret(), 'EMPLOYEE', Date.now() + 60_000)}`;
+      expect((await proxy(new NextRequest('http://localhost:3000/api/products/abc', { method: 'DELETE', headers: { cookie } }))).status).toBe(403);
     });
 
     it('should return not found for non-existent product ID', async () => {

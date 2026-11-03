@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion -- teste: dados montados à mão e resultados que o próprio teste garante */
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
@@ -6,7 +7,8 @@ import { JSDOM } from "jsdom"
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const dom = require("../../electron/whatsappDom.cjs") as typeof import("../../electron/whatsappDom.cjs")
 
-const FIXTURE = readFileSync(join(__dirname, "__fixtures__", "whatsapp-chat.html"), "utf8")
+// no Windows (core.autocrlf) o arquivo vem com CRLF; os testes trocam trechos com \n
+const FIXTURE = readFileSync(join(__dirname, "__fixtures__", "whatsapp-chat.html"), "utf8").replace(/\r\n/g, "\n")
 const page = (html = FIXTURE) => new JSDOM(html).window.document
 
 describe("readOpenChat", () => {

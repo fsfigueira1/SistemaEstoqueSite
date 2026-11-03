@@ -1,15 +1,30 @@
-// Cliente da IA da NVIDIA (NIM, API no formato da OpenAI) — o mesmo modelo
-// e os mesmos parâmetros do chat do site. Usado no ajudante e na leitura da
-// foto da lista escolar. A chave vem de Settings.nvidiaApiKey (servidor).
+// Cliente da IA no formato da OpenAI: NVIDIA (NIM, Nemotron — o mesmo modelo
+// e os mesmos parâmetros do chat do site) ou Google Gemini (endpoint
+// compatível com a OpenAI: mesmas mensagens, ferramentas e fotos). Quem
+// escolhe e cai para a outra quando uma falha é src/lib/llm.ts.
 // Testado em nvidia.test.ts.
 
 export const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 export const NVIDIA_DEFAULT_MODEL = "nvidia/nemotron-3.5-super-vl-120b-a12b"
+export const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+export const GEMINI_DEFAULT_MODEL = "gemini-3.8-flash"
+
+export type ChatProvider = "nvidia" | "gemini"
+const URLS: Record<ChatProvider, string> = { nvidia: NVIDIA_URL, gemini: GEMINI_URL }
+export const PROVIDER_LABEL: Record<ChatProvider, string> = { nvidia: "NVIDIA", gemini: "Gemini" }
 
 type Part = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
-export type NvMessage = { role: "system" | "user" | "assistant"; content: string | Part[] }
+export type NvToolCall = { id: string; type: "function"; function: { name: string; arguments: string } }
+export type NvMessage =
+  | { role: "system" | "user"; content: string | Part[] }
+  | { role: "assistant"; content: string | Part[] | null; tool_calls?: NvToolCall[] }
+  | { role: "tool"; tool_call_id: string; content: string }
+/** Ferramenta no formato da OpenAI (o NIM aceita igual). */
+export type NvTool = { type: "function"; function: { name: string; description: string; parameters: object } }
 
 type Opts = {
+  /** padrão "nvidia" */
+  provider?: ChatProvider
   apiKey: string
   model: string
   messages: NvMessage[]
@@ -19,9 +34,11 @@ type Opts = {
   timeoutMs?: number
   fetchImpl?: typeof fetch
   maxTokens?: number
+  /** ferramentas do agente (só em nvidiaComplete) */
+  tools?: NvTool[]
 }
 
-/** Erro da NVIDIA com o status HTTP (401/403 = chave, 429 = limite). */
+/** Erro da IA com o status HTTP (401/403 = chave, 429 = limite). */
 export class NvidiaError extends Error {
   constructor(
     message: string,
@@ -32,9 +49,24 @@ export class NvidiaError extends Error {
   }
 }
 
-/** Corpo da chamada (valores recomendados no model card do Nemotron Super, iguais aos do site). */
-export function nvidiaRequest(opts: { model: string; messages: NvMessage[]; stream: boolean; maxTokens?: number }): object {
+/**
+ * Corpo da chamada. NVIDIA: valores recomendados no model card do Nemotron
+ * Super, iguais aos do site. Gemini: sem os campos próprios do NIM; raciocínio
+ * curto pelo reasoning_effort.
+ */
+export function nvidiaRequest(opts: { provider?: ChatProvider; model: string; messages: NvMessage[]; stream: boolean; maxTokens?: number; tools?: NvTool[] }): object {
+  if (opts.provider === "gemini") {
+    return {
+      ...(opts.tools?.length ? { tools: opts.tools, tool_choice: "auto" } : {}),
+      model: opts.model,
+      stream: opts.stream,
+      max_tokens: opts.maxTokens ?? 4096,
+      messages: opts.messages,
+      reasoning_effort: "low",
+    }
+  }
   return {
+    ...(opts.tools?.length ? { tools: opts.tools, tool_choice: "auto" } : {}),
     model: opts.model,
     stream: opts.stream,
     // inclui os tokens de raciocínio, que não aparecem na resposta
@@ -53,13 +85,14 @@ async function call(opts: Opts, stream: boolean): Promise<Response> {
   try {
     return await request(opts, stream, signal)
   } catch (err) {
-    if (timeout.aborted) throw new NvidiaError("A IA da NVIDIA demorou demais — tente de novo", 504)
+    if (timeout.aborted) throw new NvidiaError(`A IA (${PROVIDER_LABEL[opts.provider ?? "nvidia"]}) demorou demais — tente de novo`, 504)
     throw err
   }
 }
 
 async function request(opts: Opts, stream: boolean, signal: AbortSignal): Promise<Response> {
-  const res = await (opts.fetchImpl ?? fetch)(NVIDIA_URL, {
+  const provider = opts.provider ?? "nvidia"
+  const res = await (opts.fetchImpl ?? fetch)(URLS[provider], {
     method: "POST",
     signal,
     headers: {
@@ -67,12 +100,14 @@ async function request(opts: Opts, stream: boolean, signal: AbortSignal): Promis
       "Content-Type": "application/json",
       Accept: stream ? "text/event-stream" : "application/json",
     },
-    body: JSON.stringify(nvidiaRequest({ model: opts.model, messages: opts.messages, stream, maxTokens: opts.maxTokens })),
+    body: JSON.stringify(nvidiaRequest({ provider, model: opts.model, messages: opts.messages, stream, maxTokens: opts.maxTokens, tools: opts.tools })),
   })
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { detail?: string; error?: { message?: string } | string; message?: string }
-    const detail = data.detail ?? (typeof data.error === "string" ? data.error : data.error?.message) ?? data.message ?? ""
-    throw new NvidiaError(`IA da NVIDIA respondeu ${res.status}${detail ? `: ${detail}` : ""}`, res.status)
+    // o Gemini responde o erro numa lista ([{ error: {...} }])
+    const raw = (await res.json().catch(() => ({}))) as unknown
+    const data = (Array.isArray(raw) ? raw[0] : raw) as { detail?: string; error?: { message?: string } | string; message?: string } | undefined
+    const detail = data?.detail ?? (typeof data?.error === "string" ? data.error : data?.error?.message) ?? data?.message ?? ""
+    throw new NvidiaError(`A IA (${PROVIDER_LABEL[provider]}) respondeu ${res.status}${detail ? `: ${detail}` : ""}`, res.status)
   }
   return res
 }
@@ -82,6 +117,14 @@ export async function nvidiaChat(opts: Opts): Promise<string> {
   const res = await call(opts, false)
   const data = (await res.json()) as { choices?: Array<{ message?: { content?: string | null } }> }
   return (data.choices?.[0]?.message?.content ?? "").trim()
+}
+
+/** Uma volta do agente: o texto e/ou as ferramentas que a IA quer usar. */
+export async function nvidiaComplete(opts: Opts): Promise<{ content: string; toolCalls: NvToolCall[] }> {
+  const res = await call(opts, false)
+  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string | null; tool_calls?: NvToolCall[] | null } }> }
+  const msg = data.choices?.[0]?.message
+  return { content: (msg?.content ?? "").trim(), toolCalls: (msg?.tool_calls ?? []).filter((t) => t?.function?.name) }
 }
 
 /**

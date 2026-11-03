@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { getServerSettings, publicSettings, SETTINGS_ID } from "@/lib/serverSettings"
 import { friendlyError } from "@/lib/friendlyError"
 import { parseRange } from "@/lib/autoReplyPolicy"
+import { requestRole } from "@/lib/requestRole"
+import { EMPLOYEE_SETTINGS } from "@/lib/access"
 
 const ALLOWED = [
   "companyName",
@@ -18,6 +20,9 @@ const ALLOWED = [
   "waAutoWeekdays",
   "waAutoSaturday",
   "waAutoSunday",
+  "waWinbackEnabled",
+  "waWinbackDays",
+  "waWinbackPerDay",
   "receiptFooter",
   "receiptShowCompany",
   "receiptWidth",
@@ -28,6 +33,7 @@ const ALLOWED = [
   "aiModel",
   "aiProvider",
   "nvidiaModel",
+  "geminiModel",
   "priceAlertPercent",
   "reportReminderEnabled",
   "reportReminderTime",
@@ -62,7 +68,10 @@ export async function PUT(request: Request) {
     await getServerSettings()
     const body = await request.json()
     const data: Record<string, unknown> = {}
-    for (const key of ALLOWED) {
+    // balcão só liga/desliga o atendimento automático; o resto é do dono
+    const owner = (await requestRole()) === "OWNER"
+    const allowed = owner ? ALLOWED : ALLOWED.filter((k) => EMPLOYEE_SETTINGS.includes(k))
+    for (const key of allowed) {
       if (body[key] !== undefined) data[key] = body[key]
     }
     if (typeof data.cardInterestPercent === "number" && data.cardInterestPercent < 0) {
@@ -84,6 +93,15 @@ export async function PUT(request: Request) {
     if (data.copilotPersona !== undefined) data.copilotPersona = String(data.copilotPersona).slice(0, 2000)
     if (data.storeInfo !== undefined) data.storeInfo = String(data.storeInfo).slice(0, 2000)
     if (data.waAutoEnabled !== undefined) data.waAutoEnabled = data.waAutoEnabled === true
+    if (data.waWinbackEnabled !== undefined) data.waWinbackEnabled = data.waWinbackEnabled === true
+    if (data.waWinbackDays !== undefined) {
+      const n = Number(data.waWinbackDays)
+      data.waWinbackDays = Number.isFinite(n) ? Math.min(365, Math.max(15, Math.round(n))) : 60
+    }
+    if (data.waWinbackPerDay !== undefined) {
+      const n = Number(data.waWinbackPerDay)
+      data.waWinbackPerDay = Number.isFinite(n) ? Math.min(20, Math.max(1, Math.round(n))) : 8
+    }
     if (data.waAutoMaxPerHour !== undefined) {
       const n = Number(data.waAutoMaxPerHour)
       data.waAutoMaxPerHour = Number.isFinite(n) ? Math.min(60, Math.max(1, Math.round(n))) : 20
@@ -96,13 +114,18 @@ export async function PUT(request: Request) {
     if (data.waAutoWeekdays !== undefined) data.waAutoWeekdays = range(data.waAutoWeekdays)
     if (data.waAutoSaturday !== undefined) data.waAutoSaturday = range(data.waAutoSaturday)
     if (data.waAutoSunday !== undefined) data.waAutoSunday = range(data.waAutoSunday)
-    if (data.aiProvider !== undefined && !["nvidia", "claude"].includes(String(data.aiProvider))) {
+    if (data.aiProvider !== undefined && !["nvidia", "gemini", "claude"].includes(String(data.aiProvider))) {
       delete data.aiProvider
     }
     if (data.nvidiaModel !== undefined) {
       const m = String(data.nvidiaModel).trim()
       if (m && m.length <= 200) data.nvidiaModel = m
       else delete data.nvidiaModel
+    }
+    if (data.geminiModel !== undefined) {
+      const m = String(data.geminiModel).trim()
+      if (m && m.length <= 200) data.geminiModel = m
+      else delete data.geminiModel
     }
     if (data.priceProvider !== undefined && !["shopping", "claude"].includes(String(data.priceProvider))) {
       delete data.priceProvider
@@ -127,22 +150,34 @@ export async function PUT(request: Request) {
     if (data.backupEnabled !== undefined) data.backupEnabled = data.backupEnabled === true
     // Chave da IA: só grava quando vem preenchida (o formulário não recebe a
     // chave atual de volta, então campo vazio = "manter a que já está").
-    if (typeof body.aiApiKey === "string" && body.aiApiKey.trim()) {
-      data.aiApiKey = body.aiApiKey.trim()
-    }
-    if (body.aiApiKeyClear === true) data.aiApiKey = ""
-    if (typeof body.shoppingApiKey === "string" && body.shoppingApiKey.trim()) {
-      data.shoppingApiKey = body.shoppingApiKey.trim()
-    }
-    if (body.shoppingApiKeyClear === true) data.shoppingApiKey = ""
-    if (typeof body.nvidiaApiKey === "string" && body.nvidiaApiKey.trim()) {
-      data.nvidiaApiKey = body.nvidiaApiKey.trim()
-    }
-    if (body.nvidiaApiKeyClear === true) data.nvidiaApiKey = ""
+    // Chaves são só do dono — o balcão não troca nem apaga.
+    if (owner) applyKeys(body, data)
 
-    const settings = await prisma.settings.update({ where: { id: SETTINGS_ID }, data })
+    const settings = await prisma.settings.update({
+      where: { id: SETTINGS_ID },
+      data,
+    })
     return NextResponse.json({ success: true, data: publicSettings(settings) })
   } catch (error) {
     return NextResponse.json({ success: false, error: friendlyError(error) }, { status: 500 })
   }
+}
+
+function applyKeys(body: Record<string, unknown>, data: Record<string, unknown>) {
+  if (typeof body.aiApiKey === "string" && body.aiApiKey.trim()) {
+    data.aiApiKey = body.aiApiKey.trim()
+  }
+  if (body.aiApiKeyClear === true) data.aiApiKey = ""
+  if (typeof body.shoppingApiKey === "string" && body.shoppingApiKey.trim()) {
+    data.shoppingApiKey = body.shoppingApiKey.trim()
+  }
+  if (body.shoppingApiKeyClear === true) data.shoppingApiKey = ""
+  if (typeof body.nvidiaApiKey === "string" && body.nvidiaApiKey.trim()) {
+    data.nvidiaApiKey = body.nvidiaApiKey.trim()
+  }
+  if (body.nvidiaApiKeyClear === true) data.nvidiaApiKey = ""
+  if (typeof body.geminiApiKey === "string" && body.geminiApiKey.trim()) {
+    data.geminiApiKey = body.geminiApiKey.trim()
+  }
+  if (body.geminiApiKeyClear === true) data.geminiApiKey = ""
 }

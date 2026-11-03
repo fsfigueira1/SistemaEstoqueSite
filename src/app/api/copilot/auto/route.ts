@@ -15,7 +15,7 @@ export async function GET() {
   }
 }
 
-// POST /api/copilot/auto { name, phone, text } — usado pelo robô do aplicativo:
+// POST /api/copilot/auto { name, phone, text, history? } — usado pelo robô do aplicativo:
 // responde "send" (com o texto), "human" (passa para o atendente), "wait"
 // (fora do horário) ou "off" (desligada).
 export async function POST(request: Request) {
@@ -27,7 +27,15 @@ export async function POST(request: Request) {
   if (!text) return NextResponse.json({ success: false, error: "Mensagem vazia" }, { status: 400 })
   if (text.length > 8000) return NextResponse.json({ success: false, error: "Mensagem grande demais" }, { status: 400 })
   try {
-    return NextResponse.json({ success: true, data: await AutoReplyService.decide({ name, phone, text }) })
+    // conversa recente (o robô lê do WhatsApp): o agente responde com contexto
+    const history = Array.isArray(body?.history)
+      ? (body.history as unknown[])
+          .slice(-20)
+          .map((m) => m as { from?: unknown; text?: unknown })
+          .filter((m) => (m.from === "cliente" || m.from === "loja") && typeof m.text === "string" && m.text.trim())
+          .map((m) => ({ from: m.from as "cliente" | "loja", text: String(m.text).slice(0, 2000) }))
+      : undefined
+    return NextResponse.json({ success: true, data: await AutoReplyService.decide({ name, phone, text, history }) })
   } catch (error) {
     return NextResponse.json({ success: false, error: friendlyError(error).message }, { status: 500 })
   }

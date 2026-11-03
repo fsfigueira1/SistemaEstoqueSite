@@ -1,7 +1,8 @@
 import { getSystemUserId } from "@/lib/systemUser"
 import { NextResponse } from "next/server"
 import { ProductService } from "@/services/productService"
-import { friendlyError } from "@/lib/friendlyError"
+import { errorStatus, friendlyError } from "@/lib/friendlyError"
+import { apiFailure } from "@/lib/apiResponse"
 
 
 
@@ -33,7 +34,7 @@ export async function GET(
       success: true,
       data: product
     })
-  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
+  } catch (error) { return apiFailure(error); }
 }
 
 // PUT /api/products/[id] - Update product
@@ -88,7 +89,7 @@ export async function PUT(
       success: true,
       data: product
     })
-  } catch (error) { return NextResponse.json({ error: friendlyError(error).message }, { status: 500 }); }
+  } catch (error) { return apiFailure(error); }
 }
 
 // DELETE /api/products/[id] - Exclui o produto de vez (hard delete).
@@ -106,10 +107,10 @@ export async function DELETE(
     // HAS_HISTORY: a tela usa o código para oferecer "Descontinuar"; o nome fica curto.
     const message =
       code === "HAS_HISTORY" ? "Produto tem vendas — marque como Descontinuado" : friendlyError(error).message
-    const status = code === "HAS_HISTORY" ? 409 : 500
+    const other = errorStatus(error)
     return NextResponse.json(
-      { success: false, error: { message, code: code ?? "DELETE_FAILED" } },
-      { status }
+      { success: false, error: { message, code: code ?? (other.status === 500 ? "DELETE_FAILED" : other.code) } },
+      { status: code === "HAS_HISTORY" ? 409 : other.status }
     )
   }
 }

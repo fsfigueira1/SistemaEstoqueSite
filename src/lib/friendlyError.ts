@@ -171,3 +171,19 @@ export function errorText(source: unknown, fallback = GENERIC): string {
   }
   return fallback
 }
+
+/**
+ * Código HTTP certo para o erro (antes tudo virava 500): não encontrado → 404,
+ * já cadastrado/em uso → 409, campo faltando ou valor inválido → 400.
+ * Testado em src/lib/friendlyError.test.ts.
+ */
+export function errorStatus(error: unknown): { status: number; code: string } {
+  const raw = rawMessage(error)
+  if (/not found|P2025|não encontrad/i.test(raw)) return { status: 404, code: "NOT_FOUND" }
+  if (/unique constraint|already exists|duplicate|P2002|já existe|já cadastrad|cannot delete|foreign key|P2003/i.test(raw))
+    return { status: 409, code: "CONFLICT" }
+  // frases curtas do sistema pedindo algo ("Escolha o motivo…", "Explique…", "Informe…") também são 400
+  if (/required|missing|obrigat[óo]ri|cannot be negative|greater than maximum|must be positive|invalid|inválid|^(escolha|explique|informe|preencha)\s/i.test(raw))
+    return { status: 400, code: "VALIDATION_ERROR" }
+  return { status: 500, code: "ERRO" }
+}

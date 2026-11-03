@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Search, ShoppingCart, X } from 'lucide-react';
 import Layout, { PageHeader } from '@/components/Layout';
+import AtendimentoTabs from '@/components/atendimento/AtendimentoTabs';
 import { errorText } from '@/lib/friendlyError';
 import { sendToPdv, type PrefillItem } from '@/lib/pdvPrefill';
 
@@ -113,6 +114,7 @@ export default function OrcamentosPage() {
     <Layout>
       <div className="mx-auto max-w-6xl space-y-6 p-6">
         <PageHeader eyebrow="Balcão" title="Orçamentos pedidos" subtitle="O que os clientes pediram — ache pelo nome ou telefone e leve para o PDV" />
+        <AtendimentoTabs />
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">

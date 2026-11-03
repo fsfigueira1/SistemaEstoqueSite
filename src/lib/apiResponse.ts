@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { errorStatus, friendlyError } from "@/lib/friendlyError"
 
 /**
  * Standardized API success response
@@ -73,4 +74,13 @@ export function apiConflictError(message: string): NextResponse {
  */
 export function apiBusinessError(message: string): NextResponse {
   return apiError(message, 422, "BUSINESS_RULE_VIOLATION")
+}
+
+/**
+ * Erro de serviço → resposta com a mensagem curta (friendlyError) e o código
+ * HTTP certo (404/409/400/500). As telas leem com errorText().
+ */
+export function apiFailure(error: unknown): NextResponse {
+  const { status, code } = errorStatus(error)
+  return apiError(friendlyError(error).message, status, code)
 }

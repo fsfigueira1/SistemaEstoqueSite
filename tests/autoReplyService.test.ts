@@ -13,7 +13,7 @@ describe('AutoReplyService.decide', () => {
     await cleanupDatabase();
     await prisma.settings.upsert({
       where: { id: 'app' },
-      update: { waAutoEnabled: true, companyName: 'Laçolaria', storeHours: 'Seg a sex 8h às 18h' },
+      update: { waAutoEnabled: true, waWinbackEnabled: false, waWinbackPerDay: 8, companyName: 'Laçolaria', storeHours: 'Seg a sex 8h às 18h' },
       create: { id: 'app', waAutoEnabled: true, companyName: 'Laçolaria', storeHours: 'Seg a sex 8h às 18h' },
     });
     const cat = await prisma.category.create({ data: { name: 'Escolar' } });
@@ -64,7 +64,7 @@ describe('AutoReplyService.decide', () => {
   });
 
   it('status: ligada, no horário e o limite por hora', async () => {
-    expect(await AutoReplyService.status(OPEN)).toEqual({ enabled: true, inHours: true, maxPerHour: 20 });
+    expect(await AutoReplyService.status(OPEN)).toEqual({ enabled: true, inHours: true, maxPerHour: 20, winbackEnabled: false, winbackPerDay: 8 });
     expect(await AutoReplyService.status(CLOSED)).toMatchObject({ inHours: false });
   });
 });

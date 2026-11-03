@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion -- teste: dados montados à mão e resultados que o próprio teste garante */
 import { describe, it, expect } from "vitest"
 import { NVIDIA_URL, nvidiaChat, nvidiaRequest, nvidiaStream, nvidiaStreamStart } from "./nvidia"
 
@@ -39,16 +40,16 @@ describe("nvidia", () => {
 
   it("nvidiaChat devolve o texto", async () => {
     const { f, calls } = fakeFetch(new Response(JSON.stringify({ choices: [{ message: { content: "2 lápis" } }] })))
-    const text = await nvidiaChat({ apiKey: "k", model: "m", messages: [{ role: "user", content: "oi" }], fetchImpl: f })
+    const text = await nvidiaChat({ apiKey: "<k>", model: "m", messages: [{ role: "user", content: "oi" }], fetchImpl: f })
     expect(text).toBe("2 lápis")
     expect(calls[0].url).toBe(NVIDIA_URL)
-    expect((calls[0].init?.headers as Record<string, string>).Authorization).toBe("Bearer k")
+    expect((calls[0].init?.headers as Record<string, string>).Authorization).toBe("Bearer <k>")
   })
 
   it("nvidiaChat erro vira mensagem clara", async () => {
     const { f } = fakeFetch(new Response(JSON.stringify({ detail: "Invalid API key" }), { status: 401 }))
-    await expect(nvidiaChat({ apiKey: "x", model: "m", messages: [{ role: "user", content: "oi" }], fetchImpl: f })).rejects.toThrow(
-      "IA da NVIDIA respondeu 401: Invalid API key",
+    await expect(nvidiaChat({ apiKey: "<x>", model: "m", messages: [{ role: "user", content: "oi" }], fetchImpl: f })).rejects.toThrow(
+      "A IA (NVIDIA) respondeu 401: Invalid API key",
     )
   })
 
@@ -72,7 +73,7 @@ describe("nvidia", () => {
     })
     const { f } = fakeFetch(new Response(stream))
     let out = ""
-    for await (const t of nvidiaStream({ apiKey: "k", model: "m", messages: [{ role: "user", content: "oi" }], fetchImpl: f })) out += t
+    for await (const t of nvidiaStream({ apiKey: "<k>", model: "m", messages: [{ role: "user", content: "oi" }], fetchImpl: f })) out += t
     expect(out).toBe("Vendas: R$ 10")
   })
 
@@ -81,12 +82,12 @@ describe("nvidia", () => {
       new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)))) as typeof fetch
     const ctrl = new AbortController()
     await expect(
-      nvidiaChat({ apiKey: "k", model: "m", messages: [{ role: "user", content: "oi" }], signal: ctrl.signal, timeoutMs: 50, fetchImpl: hanging }),
+      nvidiaChat({ apiKey: "<k>", model: "m", messages: [{ role: "user", content: "oi" }], signal: ctrl.signal, timeoutMs: 50, fetchImpl: hanging }),
     ).rejects.toThrow(/demorou demais/)
   })
 
   it("nvidiaStreamStart falha antes de devolver o gerador quando a chave é inválida", async () => {
     const { f } = fakeFetch(new Response(JSON.stringify({ detail: "Unauthorized" }), { status: 401 }))
-    await expect(nvidiaStreamStart({ apiKey: "x", model: "m", messages: [{ role: "user", content: "oi" }], fetchImpl: f })).rejects.toMatchObject({ status: 401 })
+    await expect(nvidiaStreamStart({ apiKey: "<x>", model: "m", messages: [{ role: "user", content: "oi" }], fetchImpl: f })).rejects.toMatchObject({ status: 401 })
   })
 })

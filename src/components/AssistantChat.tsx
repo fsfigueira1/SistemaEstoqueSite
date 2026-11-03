@@ -88,7 +88,7 @@ export default function AssistantChat() {
       setOfferUse(Boolean(d.offerUse));
       loadSettings()
         .then((s) => {
-          const ok = Boolean(s.nvidiaKeySet);
+          const ok = Boolean(s.nvidiaKeySet || s.geminiKeySet);
           setKeySet(ok);
           if (ok && d.prompt) ask(d.prompt, []);
         })
@@ -140,7 +140,7 @@ export default function AssistantChat() {
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4 text-sm">
         {keySet === false ? (
           <div className="rounded-xl border border-border bg-muted/40 p-3">
-            <p className="text-foreground">Para usar o ajudante, cadastre a chave da NVIDIA.</p>
+            <p className="text-foreground">Para usar o ajudante, cadastre a chave da NVIDIA ou do Gemini.</p>
             <Link href="/configuracoes" onClick={() => setOpen(false)} className="mt-1 inline-block text-primary hover:underline">
               Ir para Configurações → Inteligência artificial
             </Link>

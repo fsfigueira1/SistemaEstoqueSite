@@ -6,7 +6,7 @@
 // da loja. Quem envia é sempre o atendente. Testado em tests/copilotService.test.ts.
 import { allocate, buildQuote, quoteMessage, quoteTotals, type CatalogProduct } from "@/lib/schoolList"
 import { classify, EXPLICIT_QTY, stripGreetings, type SiteOrder } from "@/lib/quoteIntent"
-import { NVIDIA_DEFAULT_MODEL, nvidiaChat } from "@/lib/nvidia"
+import { llmChat } from "@/lib/llm"
 import { getServerSettings, type ServerSettings } from "@/lib/serverSettings"
 import { prisma } from "@/lib/prisma"
 import { CATALOG_SELECT, getCatalog, toCatalogProduct } from "@/services/schoolListService"
@@ -126,27 +126,24 @@ const nowFormat = new Intl.DateTimeFormat("pt-BR", {
 const nowNote = (d: Date) => `Agora: ${nowFormat.format(d)} (horário de Brasília).`
 
 function defaultAi(settings: ServerSettings): Ai {
-  return async (system, user) => {
-    const apiKey = settings.nvidiaApiKey.trim()
-    if (!apiKey) throw new Error("sem chave da NVIDIA")
-    return nvidiaChat({
-      apiKey,
-      model: settings.nvidiaModel || NVIDIA_DEFAULT_MODEL,
+  return async (system, user) =>
+    llmChat(settings, {
       timeoutMs: 60_000,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
       ],
     })
-  }
 }
 
 const NOT_FOUND = "Não encontrei essa lista aqui. Pode mandar a lista de material (texto ou foto) que eu monto o orçamento com o que temos na loja."
 
 const MAX_PRODUCT_LINES = 6
 
-/** Resposta para "tem X?" com o que tem no estoque agora. */
-async function productReply(asked: string, first: string, persona: string, settings: ServerSettings, ai: Ai): Promise<DraftResult> {
+type FoundProduct = { id: string; name: string; salePrice: unknown; stockQuantity: number }
+
+/** Produtos que casam com o que o cliente procurou (`have` = com estoque). */
+async function findProducts(asked: string): Promise<{ all: FoundProduct[]; have: FoundProduct[] }> {
   const rows = await prisma.product.findMany({
     where: { status: "ACTIVE" },
     select: { id: true, name: true, sku: true, barcode: true, salePrice: true, stockQuantity: true, category: { select: { name: true } } },
@@ -154,14 +151,22 @@ async function productReply(asked: string, first: string, persona: string, setti
   // com todas as palavras; se nada, sem o tipo do produto ("caderno do batman"
   // acha "FORONI BATMAN 80 FOLHAS", que não tem "caderno" no nome)
   const strict = smartSearch(rows, asked, productSearchFields, { strict: true })
-  const exact = strict.length ? strict : smartSearch(rows, asked, productSearchFields)
-  const have = exact.filter((p) => p.stockQuantity > 0)
+  const all = strict.length ? strict : smartSearch(rows, asked, productSearchFields)
+  return { all, have: all.filter((p) => p.stockQuantity > 0) }
+}
+
+/** Linhas "• nome — preço" (o preço sai do cadastro, nunca da IA). */
+const productLines = (ps: FoundProduct[]) => [
+  ...ps.slice(0, MAX_PRODUCT_LINES).map((p) => `• ${p.name} — ${brl(Number(p.salePrice))}`),
+  ...(ps.length > MAX_PRODUCT_LINES ? [`• e mais ${ps.length - MAX_PRODUCT_LINES} opções na loja`] : []),
+]
+
+/** Resposta para "tem X?" com o que tem no estoque agora. */
+async function productReply(asked: string, first: string, persona: string, settings: ServerSettings, ai: Ai): Promise<DraftResult> {
+  const { all: exact, have } = await findProducts(asked)
   const hi = first ? `Oi, ${first}!` : "Oi!"
   const base = { intent: "product" as const, quoteRequestId: null, total: null, productQuery: asked }
-  const list = (ps: typeof rows) => [
-    ...ps.slice(0, MAX_PRODUCT_LINES).map((p) => `• ${p.name} — ${brl(Number(p.salePrice))}`),
-    ...(ps.length > MAX_PRODUCT_LINES ? [`• e mais ${ps.length - MAX_PRODUCT_LINES} opções na loja`] : []),
-  ]
+  const list = productLines
 
   if (have.length) {
     let opening = ""
@@ -266,24 +271,36 @@ Você atende a papelaria ${settings.companyName} no WhatsApp. Escreva SÓ uma ab
     // abertura longa demais ou com números de preço é descartada
     if (!opening || opening.length > 280 || PRICE_RE.test(opening)) opening = `${first ? `Oi, ${first}!` : "Olá!"} Segue o orçamento:`
     const reply = `${opening}\n\n${quote}`
-
-    const takes = allocate(built.lines)
-    const items: QuoteItem[] = built.lines
-      .map((l, i) => ({ qty: l.qty, text: l.text, productId: l.product?.id ?? null, price: l.product?.salePrice ?? null, take: takes[i] ?? 0 }))
-      .filter((i) => i.productId)
-    const missing = built.lines.filter((l) => !l.product).map((l) => `${l.qty} × ${l.text}`)
-    const total = quoteTotals(built.lines).total
-    const data = {
-      name,
-      phone: input.phone,
-      source: "whatsapp" as const,
-      title: built.title,
-      items,
-      toConfirm: [...missing, ...built.toConfirm],
-      total,
-      message: reply,
-    }
-    const id = (input.replaceId && (await QuoteRequestService.replace(input.replaceId, data))) || (await QuoteRequestService.create(data)).id
+    const { id, total } = await saveQuote({ name, phone: input.phone, replaceId: input.replaceId }, built, reply)
     return { reply, intent: intent.kind, quoteRequestId: id, total }
   },
 }
+
+/** Grava o orçamento em Orçamentos pedidos (preço e separação do momento). */
+async function saveQuote(who: { name: string; phone: string; replaceId?: string | null }, built: Built, reply: string) {
+  const takes = allocate(built.lines)
+  const items: QuoteItem[] = built.lines
+    .map((l, i) => ({ qty: l.qty, text: l.text, productId: l.product?.id ?? null, price: l.product?.salePrice ?? null, take: takes[i] ?? 0 }))
+    .filter((i) => i.productId)
+  const missing = built.lines.filter((l) => !l.product).map((l) => `${l.qty} × ${l.text}`)
+  const total = quoteTotals(built.lines).total
+  const data = {
+    name: who.name,
+    phone: who.phone,
+    source: "whatsapp" as const,
+    title: built.title,
+    items,
+    toConfirm: [...missing, ...built.toConfirm],
+    total,
+    message: reply,
+  }
+  const id = (who.replaceId && (await QuoteRequestService.replace(who.replaceId, data))) || (await QuoteRequestService.create(data)).id
+  return { id, total }
+}
+
+/**
+ * Peças do copiloto que o agente (src/services/agentService.ts) usa como
+ * ferramentas: preço e orçamento continuam saindo do sistema, nunca da IA.
+ */
+export const CopilotParts = { findProducts, productLines, listQuote, savedQuote, saveQuote, quoteText, storeFacts, nowNote, firstName, brl }
+export type { Built }

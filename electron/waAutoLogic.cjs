@@ -48,4 +48,24 @@ function nextDue(queue, now) {
   return best;
 }
 
-module.exports = { pickDelayMs, rateOk, chatCooldownOk, userIdle, syncQueue, nextDue };
+/** Intervalo entre duas mensagens de "chamar de volta": sorteado entre 12 e 25 minutos. */
+function winbackGapMs(rand) {
+  return Math.floor(12 * MIN + (rand || Math.random)() * 13 * MIN);
+}
+
+/** Pode chamar de volta agora? Nada de resposta na fila vencendo e o intervalo já passou. */
+function winbackDue(lastAt, gapMs, now, queue) {
+  if (lastAt && now - lastAt < gapMs) return false;
+  for (const item of queue.values()) if (item.dueAt <= now + 2 * MIN) return false;
+  return true;
+}
+
+/** Mensagens da conversa no formato do agente (sem as de mídia, as últimas 14). */
+function historyFor(messages) {
+  return (messages || [])
+    .filter((m) => m && !m.media && typeof m.text === "string" && m.text.trim())
+    .slice(-14)
+    .map((m) => ({ from: m.from === "loja" ? "loja" : "cliente", text: m.text.slice(0, 2000) }));
+}
+
+module.exports = { pickDelayMs, rateOk, chatCooldownOk, userIdle, syncQueue, nextDue, winbackGapMs, winbackDue, historyFor };

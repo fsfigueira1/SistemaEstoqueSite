@@ -8,15 +8,9 @@ import AiSettings from '@/components/settings/AiSettings';
 import ReceiptWidthPreview from '@/components/settings/ReceiptWidthPreview';
 import FeeSettings from '@/components/settings/FeeSettings';
 import BackupSettings from '@/components/settings/BackupSettings';
-import { Store, Printer, KeyRound, CheckCircle, CreditCard, Users, BellRing } from 'lucide-react';
-import {
-  DEFAULT_SETTINGS,
-  loadSettings,
-  saveSettings,
-  getLocalPin,
-  setLocalPin,
-  type StoreSettings,
-} from '@/lib/settings';
+import AccessSettings from '@/components/settings/AccessSettings';
+import { Store, Printer, CheckCircle, CreditCard, BellRing } from 'lucide-react';
+import { DEFAULT_SETTINGS, loadSettings, saveSettings, type StoreSettings } from '@/lib/settings';
 
 export default function ConfiguracoesPage() {
   const [form, setForm] = useState<StoreSettings>(DEFAULT_SETTINGS);
@@ -27,11 +21,7 @@ export default function ConfiguracoesPage() {
   const [aiKey, setAiKey] = useState('');
   const [shoppingKey, setShoppingKey] = useState('');
   const [nvidiaKey, setNvidiaKey] = useState('');
-
-  // PIN
-  const [pinCur, setPinCur] = useState('');
-  const [pinNew, setPinNew] = useState('');
-  const [pinMsg, setPinMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [geminiKey, setGeminiKey] = useState('');
 
   useEffect(() => {
     loadSettings().then((s) => {
@@ -52,11 +42,13 @@ export default function ConfiguracoesPage() {
         ...(aiKey.trim() ? { aiApiKey: aiKey.trim() } : {}),
         ...(shoppingKey.trim() ? { shoppingApiKey: shoppingKey.trim() } : {}),
         ...(nvidiaKey.trim() ? { nvidiaApiKey: nvidiaKey.trim() } : {}),
+        ...(geminiKey.trim() ? { geminiApiKey: geminiKey.trim() } : {}),
       });
       setForm(next);
       setAiKey('');
       setShoppingKey('');
       setNvidiaKey('');
+      setGeminiKey('');
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
@@ -74,9 +66,17 @@ export default function ConfiguracoesPage() {
     }
   };
   const removeNvidia = async () => {
-    if (!window.confirm('Remover a chave da NVIDIA? O ajudante e a leitura da foto param até colar outra.')) return;
+    if (!window.confirm('Remover a chave da NVIDIA? Sem a do Gemini, o ajudante e o atendimento param até colar outra.')) return;
     try {
       setForm(await saveSettings(form, { nvidiaApiKeyClear: true }));
+    } catch (e) {
+      setSaveErr(errorText(e, 'Não foi possível salvar'));
+    }
+  };
+  const removeGemini = async () => {
+    if (!window.confirm('Remover a chave do Gemini?')) return;
+    try {
+      setForm(await saveSettings(form, { geminiApiKeyClear: true }));
     } catch (e) {
       setSaveErr(errorText(e, 'Não foi possível salvar'));
     }
@@ -90,29 +90,12 @@ export default function ConfiguracoesPage() {
     }
   };
 
-  const changePin = () => {
-    setPinMsg(null);
-    const current = getLocalPin() ?? '1234';
-    if (pinCur !== current) {
-      setPinMsg({ ok: false, text: 'PIN atual incorreto.' });
-      return;
-    }
-    if (pinNew.trim().length < 4) {
-      setPinMsg({ ok: false, text: 'O novo PIN precisa ter ao menos 4 dígitos.' });
-      return;
-    }
-    setLocalPin(pinNew.trim());
-    setPinCur('');
-    setPinNew('');
-    setPinMsg({ ok: true, text: 'PIN atualizado neste dispositivo.' });
-  };
-
   if (!loaded) return <Layout><div className="p-6 text-sm text-muted-foreground">Carregando…</div></Layout>;
 
   return (
     <Layout>
       <div className="mx-auto max-w-3xl space-y-6 p-6">
-        <PageHeader eyebrow="Gestão" title="Configurações" subtitle="Valem para todos os computadores da loja (exceto o PIN)" />
+        <PageHeader eyebrow="Gestão" title="Configurações" subtitle="Valem para todos os computadores da loja" />
 
         {/* Dados da empresa */}
         <Section icon={<Store className="h-5 w-5" />} title="Dados da empresa" desc="Aparecem no comprovante de compra">
@@ -181,6 +164,12 @@ export default function ConfiguracoesPage() {
         <AiSettings
           form={form}
           set={set}
+          geminiKey={geminiKey}
+          onGeminiKey={(v) => {
+            setGeminiKey(v);
+            setSaved(false);
+          }}
+          onRemoveGemini={removeGemini}
           nvidiaKey={nvidiaKey}
           onNvidiaKey={(v) => {
             setNvidiaKey(v);
@@ -301,37 +290,14 @@ export default function ConfiguracoesPage() {
           {saveErr && <span className="text-sm text-danger">{saveErr}</span>}
         </div>
 
-        {/* PIN */}
-        <Section icon={<KeyRound className="h-5 w-5" />} title="PIN de acesso" desc="Bloqueio de tela deste dispositivo">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="PIN atual">
-              <input type="password" value={pinCur} onChange={(e) => setPinCur(e.target.value)} className={inp} maxLength={6} />
-            </Field>
-            <Field label="Novo PIN">
-              <input type="password" value={pinNew} onChange={(e) => setPinNew(e.target.value)} className={inp} maxLength={6} />
-            </Field>
-          </div>
-          <div className="mt-3 flex items-center gap-3">
-            <button onClick={changePin} className="rounded-lg border border-border px-4 py-2 font-medium text-foreground/90 hover:bg-muted">
-              Alterar PIN
-            </button>
-            {pinMsg && (
-              <span className={`text-sm ${pinMsg.ok ? 'text-primary' : 'text-danger'}`}>{pinMsg.text}</span>
-            )}
-          </div>
-        </Section>
+        {/* login: usuário e senha do dono e do balcão */}
+        <AccessSettings />
 
         {/* Em breve */}
         <Section icon={<CreditCard className="h-5 w-5" />} title="Integração com meios de pagamento" desc="Em breve">
           <p className="text-sm text-muted-foreground">
             Conciliação automática de cartão/PIX e TEF ainda não estão disponíveis. Hoje a forma de
             pagamento é registrada manualmente no PDV.
-          </p>
-        </Section>
-
-        <Section icon={<Users className="h-5 w-5" />} title="Usuários e permissões" desc="Desativado">
-          <p className="text-sm text-muted-foreground">
-            O sistema opera sem login por usuário — o acesso é protegido apenas pelo PIN do dispositivo.
           </p>
         </Section>
 
