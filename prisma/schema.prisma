@@ -662,6 +662,29 @@ model CopilotExample {
   @@index([createdAt])
 }
 
+/// Pix dos livros do Ciranda (venda da APM) informado pelo WhatsApp: comprovante
+/// e dados da criança chegam em qualquer ordem e vão preenchendo a mesma linha.
+/// Registro do que o cliente mandou; a confirmação do dinheiro é no banco.
+model CirandaPayment {
+  id           String   @id @default(uuid())
+  /// telefone só com dígitos ou, se faltar, o nome do contato
+  contactKey   String
+  contactName  String   @default("")
+  phone        String   @default("")
+  childName    String   @default("")
+  schoolGrade  String   @default("")
+  guardianName String   @default("")
+  hasReceipt   Boolean  @default(false)
+  /// foto do comprovante (JPEG em data URL)
+  receiptImage String   @default("")
+  /// o que a IA leu na foto: valor, data, quem pagou, quem recebeu
+  receiptInfo  String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([contactKey, createdAt])
+  @@index([createdAt])
+}
+
 /// O que o agente de IA do WhatsApp fez: respondeu (reply), passou para o
 /// atendente (handoff) ou chamou de volta um cliente parado (winback).
 /// Alimenta o painel "IA hoje" e o histórico do Atendimento.

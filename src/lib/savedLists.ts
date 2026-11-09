@@ -35,6 +35,60 @@ export const gradeKey = (grade: string) =>
     .replace(/ª/g, "a")
     .replace(/[^a-z0-9]+/g, "")
 
+const ORDINALS: Record<string, string> = { primeiro: "1", segundo: "2", terceiro: "3", quarto: "4", quinto: "5", sexto: "6", setimo: "7", oitavo: "8", nono: "9" }
+
+/**
+ * Série como o cliente fala → etiqueta comparável: "terceiro ano", "3o ano" e
+ * "3º ano do fundamental" = "a3"; "infantil 4" e "4 anos" = "i4"; "1ª série do
+ * médio" = "ma1". null quando não dá para saber a série ("3", "a do meu filho").
+ */
+export function gradeTag(grade: string): string | null {
+  const t = norm(grade)
+    .replace(/[º°ª]/g, "")
+    .replace(/\b(primeiro|segundo|terceiro|quarto|quinto|sexto|setimo|oitavo|nono)\b/g, (w) => ORDINALS[w])
+  const medio = /\bmedio\b/.test(t) ? "m" : ""
+  const infantil = /\binfantil\s*(\d)/.exec(t) ?? /\b(\d)\s*anos\b/.exec(t)
+  if (infantil && !medio) return `i${infantil[1]}`
+  const ano = /\b(\d{1,2})\s*[oa]?\s*(?:ano|serie)\b/.exec(t)
+  return ano ? `${medio}a${ano[1]}` : null
+}
+
+export type ActiveList<T> = T & { grade: string; schoolYear: number; schoolName: string }
+
+export type ListPick<T> =
+  | { status: "found"; list: ActiveList<T> }
+  /** nenhuma lista dessa escola */
+  | { status: "no_school"; schools: string[] }
+  /** a série não foi entendida ou não tem lista salva; grades = as que têm */
+  | { status: "no_grade"; grades: string[] }
+  /** duas escolas têm essa série e o cliente não disse qual */
+  | { status: "many_schools"; schools: string[] }
+
+const SCHOOL_STOP = new Set(["colegio", "escola", "instituto", "de", "do", "da", "dos", "das", "e", "o", "a"])
+const schoolWords = (s: string) => norm(s).replace(/[^a-z0-9]+/g, " ").split(" ").filter((w) => w && !SCHOOL_STOP.has(w))
+
+/** "são josé", "agostiniano" e a sigla "CSJ" servem para o Colégio São José Agostiniano. */
+function sameSchool(asked: string, name: string): boolean {
+  const q = schoolWords(asked)
+  if (!q.length) return true
+  const words = schoolWords(name)
+  const initials = norm(name).replace(/[^a-z0-9]+/g, " ").split(" ").filter((w) => w.length > 2).map((w) => w[0]).join("")
+  return q.every((w) => words.includes(w) || (w.length >= 3 && initials.startsWith(w)))
+}
+
+/** Acha a lista ativa pela série (e escola, se o cliente disse); entre anos letivos, a mais nova. */
+export function pickList<T>(lists: ActiveList<T>[], grade: string, school = ""): ListPick<T> {
+  const uniq = (xs: string[]) => [...new Set(xs)]
+  const inSchool = lists.filter((l) => sameSchool(school, l.schoolName))
+  if (!inSchool.length) return { status: "no_school", schools: uniq(lists.map((l) => l.schoolName)) }
+  const tag = gradeTag(grade)
+  const matches = tag ? inSchool.filter((l) => gradeTag(l.grade) === tag) : inSchool.filter((l) => gradeKey(l.grade) === gradeKey(grade))
+  if (!matches.length) return { status: "no_grade", grades: uniq(inSchool.map((l) => l.grade)) }
+  const schools = uniq(matches.map((l) => l.schoolName))
+  if (schools.length > 1) return { status: "many_schools", schools }
+  return { status: "found", list: matches.reduce((a, b) => (b.schoolYear > a.schoolYear ? b : a)) }
+}
+
 export type SavedItemInput = { raw: string; text: string; qty: number; productId: string | null }
 
 /**

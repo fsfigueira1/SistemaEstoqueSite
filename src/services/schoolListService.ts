@@ -65,8 +65,24 @@ Responda somente com as linhas, sem comentários.`
 
 const cleanLines = (text: string) => text.replace(/```[a-z]*\n?|```/g, "").trim()
 
-/** Lê a foto da lista com a IA escolhida em Configurações (NVIDIA, Gemini ou Claude). */
-export async function readListWithAI(dataUrl: string): Promise<string> {
+/** Resposta da IA quando a foto do WhatsApp não é uma lista de material. */
+export const NOT_A_LIST = "NAO_E_LISTA"
+
+/** Primeira palavra da resposta da IA quando a foto é um comprovante de pagamento. */
+export const RECEIPT = "COMPROVANTE"
+
+/** O que a IA leu no comprovante; null se a foto não for comprovante. */
+export const receiptInfo = (text: string): string | null => (text.trim().startsWith(RECEIPT) ? text.trim().slice(RECEIPT.length).replace(/^[\s:|-]+/, "") : null)
+
+/**
+ * Lê a foto da lista com a IA escolhida em Configurações (NVIDIA, Gemini ou
+ * Claude). rejectOther: a foto pode ser qualquer coisa (veio do WhatsApp), e a
+ * IA responde NOT_A_LIST se não for uma lista.
+ */
+export async function readListWithAI(dataUrl: string, opts: { rejectOther?: boolean } = {}): Promise<string> {
+  const prompt = opts.rejectOther
+    ? `${PROMPT}\nSe a imagem for um comprovante de pagamento (Pix, transferência), responda na primeira linha somente ${RECEIPT} e, nas linhas seguintes: valor, data, nome de quem pagou, nome e CNPJ de quem recebeu.\nSe a imagem não for lista de material nem comprovante, responda somente: ${NOT_A_LIST}`
+    : PROMPT
   const settings = await getServerSettings()
   const m = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl)
   if (!m) throw new Error("Imagem inválida — use JPG ou PNG")
@@ -80,17 +96,17 @@ export async function readListWithAI(dataUrl: string): Promise<string> {
           role: "user",
           content: [
             { type: "image_url", image_url: { url: dataUrl } },
-            { type: "text", text: PROMPT },
+            { type: "text", text: prompt },
           ],
         },
       ],
     })
     return cleanLines(text)
   }
-  return readWithClaude(m[1], m[2], settings.aiApiKey.trim(), settings.aiModel)
+  return readWithClaude(m[1], m[2], settings.aiApiKey.trim(), settings.aiModel, prompt)
 }
 
-async function readWithClaude(mediaType: string, base64: string, apiKey: string, model: string | null): Promise<string> {
+async function readWithClaude(mediaType: string, base64: string, apiKey: string, model: string | null, prompt: string): Promise<string> {
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 90_000)
@@ -107,7 +123,7 @@ async function readWithClaude(mediaType: string, base64: string, apiKey: string,
             role: "user",
             content: [
               { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-              { type: "text", text: PROMPT },
+              { type: "text", text: prompt },
             ],
           },
         ],

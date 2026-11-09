@@ -57,6 +57,69 @@ describe('AgentService (Nemotron com ferramentas)', () => {
     expect(await prisma.quoteRequest.count()).toBe(1);
   });
 
+  describe('ver_lista_escolar', () => {
+    const SOURCE = '*Colégio São José — 3º ano — 2027*\n\nTaxa: R$ 100,00\n• 2 borrachas';
+
+    beforeEach(async () => {
+      const school = await prisma.school.create({ data: { name: 'Colégio São José Agostiniano', slug: 'colegio-sao-jose-agostiniano' } });
+      const lapis = await prisma.product.findFirstOrThrow({ where: { sku: 'ALAP' } });
+      await prisma.schoolList.create({
+        data: { schoolId: school.id, grade: '3º ano', schoolYear: 2027, code: 'L-3ANO', sourceText: SOURCE, items: { create: [{ position: 0, raw: '1 lápis', text: 'lápis', qty: 1, productId: lapis.id }] } },
+      });
+      await prisma.schoolList.create({ data: { schoolId: school.id, grade: 'Infantil 3', schoolYear: 2027, code: 'L-INF3', sourceText: 'Lista do Infantil 3' } });
+    });
+
+    const ask = async (args: Record<string, string>, opening = 'Oi, Ana! Aqui está a lista 😊', text = 'Qual a lista do terceiro ano?') => {
+      const { complete, seen } = script({ tools: [tool('ver_lista_escolar', args)] }, { content: opening });
+      const r = await AgentService.run({ name: 'Ana', phone: '', text }, { complete, now: OPEN });
+      return { r, seen };
+    };
+
+    it('anexa o texto salvo da série e o código para pedir orçamento', async () => {
+      const { r } = await ask({ serie: 'terceiro ano', escola: 'São José' });
+      expect(r).toMatchObject({ action: 'send', mode: 'agente' });
+      expect(r.reply).toMatch(/^Oi, Ana! Aqui está a lista/);
+      expect(r.reply).toContain(SOURCE);
+      expect(r.reply).toContain('#L-3ANO');
+      expect(r.steps).toContain('consultando a lista "terceiro ano"');
+    });
+
+    it('lista sem produto ligado não oferece orçamento', async () => {
+      const { r } = await ask({ serie: 'infantil 3' });
+      expect(r.reply).toContain('Lista do Infantil 3');
+      expect(r.reply).not.toContain('#L-INF3');
+    });
+
+    it('Infantil: script pronto, sem nenhuma frase da IA', async () => {
+      const { r } = await ask({ serie: 'infantil 3' }, 'O Ciranda é com a equipe do colégio.');
+      expect(r.action).toBe('send');
+      expect(r.reply).toBe('Oi, Ana! Seguem as informações do Infantil 3:\n\nLista do Infantil 3');
+    });
+
+    it('série sem lista: a IA recebe as séries salvas e nada é anexado', async () => {
+      const { r, seen } = await ask({ serie: '9º ano' }, 'Oi! Temos do Infantil 3 e do 3º ano.');
+      expect(r.reply).toBe('Oi! Temos do Infantil 3 e do 3º ano.');
+      expect(JSON.stringify(seen[1])).toContain('Séries com lista: 3º ano; Infantil 3');
+    });
+
+    it('escola sem lista não mostra a lista de outra escola', async () => {
+      const { r } = await ask({ serie: '3º ano', escola: 'Objetivo' }, 'Essa escola ainda não temos, pode mandar a lista?');
+      expect(r.reply).not.toContain(SOURCE);
+    });
+
+    it('abertura da IA com preço é trocada e a lista ainda vai', async () => {
+      const { r } = await ask({ serie: '3º ano' }, 'A taxa é R$ 100,00');
+      expect(r).toMatchObject({ action: 'send' });
+      expect(r.reply).toMatch(/^Oi, Ana! Segue a lista:/);
+      expect(r.reply).toContain(SOURCE);
+    });
+
+    it('pergunta em duas linhas não vai para o atendente como lista não orçada', async () => {
+      const { r } = await ask({ serie: '3º ano' }, 'Aqui está!', 'Oi\nqual a lista do 3 ano\ndo são josé?');
+      expect(r.action).toBe('send');
+    });
+  });
+
   it('chamar_atendente: passa para a loja e não responde', async () => {
     const { complete } = script({ tools: [tool('chamar_atendente', { motivo: 'quer encomendar 200 convites' })] });
     const r = await AgentService.run({ name: 'Ana', phone: '', text: 'Vocês fazem 200 convites de casamento personalizados?' }, { complete, now: OPEN });

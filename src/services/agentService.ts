@@ -3,6 +3,8 @@
 //   buscar_produtos  — "tem X?": procura no estoque
 //   montar_orcamento — lista de material ou código de lista salva → orçamento
 //                      montado pelo sistema e salvo em Orçamentos pedidos
+//   ver_lista_escolar — "qual a lista do 3º ano?": lista salva da escola, com
+//                      o texto anexado pelo sistema, do jeito que foi salvo
 //   chamar_atendente — passa a conversa para uma pessoa da loja
 // Regra de ouro (igual ao copiloto): a IA escreve a conversa; nome de produto
 // com preço, total e orçamento são anexados pelo SISTEMA, do cadastro. Texto
@@ -16,6 +18,8 @@ import { getServerSettings, type ServerSettings } from "@/lib/serverSettings"
 import { PRICE_RE, buildPersonaPrompt } from "@/lib/copilotStyle"
 import { CopilotExampleService } from "@/services/copilotExampleService"
 import { CopilotParts, CopilotService, type Built, type DraftResult } from "@/services/copilotService"
+import { SavedListService } from "@/services/savedListService"
+import { CirandaPaymentService, cirandaReply } from "@/services/cirandaPaymentService"
 
 export type ChatLine = { from: "cliente" | "loja"; text: string }
 export type Complete = (messages: NvMessage[], tools: NvTool[]) => Promise<{ content: string; toolCalls: NvToolCall[] }>
@@ -72,6 +76,38 @@ export const AGENT_TOOLS: NvTool[] = [
   {
     type: "function",
     function: {
+      name: "ver_lista_escolar",
+      description:
+        "Mostra a lista de material de uma série, salva pela loja: livros, material, onde comprar, início das aulas. Use quando o cliente perguntar qual é a lista, o que precisa comprar ou qual livro é pedido para uma série.",
+      parameters: {
+        type: "object",
+        properties: {
+          serie: { type: "string", description: "a série como o cliente falou, ex.: '3º ano', 'infantil 4', 'quinto ano'" },
+          escola: { type: "string", description: "a escola, só se o cliente falou, ex.: 'São José'" },
+        },
+        required: ["serie"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "registrar_dados_ciranda",
+      description:
+        "Salva os dados de quem pagou por Pix os livros do Ciranda (APM). Use quando o cliente mandar o nome da criança, o ano escolar ou o nome do responsável para esse pagamento, ou disser que já fez o Pix do Ciranda. Passe só o que o cliente informou.",
+      parameters: {
+        type: "object",
+        properties: {
+          crianca: { type: "string", description: "nome da criança" },
+          ano: { type: "string", description: "ano escolar, ex.: 'Infantil 4'" },
+          responsavel: { type: "string", description: "nome do responsável" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "chamar_atendente",
       description:
         "Passa a conversa para uma pessoa da loja. Use para troca, defeito, reclamação, cobrança, desconto ou negociação, encomenda, foto/áudio que você não entende, ou quando não tiver certeza da resposta.",
@@ -106,6 +142,9 @@ Como trabalhar:
 - Leia a conversa e responda a ÚLTIMA mensagem do cliente.
 - Cliente pergunta se tem um produto ou o preço → use buscar_produtos.
 - Lista de material, pedido com vários itens ou código de lista → use montar_orcamento.
+- Cliente pergunta qual é a lista de uma série, o que precisa comprar ou qual livro é pedido → use ver_lista_escolar. Se ele não disse a série, pergunte qual é.
+- Cliente pergunta dos livros do Ciranda ou como pagar o material do Infantil → use ver_lista_escolar com a série (Infantil 3, 4 ou 5). O material escolar do Infantil é só com a equipe do colégio.
+- Cliente manda nome da criança, ano escolar ou nome do responsável do Pix do Ciranda, ou diz que já pagou → use registrar_dados_ciranda.
 - Troca, defeito, reclamação, cobrança, desconto, negociação, encomenda ou dúvida que você não sabe → use chamar_atendente.
 - Depois de usar as ferramentas, escreva a mensagem para o cliente.
 
@@ -123,7 +162,7 @@ ${CopilotParts.nowNote(now)}`
 function conversation(name: string, text: string, history: ChatLine[] | undefined): string {
   const lines = (history?.length ? history : [{ from: "cliente" as const, text }]).slice(-MAX_HISTORY)
   const who = name ? `Cliente: ${name}` : "Cliente sem nome salvo"
-  return `${who}\n\nConversa (a mais recente por último):\n${lines.map((l) => `${l.from === "cliente" ? "Cliente" : "Loja"}: ${l.text.slice(0, 1200)}`).join("\n")}\n\nResponda a última mensagem do cliente.`
+  return `${who}\n\nConversa (a mais recente por último):\n${lines.map((l) => `${l.from === "cliente" ? "Cliente" : "Loja"}: ${l.text.slice(0, 4000)}`).join("\n")}\n\nResponda a última mensagem do cliente.`
 }
 
 /** Resultado do copiloto simples no formato do agente. */
@@ -141,10 +180,24 @@ const fromDraft = (d: DraftResult, steps: string[]): AgentResult => ({
   productQuery: d.productQuery,
 })
 
-type Found = { productBlock: string | null; quote: { built: Built; block: string } | null; handoff: string | null; searched: { query: string; found: boolean } | null }
+type Found = {
+  productBlock: string | null
+  quote: { built: Built; block: string } | null
+  handoff: string | null
+  searched: { query: string; found: boolean } | null
+  listBlock: string | null
+  /** resposta inteira escrita pelo sistema (pagamento do Ciranda) */
+  directReply: string | null
+}
 
-async function runTool(call: NvToolCall, s: ServerSettings, f: Found, steps: string[]): Promise<string> {
+async function runTool(call: NvToolCall, s: ServerSettings, f: Found, steps: string[], who: { name: string; phone: string }): Promise<string> {
   const args = parseArgs(call)
+  if (call.function.name === "registrar_dados_ciranda") {
+    steps.push("salvando dados do Ciranda")
+    const saved = await CirandaPaymentService.addDetails(who, { childName: args.crianca, schoolGrade: args.ano, guardianName: args.responsavel })
+    f.directReply = cirandaReply(saved)
+    return "Dados salvos. O sistema responde ao cliente."
+  }
   if (call.function.name === "buscar_produtos") {
     const q = (args.consulta || "").trim().slice(0, 120)
     steps.push(`buscando "${q}" no estoque`)
@@ -170,6 +223,22 @@ async function runTool(call: NvToolCall, s: ServerSettings, f: Found, steps: str
       return `Orçamento pronto com ${priced} itens${missing ? ` (${missing} a loja confere)` : ""}. Ele vai anexado pelo sistema logo abaixo da sua mensagem; escreva só uma abertura curta.`
     }
     return "Não reconheci itens da loja nessa lista. Peça para o cliente mandar a lista de material (texto ou foto) ou chame o atendente."
+  }
+  if (call.function.name === "ver_lista_escolar") {
+    const serie = (args.serie || "").trim().slice(0, 80)
+    steps.push(`consultando a lista "${serie}"`)
+    const r = await SavedListService.findForCustomer(serie, (args.escola || "").trim().slice(0, 80))
+    if (r.status === "no_school") return `Essa escola não tem lista salva. Escolas com lista: ${r.schools.join("; ") || "nenhuma"}. Diga isso ao cliente e ofereça montar o orçamento se ele mandar a lista (texto ou foto).`
+    if (r.status === "no_grade") return `Não há lista salva para "${serie}". Séries com lista: ${r.grades.join("; ")}. Se o cliente não disse a série, pergunte; senão, diga as que temos e ofereça montar o orçamento se ele mandar a lista.`
+    if (r.status === "many_schools") return `Mais de uma escola tem essa série: ${r.schools.join("; ")}. Pergunte de qual escola é.`
+    const { list } = r
+    f.listBlock = [list.sourceText, ...(list.quotable ? [`Para receber o orçamento dos materiais com os preços de hoje, é só responder: #${list.code}`] : [])].join("\n\n")
+    // Infantil tem script pronto da APM: vai sem nenhuma frase escrita pela IA
+    if (/^infantil/i.test(list.grade)) {
+      const first = CopilotParts.firstName(who.name)
+      f.directReply = `${first ? `Oi, ${first}!` : "Olá!"} Seguem as informações do ${list.grade}:\n\n${f.listBlock}`
+    }
+    return `Lista encontrada: ${list.schoolName}, ${list.grade}, ano letivo ${list.schoolYear}. O texto completo vai anexado pelo sistema logo abaixo da sua mensagem; escreva só uma abertura curta, sem copiar a lista.${list.quotable ? ` Se o cliente pediu orçamento, use montar_orcamento com o código ${list.code}.` : ""}`
   }
   if (call.function.name === "chamar_atendente") {
     f.handoff = (args.motivo || "o agente pediu ajuda").slice(0, 160)
@@ -206,7 +275,7 @@ export const AgentService = {
       { role: "system", content: systemPrompt(s, persona, now) },
       { role: "user", content: conversation(name, text, input.history) },
     ]
-    const f: Found = { productBlock: null, quote: null, handoff: null, searched: null }
+    const f: Found = { productBlock: null, quote: null, handoff: null, searched: null, listBlock: null, directReply: null }
     let content = ""
 
     try {
@@ -217,7 +286,7 @@ export const AgentService = {
           break
         }
         messages.push({ role: "assistant", content: r.content || null, tool_calls: r.toolCalls })
-        for (const call of r.toolCalls) messages.push({ role: "tool", tool_call_id: call.id, content: await runTool(call, s, f, steps) })
+        for (const call of r.toolCalls) messages.push({ role: "tool", tool_call_id: call.id, content: await runTool(call, s, f, steps, { name, phone: input.phone }) })
       }
     } catch {
       // NVIDIA sem ferramentas, fora do ar ou sem chave: copiloto simples
@@ -227,18 +296,23 @@ export const AgentService = {
     const intent: DraftResult["intent"] = f.quote ? "list" : f.searched ? "product" : "other"
     const base = { quoteRequestId: null, total: null, steps, mode: "agente" as const, intent, productQuery: f.searched?.query }
     if (f.handoff) return { ...base, action: "human", reply: "", reason: f.handoff }
+    if (f.directReply) {
+      steps.push("resposta pronta")
+      return { ...base, action: "send", reply: f.directReply, reason: "" }
+    }
     // lista que o agente não orçou: não arrisca, o atendente vê
-    if (kind === "list" && !f.quote) return { ...base, action: "human", reply: "", reason: "lista de material que o agente não conseguiu orçar", intent: "list" }
+    if (kind === "list" && !f.quote && !f.listBlock) return { ...base, action: "human", reply: "", reason: "lista de material que o agente não conseguiu orçar", intent: "list" }
     if (f.searched && !f.searched.found)
       return { ...base, action: "human", reply: "", reason: `não achei "${f.searched.query}" no estoque — confira se tem com outro nome`, productFound: false }
 
     // texto da IA com preço, vazio ou enorme: não vai sozinho
     let opening = content.trim()
     if (!opening || opening.length > 700 || PRICE_RE.test(opening)) {
-      if (!f.quote && !f.productBlock) return { ...base, action: "human", reply: "", reason: "a IA não conseguiu escrever uma resposta segura" }
-      opening = f.quote ? `${first ? `Oi, ${first}!` : "Olá!"} Segue o orçamento:` : `${first ? `Oi, ${first}!` : "Oi!"} Temos sim 😊`
+      if (!f.quote && !f.productBlock && !f.listBlock) return { ...base, action: "human", reply: "", reason: "a IA não conseguiu escrever uma resposta segura" }
+      const hi = first ? `Oi, ${first}!` : "Olá!"
+      opening = f.quote ? `${hi} Segue o orçamento:` : f.productBlock ? `${first ? `Oi, ${first}!` : "Oi!"} Temos sim 😊` : `${hi} Segue a lista:`
     }
-    const attached = f.quote?.block ?? f.productBlock
+    const attached = f.quote?.block ?? f.productBlock ?? f.listBlock
     const reply = attached ? `${opening}\n\n${attached}` : opening
     if (f.quote) {
       const saved = await CopilotParts.saveQuote({ name, phone: input.phone }, f.quote.built, reply)

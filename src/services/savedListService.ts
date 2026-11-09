@@ -8,6 +8,7 @@ import {
   gradeKey,
   newListCode,
   normalizeGrade,
+  pickList,
   savedLines,
   slugify,
   type SavedItemInput,
@@ -169,6 +170,33 @@ export const SavedListService = {
       : []
     const catalog = new Map(products.map((p) => [p.id, toCatalogProduct(p)]))
     return { list: toSummary(list), lines: savedLines(list.items, catalog), sourceText: list.sourceText }
+  },
+
+  /** Lista ativa por série e escola, para o agente responder "qual a lista do 3º ano?". */
+  async findForCustomer(grade: string, school = "") {
+    await ensureSchema()
+    const rows = await prisma.schoolList.findMany({
+      where: { active: true },
+      orderBy: { grade: "asc" },
+      select: {
+        code: true,
+        grade: true,
+        schoolYear: true,
+        sourceText: true,
+        school: { select: { name: true } },
+        _count: { select: { items: { where: { productId: { not: null } } } } },
+      },
+    })
+    const lists = rows.map((l) => ({
+      code: l.code,
+      grade: l.grade,
+      schoolYear: l.schoolYear,
+      schoolName: l.school.name,
+      sourceText: l.sourceText,
+      /** dá para orçar: ao menos um item está ligado a um produto */
+      quotable: l._count.items > 0,
+    }))
+    return pickList(lists, grade, school)
   },
 
   async setActive(id: string, active: boolean): Promise<void> {

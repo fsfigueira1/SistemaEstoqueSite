@@ -30,6 +30,7 @@ export async function cleanupDatabase() {
       await prisma.quoteRequest.deleteMany();
       await prisma.copilotExample.deleteMany();
       await prisma.agentEvent.deleteMany();
+      await prisma.cirandaPayment.deleteMany();
       await prisma.broadcastRecipient.deleteMany();
       await prisma.broadcast.deleteMany();
       await prisma.whatsAppMessage.deleteMany();
