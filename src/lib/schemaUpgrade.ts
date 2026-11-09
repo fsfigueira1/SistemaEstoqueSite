@@ -264,6 +264,25 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
   // --- 0.5.0: Google Gemini (escolhida ou reserva da NVIDIA) ---
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "geminiModel" TEXT NOT NULL DEFAULT 'gemini-3.8-flash'`,
+
+  // --- Comprovantes de Pix do Ciranda (APM) ---
+  `CREATE TABLE IF NOT EXISTS "CirandaPayment" (
+    "id" TEXT NOT NULL,
+    "contactKey" TEXT NOT NULL,
+    "contactName" TEXT NOT NULL DEFAULT '',
+    "phone" TEXT NOT NULL DEFAULT '',
+    "childName" TEXT NOT NULL DEFAULT '',
+    "schoolGrade" TEXT NOT NULL DEFAULT '',
+    "guardianName" TEXT NOT NULL DEFAULT '',
+    "hasReceipt" BOOLEAN NOT NULL DEFAULT false,
+    "receiptImage" TEXT NOT NULL DEFAULT '',
+    "receiptInfo" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "CirandaPayment_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "CirandaPayment_contactKey_createdAt_idx" ON "CirandaPayment"("contactKey", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "CirandaPayment_createdAt_idx" ON "CirandaPayment"("createdAt")`,
 ]
 
 let upgrade: Promise<void> | null = null

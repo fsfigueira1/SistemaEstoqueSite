@@ -113,19 +113,26 @@ function createAutoReply({ appOrigin, ensureView, lastInputAt, authCookie }) {
     }
     const last = chat.messages[chat.messages.length - 1];
     if (!last || last.from !== "cliente") return; // alguém da loja já respondeu
-    if (dom.newMedia(chat.messages, item.unread || 1)) {
-      handoff(item.name, chat.phone, "mandou foto, áudio ou figurinha — veja a conversa");
-      notify("Atendimento: precisa de você", `${item.name} mandou foto ou áudio`);
-      return;
+    const fresh = item.unread || 1;
+    let images = [];
+    if (dom.newMedia(chat.messages, fresh)) {
+      // foto o sistema tenta ler; áudio, figurinha e foto não baixada vão para o atendente
+      images = dom.onlyPhotos(chat.messages, fresh) ? await run(dom.captureImages, fresh) : [];
+      if (!images.length) {
+        handoff(item.name, chat.phone, "mandou foto, áudio ou figurinha — veja a conversa");
+        notify("Atendimento: precisa de você", `${item.name} mandou foto ou áudio`);
+        return;
+      }
     }
-    const turn = dom.customerTurn(chat.messages, item.unread || 1);
-    if (!turn.trim() || state.handled.get(item.name) === turn) return;
-    state.handled.set(item.name, turn);
+    const turn = dom.customerTurn(chat.messages, fresh);
+    const handledKey = `${turn}|${images.map((i) => i.length).join(",")}`;
+    if ((!turn.trim() && !images.length) || state.handled.get(item.name) === handledKey) return;
+    state.handled.set(item.name, handledKey);
     if (!L.rateOk(state.sentTimes, now(), state.maxPerHour)) {
       handoff(item.name, chat.phone, `limite de ${state.maxPerHour} respostas por hora`);
       return;
     }
-    const d = await api("/api/copilot/auto", { name: chat.name, phone: chat.phone, text: turn, history: L.historyFor(chat.messages) });
+    const d = await api("/api/copilot/auto", { name: chat.name, phone: chat.phone, text: turn, images, history: L.historyFor(chat.messages) });
     const mark = (status) => (d.eventId ? api(`/api/agent/events/${d.eventId}`, { status }, 15_000).catch(() => {}) : null);
     if (d.action === "human") {
       log(state.human, { name: item.name, reason: d.reason, at: now() }, 30);

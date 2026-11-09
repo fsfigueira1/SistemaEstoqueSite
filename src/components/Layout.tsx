@@ -58,6 +58,7 @@ const groups: Array<{
       { name: 'Revisão de cadastro', href: '/revisao', icon: SpellCheck },
       { name: 'Compras', href: '/compras', icon: ClipboardList },
       { name: 'Relatórios', href: '/relatorios', icon: NotebookPen },
+      { name: 'Ciranda (APM)', href: '/ciranda', icon: NotebookPen },
       { name: 'Configurações', href: '/configuracoes', icon: Settings },
     ],
   },

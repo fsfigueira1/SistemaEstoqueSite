@@ -59,10 +59,64 @@ describe("readOpenChat", () => {
     const html = FIXTURE.replace("        </div>\n        <footer>", `          ${foto}\n        </div>\n        <footer>`)
     const r = dom.readOpenChat(page(html))
     if (!r.ok) throw new Error("devia ler")
-    expect(r.messages.at(-1)).toEqual({ from: "cliente", text: "", media: true })
+    expect(r.messages.at(-1)).toEqual({ from: "cliente", text: "", media: true, image: true })
     expect(dom.newMedia(r.messages, 1)).toBe(true)
     expect(dom.newMedia(r.messages.slice(0, -1), 1)).toBe(false)
     expect(dom.customerTurn(r.messages, 2)).toBe("3 lápis preto")
+  })
+
+  const bolha = (corpo: string) => `<div tabindex="-1" data-testid="conv-msg-X"><div data-testid="msg-container"><span data-icon="tail-in"></span>${corpo}</div></div>`
+  const comBolhas = (...corpos: string[]) => page(FIXTURE.replace("        </div>\n        <footer>", `          ${corpos.map(bolha).join("\n")}\n        </div>\n        <footer>`))
+  const FOTO = '<div role="button" aria-label="Abrir imagem"><img src="blob:https://web.whatsapp.com/abc" /></div>'
+  const lidas = (d: Document) => {
+    const r = dom.readOpenChat(d)
+    if (!r.ok) throw new Error("devia ler")
+    return r.messages
+  }
+
+  it("foto com legenda: fica com o texto e marcada como foto", () => {
+    const legenda = `<div data-pre-plain-text="[10:06, 22/10/2026] Ana Souza: "><span class="selectable-text copyable-text"><span>segue a lista</span></span></div>${FOTO}`
+    const m = lidas(comBolhas(legenda))
+    expect(m.at(-1)).toEqual({ from: "cliente", text: "segue a lista", image: true })
+    expect(dom.newMedia(m, 1)).toBe(true)
+    expect(dom.onlyPhotos(m, 1)).toBe(true)
+  })
+
+  it("áudio e figurinha não são foto: vão para o atendente", () => {
+    const audio = lidas(comBolhas('<span data-icon="ptt-play"></span>'))
+    expect(dom.onlyPhotos(audio, 1)).toBe(false)
+    expect(audio.at(-1)).toEqual({ from: "cliente", text: "", media: true })
+    const figurinha = lidas(comBolhas('<div aria-label="Figurinha"><img src="blob:https://web.whatsapp.com/f" /></div>'))
+    expect(figurinha.at(-1)).toEqual({ from: "cliente", text: "", media: true })
+    expect(dom.onlyPhotos(figurinha, 1)).toBe(false)
+    expect(dom.onlyPhotos(lidas(comBolhas(FOTO, '<span data-icon="ptt-play"></span>')), 2)).toBe(false)
+  })
+
+  describe("captureImages", () => {
+    const comCanvas = (d: Document, largura = 1000) => {
+      d.querySelectorAll("img").forEach((i) => Object.defineProperty(i, "naturalWidth", { value: largura }))
+      d.querySelectorAll("img").forEach((i) => Object.defineProperty(i, "naturalHeight", { value: 800 }))
+      const proto = d.defaultView!.HTMLCanvasElement.prototype
+      proto.getContext = (() => ({ drawImage: () => {} })) as never
+      proto.toDataURL = function (this: HTMLCanvasElement) {
+        return `data:image/jpeg;base64,${this.width}x${this.height}`
+      } as never
+      return d
+    }
+
+    it("só as fotos novas do cliente, na ordem", () => {
+      expect(dom.captureImages(comCanvas(comBolhas(FOTO, FOTO)), 2)).toEqual(["data:image/jpeg;base64,1000x800", "data:image/jpeg;base64,1000x800"])
+      expect(dom.captureImages(comCanvas(comBolhas(FOTO, FOTO)), 1)).toHaveLength(1)
+    })
+
+    it("reduz foto grande e no máximo 3", () => {
+      expect(dom.captureImages(comCanvas(comBolhas(FOTO), 3200), 1)).toEqual(["data:image/jpeg;base64,1600x400"])
+      expect(dom.captureImages(comCanvas(comBolhas(FOTO, FOTO, FOTO, FOTO)), 4)).toHaveLength(3)
+    })
+
+    it("miniatura pequena não serve", () => {
+      expect(dom.captureImages(comCanvas(comBolhas(FOTO), 80), 1)).toEqual([])
+    })
   })
 
   it("robô: só as mensagens novas (não lidas), nunca uma antiga junto", () => {

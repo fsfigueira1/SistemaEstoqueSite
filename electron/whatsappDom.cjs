@@ -27,6 +27,10 @@ const SELECTORS = {
   /** mensagem sem texto (foto, áudio, vídeo, figurinha, documento) */
   mediaEl: 'img[src^="blob:"], audio, video, [data-icon="audio-play"], [data-icon="ptt-play"]',
   mediaLabel: "imagem|foto|v[íi]deo|[áa]udio|mensagem de voz|figurinha|documento|image|photo|voice|sticker|document",
+  /** foto que o robô pode ler (o resto de mediaEl e as figurinhas vão para o atendente) */
+  photo: 'img[src^="blob:"]',
+  notPhoto: 'audio, video, [data-icon="audio-play"], [data-icon="ptt-play"]',
+  stickerLabel: "figurinha|sticker",
   send: '#main footer button[aria-label="Enviar"], #main footer button[aria-label="Send"]',
   row: '#pane-side [role="row"]',
   rowTitle: '[data-testid="cell-frame-title"] span[title]',
@@ -66,15 +70,17 @@ function readOpenChat(doc, S) {
   const messages = [];
   const authors = new Set();
   const media = new RegExp(S.mediaLabel, "i");
+  const sticker = new RegExp(S.stickerLabel, "i");
+  const isPhoto = (m) => Boolean(m.querySelector(S.photo)) && !m.querySelector(S.notPhoto) && ![...m.querySelectorAll("[aria-label]")].some((e) => sticker.test(e.getAttribute("aria-label") || ""));
   doc.querySelectorAll(S.message).forEach((m) => {
     const own =
       Boolean(m.querySelector(S.outgoing)) ||
       [...m.querySelectorAll("[aria-label]")].some((e) => status.test((e.getAttribute("aria-label") || "").trim()));
     const body = m.querySelector(S.text);
     if (!body) {
-      // foto, áudio, figurinha, documento: o robô não lê — fica para o atendente
+      // foto o robô tenta ler; áudio, figurinha e documento ficam para o atendente
       const isMedia = m.querySelector(S.mediaEl) || [...m.querySelectorAll("[aria-label]")].some((e) => media.test(e.getAttribute("aria-label") || ""));
-      if (isMedia) messages.push({ from: own ? "loja" : "cliente", text: "", media: true });
+      if (isMedia) messages.push({ from: own ? "loja" : "cliente", text: "", media: true, ...(isPhoto(m) ? { image: true } : {}) });
       return; // senão: divisória de data, aviso do sistema
     }
     const parts = [...body.querySelectorAll(".selectable-text")].filter((p) => !p.parentElement.closest(".selectable-text"));
@@ -84,7 +90,7 @@ function readOpenChat(doc, S) {
       const who = /\]\s*(.*?):\s*$/.exec(body.getAttribute("data-pre-plain-text") || "");
       if (who && who[1]) authors.add(who[1]);
     }
-    messages.push({ from: own ? "loja" : "cliente", text });
+    messages.push({ from: own ? "loja" : "cliente", text, ...(isPhoto(m) ? { image: true } : {}) });
   });
   return { ok: true, name: isPhone(name) ? "" : name, phone, group: authors.size > 1, messages };
 }
@@ -105,14 +111,53 @@ function customerTurn(messages, limit) {
   return after.slice(-max).filter((m) => m.text).map((m) => m.text).join("\n");
 }
 
-/** Entre as últimas `limit` mensagens do cliente (as novas) tem foto/áudio sem texto? */
-function newMedia(messages, limit) {
+/** As últimas `limit` mensagens do cliente (as novas) que são foto, áudio etc. */
+function newMediaMessages(messages, limit) {
   let last = -1;
   messages.forEach((m, i) => {
     if (m.from === "loja") last = i;
   });
   const after = messages.slice(last + 1).filter((m) => m.from === "cliente");
-  return after.slice(-(limit > 0 ? limit : after.length)).some((m) => m.media);
+  return after.slice(-(limit > 0 ? limit : after.length)).filter((m) => m.media || m.image);
+}
+
+/** Entre as mensagens novas do cliente tem foto, áudio, figurinha? */
+const newMedia = (messages, limit) => newMediaMessages(messages, limit).length > 0;
+
+/** Toda mídia nova é foto (o robô sabe ler)? */
+function onlyPhotos(messages, limit) {
+  const news = newMediaMessages(messages, limit);
+  return news.length > 0 && news.every((m) => m.image);
+}
+
+/**
+ * Fotos das últimas `limit` mensagens do cliente, como JPEG em data URL (até 3,
+ * lado maior 1600 px). Foto ainda sem baixar só tem miniatura: fica de fora e
+ * a conversa vai para o atendente.
+ */
+function captureImages(doc, limit, S) {
+  S = S || SELECTORS;
+  const MAX_SIDE = 1600;
+  const MIN_WIDTH = 200;
+  const status = new RegExp(S.statusLabel, "i");
+  const all = [...doc.querySelectorAll(S.message)];
+  const out = [];
+  let count = 0;
+  for (let i = all.length - 1; i >= 0 && out.length < 3; i--) {
+    const m = all[i];
+    if (m.querySelector(S.outgoing) || [...m.querySelectorAll("[aria-label]")].some((e) => status.test((e.getAttribute("aria-label") || "").trim()))) break;
+    if (!m.querySelector(S.text) && !m.querySelector(S.mediaEl)) continue; // divisória de data
+    if (limit > 0 && ++count > limit) break;
+    const img = m.querySelector(S.photo);
+    if (!img || img.naturalWidth < MIN_WIDTH) continue;
+    const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = doc.createElement("canvas");
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    out.unshift(canvas.toDataURL("image/jpeg", 0.85));
+  }
+  return out;
 }
 
 /** A conversa aberta é do cliente esperado? Pelo telefone quando os dois têm; senão pelo nome. */
@@ -206,4 +251,4 @@ function toScript(fn, ...args) {
   return `(${fn.toString()})(${params})`;
 }
 
-module.exports = { SELECTORS, readOpenChat, customerTurn, newMedia, sameChat, listChats, openChat, expandReadMore, insertIntoCompose, sendCompose, toScript };
+module.exports = { SELECTORS, readOpenChat, customerTurn, newMedia, onlyPhotos, captureImages, sameChat, listChats, openChat, expandReadMore, insertIntoCompose, sendCompose, toScript };
