@@ -5,7 +5,8 @@
 // ou para a tela inicial do perfil.
 
 import { useState } from 'react';
-import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
+import KodaLogo from '@/components/KodaLogo';
 import { errorText } from '@/lib/friendlyError';
 
 export default function SenhaPage() {
@@ -40,22 +41,36 @@ export default function SenhaPage() {
     }
   };
 
-  const inp =
-    'w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-ring/40';
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-sidebar p-4">
-      <main className="w-full max-w-sm">
-        <div className="rounded-3xl border border-border bg-card p-8 shadow-2xl">
-          <div className="flex flex-col items-center text-center">
-            <img src="/logo.png" alt="" className="h-20 w-20 rounded-2xl bg-white object-cover shadow-sm ring-1 ring-black/5" />
-            <h1 className="mt-4 font-heading text-2xl font-semibold text-foreground">Laçolaria</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Entre com seu usuário e senha</p>
-          </div>
+    <div className="grid min-h-screen bg-ink text-cream lg:grid-cols-2">
+      {/* metade verde: marca */}
+      <section className="flex flex-col justify-between bg-primary p-8 text-ink sm:p-14">
+        <KodaLogo className="h-7 w-auto self-start" dot="currentColor" />
+        <div className="py-12">
+          <KodaLogo className="h-24 w-auto max-w-full sm:h-36" dot="currentColor" />
+          <p className="mt-8 max-w-md text-xl font-medium leading-snug sm:text-[1.6rem]">
+            Sistema de gestão para o balcão e o estoque da sua loja.
+          </p>
+        </div>
+        <div className="flex items-center justify-between font-mono text-sm">
+          <span>@buildkoda</span>
+          <span>v{process.env.NEXT_PUBLIC_APP_VERSION}</span>
+        </div>
+      </section>
 
-          <form onSubmit={submit} className="mt-7 space-y-4" noValidate>
+      {/* metade escura: entrar */}
+      <main className="koda-ink flex items-center justify-center bg-ink p-8 sm:p-14">
+        <div className="w-full max-w-md">
+          <p className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            <span className="h-2 w-2 rounded-full bg-primary" aria-hidden />
+            Laçolaria · Papelaria fina
+          </p>
+          <h1 className="mt-3 text-5xl text-foreground">Entrar</h1>
+          <p className="mt-3 text-lg text-muted-foreground">Entre com seu usuário e senha</p>
+
+          <form onSubmit={submit} className="mt-8 space-y-7" noValidate>
             <label className="block">
-              <span className="mb-1.5 block text-sm font-medium text-foreground">Usuário</span>
+              <span className="block text-sm font-semibold text-foreground">Usuário</span>
               <input
                 value={user}
                 onChange={(e) => setUser(e.target.value)}
@@ -65,11 +80,11 @@ export default function SenhaPage() {
                 spellCheck={false}
                 autoFocus
                 required
-                className={inp}
+                className="field-line"
               />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-sm font-medium text-foreground">Senha</span>
+              <span className="block text-sm font-semibold text-foreground">Senha</span>
               <span className="relative block">
                 <input
                   type={show ? 'text' : 'password'}
@@ -77,21 +92,21 @@ export default function SenhaPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                   required
-                  className={`${inp} pr-12`}
+                  className="field-line pr-20"
                 />
                 <button
                   type="button"
                   onClick={() => setShow((v) => !v)}
                   aria-label={show ? 'Esconder senha' : 'Mostrar senha'}
-                  className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-muted-foreground hover:text-foreground"
+                  className="absolute inset-y-0 right-0 flex items-center font-mono text-xs text-muted-foreground hover:text-foreground"
                 >
-                  {show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {show ? 'esconder' : 'mostrar'}
                 </button>
               </span>
             </label>
 
             {error && (
-              <p role="alert" className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-medium text-danger">
+              <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-medium text-danger">
                 {error}
               </p>
             )}
@@ -99,14 +114,15 @@ export default function SenhaPage() {
             <button
               type="submit"
               disabled={loading || !user.trim() || !password}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              className="flex w-full items-center justify-between rounded-full bg-primary py-2 pl-8 pr-2 text-lg font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
               {loading ? 'Entrando…' : 'Entrar'}
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-ink text-primary">
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
+              </span>
             </button>
           </form>
         </div>
-        <p className="mt-4 text-center text-xs text-sidebar-muted">v{process.env.NEXT_PUBLIC_APP_VERSION}</p>
       </main>
     </div>
   );

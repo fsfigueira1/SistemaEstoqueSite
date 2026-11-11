@@ -1,8 +1,9 @@
 import './globals.css';
 import type { Metadata } from 'next';
 // Fontes locais (sem Google Fonts): o build e o app funcionam offline.
-import '@fontsource-variable/inter/wght.css';
-import '@fontsource-variable/fraunces/opsz.css';
+import '@fontsource-variable/figtree/wght.css';
+import '@fontsource-variable/bricolage-grotesque/index.css';
+import '@fontsource-variable/jetbrains-mono/wght.css';
 import AppWrapper from '@/app/AppWrapper';
 
 export const metadata: Metadata = {

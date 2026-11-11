@@ -126,7 +126,7 @@ export default function RelatorioMesPage() {
           <Link href={`/relatorios/mes/${shift(mes, 1)}`} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted">
             {monthName(shift(mes, 1))} <ChevronRight className="h-4 w-4" />
           </Link>
-          <button type="button" onClick={() => window.print()} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+          <button type="button" onClick={() => window.print()} className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
             <Printer className="h-4 w-4" /> Imprimir
           </button>
         </div>

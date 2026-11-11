@@ -239,7 +239,7 @@ export default function OrcamentosPage() {
                     {v.label}
                   </button>
                 ))}
-                <button type="button" onClick={toPdv} className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                <button type="button" onClick={toPdv} className="ml-auto inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
                   <ShoppingCart className="h-4 w-4" /> Levar para o PDV
                 </button>
               </div>

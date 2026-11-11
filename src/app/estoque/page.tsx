@@ -367,7 +367,7 @@ export default function EstoquePage() {
             <button
               type="button"
               onClick={() => openNew()}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               <Plus className="h-4 w-4" />
               Novo produto
@@ -708,7 +708,7 @@ export default function EstoquePage() {
                 type="button"
                 onClick={submit}
                 disabled={saving}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {editingId ? 'Salvar alterações' : 'Adicionar produto'}

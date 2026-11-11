@@ -94,18 +94,15 @@ export default function DashboardPage() {
           title="Painel"
           actions={
             <>
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground" title="O painel se atualiza sozinho a cada 30 segundos">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60 motion-reduce:hidden" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
-              </span>
-              Ao vivo{updatedAt ? ` · ${updatedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
+            <span className="inline-flex items-center gap-2 font-mono text-xs text-muted-foreground" title="O painel se atualiza sozinho a cada 30 segundos">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
+              Atualizado{updatedAt ? ` · ${updatedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
             </span>
             <Link
               href="/relatorios"
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:border-primary/40"
+              className="inline-flex items-center gap-2 rounded-full bg-secondary px-6 py-3 text-[15px] font-semibold text-foreground transition-colors hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_6%)]"
             >
-              <NotebookPen className="h-4 w-4 text-primary" /> Relatório do dia
+              Relatório do dia
             </Link>
             </>
           }
@@ -119,7 +116,7 @@ export default function DashboardPage() {
             Carregando…
           </div>
         ) : error ? (
-          <div className="rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger">{error}</div>
+          <div className="rounded-2xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">{error}</div>
         ) : stats ? (
           <>
             {/* vendas: números com comparação e gráficos */}
@@ -155,9 +152,9 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               {/* vendas recentes */}
-              <div className="rounded-2xl border border-border bg-card shadow-sm lg:col-span-2">
-                <div className="flex items-center justify-between border-b border-border px-5 py-3">
-                  <h2 className="text-lg text-foreground">Vendas recentes</h2>
+              <div className="koda-ink rounded-[1.75rem] bg-card lg:col-span-2">
+                <div className="flex items-center justify-between border-b border-border px-6 py-4">
+                  <h2 className="text-[1.35rem] text-foreground">Vendas recentes</h2>
                   <Link href="/vendas" className="flex items-center gap-1 text-sm text-primary hover:underline">
                     Ver todas <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
@@ -171,7 +168,7 @@ export default function DashboardPage() {
                       return (
                         <li key={s.id} className="flex items-center justify-between px-5 py-3 text-sm">
                           <div>
-                            <span className="font-medium text-foreground">#{s.numero}</span>
+                            <span className="font-mono font-medium text-foreground">#{s.numero}</span>
                             <span className="ml-2 text-muted-foreground">
                               {s.itens} item(s) · {s.cliente}
                             </span>
@@ -180,10 +177,10 @@ export default function DashboardPage() {
                             </span>
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${st.cls}`}>
+                            <span className={`pill ${st.cls}`}>
                               {st.label}
                             </span>
-                            <span className="font-semibold text-foreground">{brl(s.total)}</span>
+                            <span className="font-heading font-semibold tabular-nums text-foreground">{brl(s.total)}</span>
                           </div>
                         </li>
                       );
@@ -193,9 +190,9 @@ export default function DashboardPage() {
               </div>
 
               {/* alerta de estoque */}
-              <div className="rounded-2xl border border-border bg-card shadow-sm">
-                <div className="flex items-center justify-between border-b border-border px-5 py-3">
-                  <h2 className="text-lg text-foreground">Repor estoque</h2>
+              <div className="koda-ink rounded-[1.75rem] bg-card">
+                <div className="flex items-center justify-between border-b border-border px-6 py-4">
+                  <h2 className="text-[1.35rem] text-foreground">Repor estoque</h2>
                   <Link href="/compras" className="flex items-center gap-1 text-sm text-primary hover:underline">
                     Sugestão de compra <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
@@ -210,7 +207,7 @@ export default function DashboardPage() {
                           <span className="truncate pr-2 text-foreground">{p.nome}</span>
                           <span
                             className={`shrink-0 font-semibold tabular-nums ${
-                              p.estoque === 0 ? 'text-danger' : 'text-amber-600'
+                              p.estoque === 0 ? 'text-danger' : 'text-warning'
                             }`}
                           >
                             {p.estoque}
@@ -220,7 +217,7 @@ export default function DashboardPage() {
                         {/* quanto do mínimo ainda tem na prateleira */}
                         <div className="mt-1.5 h-1.5 rounded-full bg-muted" aria-hidden>
                           <div
-                            className={`h-1.5 rounded-full ${p.estoque === 0 ? 'bg-danger' : 'bg-amber-500'}`}
+                            className={`h-1.5 rounded-full ${p.estoque === 0 ? 'bg-danger' : 'bg-warning'}`}
                             style={{ width: `${p.minimo > 0 ? Math.max(3, Math.min(100, (p.estoque / p.minimo) * 100)) : 0}%` }}
                           />
                         </div>
@@ -259,14 +256,14 @@ function Kpi({
   accent?: boolean;
   tone?: 'warn' | 'danger';
 }) {
-  const valueCls = tone === 'danger' ? 'text-danger' : tone === 'warn' ? 'text-amber-600' : 'text-foreground';
+  const valueCls = tone === 'danger' ? 'text-danger' : tone === 'warn' ? 'text-warning' : 'text-foreground';
   return (
-    <div className={`rounded-2xl border p-4 shadow-sm ${accent ? 'border-primary/30 bg-accent-soft' : 'border-border bg-card'}`}>
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <div className={`koda-ink rounded-[1.75rem] p-5 ${accent ? 'bg-primary text-ink' : 'bg-card'}`}>
+      <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
         <span className="[&>svg]:h-4 [&>svg]:w-4">{icon}</span>
         {label}
       </div>
-      <div className={`mt-1 text-2xl font-bold ${valueCls}`}>{value}</div>
+      <div className={`mt-2 font-heading text-[1.7rem] font-bold tracking-tight tabular-nums ${valueCls}`}>{value}</div>
       {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
     </div>
   );
@@ -286,9 +283,9 @@ function QuickLink({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-accent-soft"
+      className="group flex items-center gap-3 rounded-full border border-border bg-card py-2.5 pl-2.5 pr-5 transition-colors hover:border-primary hover:bg-accent-soft"
     >
-      <span className="rounded-lg bg-accent-soft p-2 text-primary [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
+      <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-ink text-primary [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
       <span>
         <span className="block font-medium text-foreground">{label}</span>
         <span className="block text-xs text-muted-foreground">{desc}</span>

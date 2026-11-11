@@ -111,7 +111,7 @@ export default function SupplierSelect({
             type="button"
             onClick={save}
             disabled={busy}
-            className="rounded-lg bg-primary px-2.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="rounded-full bg-primary px-2.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             aria-label="Salvar fornecedor"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}

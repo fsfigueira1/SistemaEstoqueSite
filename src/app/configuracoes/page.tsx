@@ -279,7 +279,7 @@ export default function ConfiguracoesPage() {
         </Section>
 
         <div className="flex items-center gap-3">
-          <button onClick={save} className="rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground hover:bg-primary/90">
+          <button onClick={save} className="rounded-full bg-primary px-5 py-2.5 font-medium text-primary-foreground hover:bg-primary/90">
             Salvar configurações
           </button>
           {saved && (

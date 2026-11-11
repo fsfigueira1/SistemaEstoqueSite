@@ -42,7 +42,7 @@ export function DuplicateSection({ groups, onInactivate }: { groups: DuplicateGr
           type="button"
           onClick={apply}
           disabled={busy || picked.size === 0}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}
           Desativar {picked.size || ''} selecionado{picked.size === 1 ? '' : 's'}
