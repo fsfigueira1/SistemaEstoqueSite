@@ -289,7 +289,7 @@ function trayImage() {
 function setupErrorPage(message) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const html = `<!doctype html><html><body style="font-family:system-ui;padding:48px;max-width:640px;margin:auto">
-    <h1 style="color:#0aa">Laçolaria</h1>
+    <h1 style="color:#14b8a6">Koda</h1>
     <p>Não consegui iniciar o sistema.</p>
     <pre style="background:#f4f4f4;padding:12px;border-radius:8px;white-space:pre-wrap">${String(message)}</pre>
     <p>Verifique a conexão com o banco (Supabase) em <b>Configurar banco</b> no menu da bandeja,
@@ -410,7 +410,7 @@ async function createWindow() {
 // ---------------- bandeja ----------------
 function buildTray() {
   tray = new Tray(trayImage());
-  tray.setToolTip("Laçolaria — Gestão & PDV");
+  tray.setToolTip("Koda — Gestão & PDV");
   buildTrayMenu();
   tray.on("click", () => showWindow());
 }
@@ -506,7 +506,7 @@ function askInstall() {
       cancelId: 1,
       title: "Atualização pronta",
       message: `A versão ${updateReady.version} foi baixada.`,
-      detail: "O Laçolaria fecha, instala e abre sozinho (leva menos de um minuto). Se escolher Depois, instale pela bandeja quando quiser.",
+      detail: "O Koda fecha, instala e abre sozinho (leva menos de um minuto). Se escolher Depois, instale pela bandeja quando quiser.",
     })
     .then(({ response }) => {
       if (response === 0) installUpdateNow();
@@ -581,7 +581,7 @@ function setupAutoUpdate() {
     updateDownloading = false;
     updateReady = { version: info && info.version };
     buildTrayMenu();
-    if (tray) tray.setToolTip(`Laçolaria — versão ${updateReady.version} pronta para instalar`);
+    if (tray) tray.setToolTip(`Koda — versão ${updateReady.version} pronta para instalar`);
     askInstall();
   });
 }

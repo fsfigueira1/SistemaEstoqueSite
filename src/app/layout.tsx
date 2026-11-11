@@ -7,10 +7,10 @@ import '@fontsource-variable/jetbrains-mono/wght.css';
 import AppWrapper from '@/app/AppWrapper';
 
 export const metadata: Metadata = {
-  title: 'Laçolaria — Gestão',
-  description: 'Sistema de gestão e PDV da papelaria Laçolaria',
+  title: 'Koda — Gestão',
+  description: 'Koda: sistema de gestão e PDV da papelaria Laçolaria',
   icons: {
-    icon: '/logo.png',
+    icon: '/icon.png',
     apple: '/apple-icon.png',
   },
 };

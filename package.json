@@ -127,7 +127,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "runAfterFinish": true,
-      "include": "electron/installer.nsh"
+      "include": "electron/installer.nsh",
+      "shortcutName": "Koda",
+      "uninstallDisplayName": "Koda"
     },
     "npmRebuild": false,
     "afterPack": "scripts/after-pack.cjs"
