@@ -163,7 +163,7 @@ export function PrintLabelNotice({
       </span>
       <Link
         href={`/etiquetas?produtos=${encodeURIComponent(saved.id)}`}
-        className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+        className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
       >
         <Tag className="h-3.5 w-3.5" /> Imprimir etiqueta
       </Link>

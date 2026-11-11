@@ -111,9 +111,9 @@ export default function AssistantChat() {
   if (!open) return null;
 
   return (
-    <div role="dialog" aria-label="Ajudante" className="fixed bottom-5 right-5 z-50 flex h-[min(36rem,calc(100vh-2.5rem))] w-[min(26rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-lg animate-in fade-in slide-in-from-bottom-2">
+    <div role="dialog" aria-label="Ajudante" className="fixed bottom-5 right-5 z-50 flex h-[min(36rem,calc(100vh-2.5rem))] w-[min(26rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-lg animate-in fade-in slide-in-from-bottom-2">
       <div className="flex items-center gap-3 border-b border-border bg-bow-soft/60 px-4 py-3">
-        <span className="rounded-lg bg-white p-1.5 text-primary ring-1 ring-black/5">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
           <Bot className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
@@ -199,7 +199,7 @@ export default function AssistantChat() {
           placeholder="Escreva sua pergunta…"
           className="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
         />
-        <button type="submit" disabled={busy || !input.trim() || keySet !== true} className="rounded-lg bg-primary px-3 text-primary-foreground disabled:opacity-50" aria-label="Enviar">
+        <button type="submit" disabled={busy || !input.trim() || keySet !== true} className="rounded-full bg-primary px-3 text-primary-foreground disabled:opacity-50" aria-label="Enviar">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </button>
       </form>

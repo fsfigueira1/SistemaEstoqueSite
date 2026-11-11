@@ -9,7 +9,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Check, ChevronDown, Copy, Hand, Loader2, MessageCircleOff, Sparkles, X } from 'lucide-react';
+import { KodaMark } from '@/components/KodaLogo';
+import { Check, ChevronDown, Copy, Hand, Loader2, MessageCircleOff, Sparkles, X } from 'lucide-react';
 import { errorText } from '@/lib/friendlyError';
 
 type Alert = { id: string; type: 'atendente' | 'parou'; name: string; reason: string; customerText: string; at: string };
@@ -90,15 +91,15 @@ function Item({ a, onSeen }: { a: Alert; onSeen: (id: string) => void }) {
       )}
       {err && <p className="text-xs font-medium text-danger">{err}</p>}
       <div className="flex flex-wrap gap-1.5 pl-9">
-        <Link href="/atendimento" className="rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90">
+        <Link href="/atendimento" className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90">
           Abrir atendimento
         </Link>
         {a.type === 'parou' && !text && (
-          <button type="button" onClick={suggest} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50">
+          <button type="button" onClick={suggest} disabled={busy} className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50">
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Sugerir mensagem
           </button>
         )}
-        <button type="button" onClick={() => onSeen(a.id)} className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted">
+        <button type="button" onClick={() => onSeen(a.id)} className="rounded-full border border-border px-3 py-1 text-xs font-medium hover:bg-muted">
           Visto
         </button>
       </div>
@@ -143,15 +144,15 @@ export default function AgentAlerts() {
   const urgent = alerts.filter((a) => a.type === 'atendente').length;
   const title = urgent ? `${urgent} conversa${urgent > 1 ? 's precisam' : ' precisa'} de você` : `${alerts.length} cliente${alerts.length > 1 ? 's pararam' : ' parou'} de responder`;
   // na tela do PDV fica no alto, longe do botão de finalizar
-  const pos = pathname?.startsWith('/pdv') ? 'top-4' : 'bottom-5';
+  const pos = pathname?.startsWith('/pdv') ? 'top-32' : 'bottom-5';
 
   return (
-    <aside aria-label="Avisos da assistente" className={`fixed left-4 z-50 w-[min(23rem,calc(100vw-2rem))] lg:left-[17rem] ${pos}`}>
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
-        <div className="flex items-center gap-2.5 px-4 py-3">
-          <span className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-            <Bell className="h-4 w-4" />
-            <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">{alerts.length}</span>
+    <aside aria-label="Avisos da assistente" className={`fixed left-4 z-50 w-[min(23rem,calc(100vw-2rem))] lg:left-8 ${pos}`}>
+      <div className={`overflow-hidden border border-border bg-card shadow-xl ${expanded ? 'rounded-3xl' : 'rounded-[2rem]'}`}>
+        <div className="flex items-center gap-3 py-2.5 pl-2.5 pr-4">
+          <span className="relative shrink-0">
+            <KodaMark className="h-11 w-11 text-xl" />
+            <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-ink px-1 font-mono text-[10px] font-bold text-cream ring-2 ring-card">{alerts.length}</span>
           </span>
           <button type="button" onClick={() => setExpanded((v) => !v)} className="min-w-0 flex-1 text-left" aria-expanded={expanded}>
             <span className="block text-[11px] font-medium text-muted-foreground">Assistente de IA</span>

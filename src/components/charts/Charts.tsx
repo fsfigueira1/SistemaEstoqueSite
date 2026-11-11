@@ -6,7 +6,7 @@
 // o mouse; categorias (formas de pagamento) nas cores --chart-1..3, sempre com
 // rótulo e valor escritos (nunca só a cor).
 
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 export const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 /** Eixo: curto para caber numa linha ("3,2 mil", "800"); o título do gráfico diz que é R$. */
@@ -19,26 +19,44 @@ function TipBox({ active, payload, format }: { active?: boolean; payload?: Array
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-lg">
+    <div className="rounded-xl border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
       <p className="font-medium text-foreground">{p.hint ?? p.label}</p>
       <p className="tabular-nums text-muted-foreground">{format(p.value)}</p>
     </div>
   );
 }
 
-const axis = { stroke: 'var(--muted-foreground)', fontSize: 11, tickLine: false, axisLine: false } as const;
+const axis = { stroke: 'var(--muted-foreground)', fontSize: 11, fontFamily: 'var(--app-font-mono)', tickLine: false, axisLine: false } as const;
 
-/** Barras verticais (ex.: faturamento por dia). */
-export function ColumnChart({ data, format = brl, height = 220 }: { data: Point[]; format?: (v: number) => string; height?: number }) {
+/**
+ * Barras verticais (ex.: faturamento por dia). Com `highlight`, as barras ficam
+ * na cor neutra e só a destacada (índice ou 'last') fica verde-água — sem
+ * grade nem eixo de valores, como no Painel koda.
+ */
+export function ColumnChart({
+  data,
+  format = brl,
+  height = 220,
+  highlight,
+}: {
+  data: Point[];
+  format?: (v: number) => string;
+  height?: number;
+  highlight?: number | 'last';
+}) {
+  const hi = highlight === 'last' ? data.length - 1 : highlight;
+  const bare = hi !== undefined;
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer>
-        <BarChart data={data} margin={{ top: 8, right: 4, bottom: 0, left: 0 }} barCategoryGap={2}>
-          <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-          <XAxis dataKey="label" {...axis} interval="preserveStartEnd" minTickGap={8} />
-          <YAxis {...axis} width={60} tickFormatter={brlShort} />
+        <BarChart data={data} margin={{ top: 8, right: 4, bottom: 0, left: 0 }} barCategoryGap={bare ? '18%' : 2}>
+          {!bare && <CartesianGrid vertical={false} stroke="var(--chart-grid)" />}
+          <XAxis dataKey="label" {...axis} interval="preserveStartEnd" minTickGap={bare ? 24 : 8} />
+          {bare ? <YAxis hide /> : <YAxis {...axis} width={60} tickFormatter={brlShort} />}
           <Tooltip cursor={{ fill: 'var(--muted)', opacity: 0.5 }} content={<TipBox format={format} />} />
-          <Bar dataKey="value" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={false} />
+          <Bar dataKey="value" fill="var(--primary)" radius={bare ? [6, 6, 6, 6] : [4, 4, 0, 0]} maxBarSize={bare ? 46 : 22} minPointSize={bare ? 3 : 0} isAnimationActive={false}>
+            {bare && data.map((_, i) => <Cell key={i} fill={i === hi ? 'var(--primary)' : 'var(--chart-rest)'} />)}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -82,24 +100,28 @@ export function RankBars({
 }) {
   if (!items.length) return <p className="py-6 text-center text-sm text-muted-foreground">{empty}</p>;
   const max = Math.max(...items.map((i) => i.value), 1);
-  const bar = tone === 'danger' ? 'bg-danger/70' : 'bg-primary';
+  const lead = tone === 'danger' ? 'bg-danger/70' : 'bg-primary';
+  const rest = tone === 'danger' ? 'bg-danger/40' : 'bg-foreground/85';
   return (
-    <ul className="space-y-2.5">
+    <ol className="space-y-3.5">
       {items.map((i, n) => (
-        <li key={`${i.label}-${n}`} title={`${i.label}: ${format(i.value)}${i.extra ? ` · ${i.extra}` : ''}`}>
-          <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
-            <span className="min-w-0 truncate text-foreground">{i.label}</span>
-            <span className="shrink-0 tabular-nums text-muted-foreground">
-              {format(i.value)}
-              {i.extra && <span className="ml-1.5 text-xs">· {i.extra}</span>}
-            </span>
-          </div>
-          <div className="h-2 rounded-full bg-muted">
-            <div className={`h-2 rounded-full ${bar}`} style={{ width: `${Math.max(2, (i.value / max) * 100)}%` }} />
+        <li key={`${i.label}-${n}`} className="flex items-start gap-4" title={`${i.label}: ${format(i.value)}${i.extra ? ` · ${i.extra}` : ''}`}>
+          <span className="w-6 shrink-0 pt-1 font-mono text-xs tabular-nums text-muted-foreground">{String(n + 1).padStart(2, '0')}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <span className="min-w-0 truncate pt-0.5 font-medium text-foreground">{i.label}</span>
+              <span className="shrink-0 text-right leading-tight">
+                <span className="block font-heading font-semibold tabular-nums text-foreground">{format(i.value)}</span>
+                {i.extra && <span className="block font-mono text-[11px] text-muted-foreground">{i.extra}</span>}
+              </span>
+            </div>
+            <div className="mt-1 h-[3px] rounded-full bg-muted">
+              <div className={`h-[3px] rounded-full ${n === 0 ? lead : rest}`} style={{ width: `${Math.max(2, (i.value / max) * 100)}%` }} />
+            </div>
           </div>
         </li>
       ))}
-    </ul>
+    </ol>
   );
 }
 
@@ -110,19 +132,18 @@ export function ShareBar({ parts, format = brl }: { parts: Array<{ label: string
   const shown = parts.filter((p) => p.value > 0);
   return (
     <div>
-      <div className="flex h-3.5 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={shown.map((p) => `${p.label} ${Math.round((p.value / total) * 100)}%`).join(', ')}>
+      <div className="flex h-12 gap-1 overflow-hidden" role="img" aria-label={shown.map((p) => `${p.label} ${Math.round((p.value / total) * 100)}%`).join(', ')}>
         {shown.map((p) => (
-          <div key={p.label} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} title={`${p.label}: ${format(p.value)}`} />
+          <div key={p.label} className="rounded-xl" style={{ width: `${(p.value / total) * 100}%`, background: p.color }} title={`${p.label}: ${format(p.value)}`} />
         ))}
       </div>
-      <ul className="mt-4 space-y-2">
+      <ul className="mt-5 space-y-2.5">
         {parts.map((p) => (
-          <li key={p.label} className="flex items-center gap-2 text-sm">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.color }} aria-hidden />
-            <span className="text-muted-foreground">{p.label}</span>
-            <span className="ml-auto tabular-nums font-medium text-foreground">
-              {format(p.value)} <span className="text-xs font-normal text-muted-foreground">{Math.round((p.value / total) * 100)}%</span>
-            </span>
+          <li key={p.label} className="flex items-center gap-2.5 text-[15px]">
+            <span className="h-3 w-3 shrink-0 rounded-[3px]" style={{ background: p.color }} aria-hidden />
+            <span className="font-medium text-foreground">{p.label}</span>
+            <span className="ml-auto font-heading font-semibold tabular-nums text-foreground">{format(p.value)}</span>
+            <span className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">{Math.round((p.value / total) * 100)}%</span>
           </li>
         ))}
       </ul>
@@ -130,18 +151,24 @@ export function ShareBar({ parts, format = brl }: { parts: Array<{ label: string
   );
 }
 
+/** Variação em pílula (▲ 12%) — verde subindo, vermelho caindo. */
+export function Delta({ value }: { value?: number | null }) {
+  if (value == null || !Number.isFinite(value)) return null;
+  return (
+    <span className={`rounded-full px-1.5 py-0.5 font-mono text-[11px] font-medium ${value >= 0 ? 'bg-success/15 text-success' : 'bg-danger/10 text-danger'}`}>
+      {value >= 0 ? '▲' : '▼'} {Math.abs(Math.round(value))}%
+    </span>
+  );
+}
+
 /** Cartão de número grande, com variação opcional (ex.: vs mês anterior). */
 export function StatTile({ label, value, sub, delta }: { label: string; value: string; sub?: string; delta?: number | null }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-1 font-heading text-2xl font-semibold tabular-nums text-foreground">{value}</p>
+      <p className="mt-1 font-heading text-[1.7rem] font-bold tracking-tight tabular-nums text-foreground">{value}</p>
       <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        {delta != null && Number.isFinite(delta) && (
-          <span className={`rounded-full px-1.5 py-0.5 font-medium ${delta >= 0 ? 'bg-success/15 text-success' : 'bg-danger/10 text-danger'}`}>
-            {delta >= 0 ? '▲' : '▼'} {Math.abs(Math.round(delta))}%
-          </span>
-        )}
+        <Delta value={delta} />
         {sub}
       </p>
     </div>
@@ -171,7 +198,7 @@ export function HeatCalendar({ days, format = brl }: { days: Array<{ date: strin
   return (
     <div>
       <div className="flex gap-1.5">
-        <div className="grid grid-rows-7 gap-1.5 pr-0.5 text-[10px] leading-none text-muted-foreground">
+        <div className="grid grid-rows-7 gap-1.5 pr-1 font-mono text-[10px] leading-none text-muted-foreground">
           {WEEK.map((w, i) => (
             <span key={i} className="flex h-6 items-center">
               {w}
@@ -184,15 +211,15 @@ export function HeatCalendar({ days, format = brl }: { days: Array<{ date: strin
               const d = w[di];
               if (!d) return <span key={di} className="h-6" />;
               const tip = `${WEEK_FULL[dow(d.date)]} ${label(d.date)}: ${format(d.revenue)} (${d.count} venda${d.count === 1 ? '' : 's'})`;
-              return <span key={di} className="h-6 rounded-[5px] ring-1 ring-inset ring-black/5" style={{ background: HEAT[level(d.revenue)] }} title={tip} aria-label={tip} role="img" />;
+              return <span key={di} className="h-6 rounded-md" style={{ background: HEAT[level(d.revenue)] }} title={tip} aria-label={tip} role="img" />;
             })}
           </div>
         ))}
       </div>
-      <div className="mt-3 flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground">
+      <div className="mt-3 flex items-center justify-end gap-1.5 font-mono text-[11px] text-muted-foreground">
         menos
         {HEAT.map((c, i) => (
-          <span key={i} className="h-3 w-3 rounded-[3px] ring-1 ring-inset ring-black/5" style={{ background: c }} aria-hidden />
+          <span key={i} className="h-3 w-3 rounded-[3px]" style={{ background: c }} aria-hidden />
         ))}
         mais
       </div>

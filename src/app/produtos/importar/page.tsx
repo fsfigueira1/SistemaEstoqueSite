@@ -141,7 +141,7 @@ export default function ImportarProdutosPage() {
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={Boolean(busy)}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {busy === 'preview' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             Escolher arquivo
@@ -170,7 +170,7 @@ export default function ImportarProdutosPage() {
                 Com problema: {result.errors.map((e) => `linha ${e.line} (${e.message})`).join(', ')}
               </p>
             )}
-            <Link href="/produtos" className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
+            <Link href="/produtos" className="mt-4 inline-flex rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
               Ver produtos
             </Link>
           </section>
@@ -221,7 +221,7 @@ export default function ImportarProdutosPage() {
                   type="button"
                   onClick={doImport}
                   disabled={Boolean(busy) || chosen.length === 0}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {busy === 'import' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   Importar {chosen.length} produto(s)

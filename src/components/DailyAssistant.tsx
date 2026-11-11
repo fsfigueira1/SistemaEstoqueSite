@@ -14,6 +14,7 @@ import { usePathname } from 'next/navigation';
 import { X, ArrowRight, Clock, Banknote, CreditCard, QrCode, Loader2 } from 'lucide-react';
 import type { DailyReport } from '@/services/reportService';
 import { openAssistantChat } from '@/components/AssistantChat';
+import { KodaMark } from '@/components/KodaLogo';
 import { loadSettings } from '@/lib/settings';
 import { errorText } from '@/lib/friendlyError';
 
@@ -152,12 +153,12 @@ export default function DailyAssistant() {
       role="dialog"
       aria-label="Assistente do relatório do dia"
       className={`fixed z-50 w-[min(24rem,calc(100vw-2rem))] animate-in fade-in slide-in-from-bottom-2 ${
-        compact ? 'right-4 top-4' : 'bottom-5 right-5'
+        compact ? 'right-4 top-32' : 'bottom-5 right-5'
       }`}
     >
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
+      <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-lg">
         <div className="flex items-start gap-3 border-b border-border bg-bow-soft/60 px-4 py-3">
-          <img src="/logo.png" alt="" className="h-11 w-11 shrink-0 rounded-xl bg-white object-cover ring-1 ring-black/5" />
+          <KodaMark className="h-11 w-11 text-xl" />
           <div className="min-w-0 flex-1">
             <p className="eyebrow !text-bow">Assistente</p>
             <p className="font-heading text-lg font-semibold leading-snug text-foreground">
@@ -209,7 +210,7 @@ export default function DailyAssistant() {
                 if (auto) store.set('assistant_dismissed', todayKey());
                 setOpen(false);
               }}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               {report?.closing ? 'Ver relatório' : 'Conferir o caixa'} <ArrowRight className="h-4 w-4" />
             </Link>

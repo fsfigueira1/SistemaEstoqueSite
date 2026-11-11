@@ -137,7 +137,7 @@ export default function EtiquetasPage() {
           <button
             onClick={startPrint}
             disabled={!labels.length || printing}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
             Imprimir {labels.length ? `${labels.length} etiqueta${labels.length > 1 ? 's' : ''}` : 'etiquetas'}

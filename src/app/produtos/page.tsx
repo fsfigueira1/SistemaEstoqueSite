@@ -322,7 +322,7 @@ export default function ProdutosPage() {
               </Link>
               <button
                 onClick={openNew}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90"
+                className="flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 font-medium text-primary-foreground hover:bg-primary/90"
               >
                 <Plus className="h-4 w-4" />
                 Novo produto
@@ -701,7 +701,7 @@ export default function ProdutosPage() {
               <button
                 onClick={submit}
                 disabled={saving}
-                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-full bg-primary px-5 py-2 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {editingId ? 'Salvar alterações' : 'Adicionar produto'}

@@ -989,7 +989,7 @@ export default function PDVPage() {
                     <button
                       type="button"
                       onClick={addAvulso}
-                      className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:opacity-90"
+                      className="w-full rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:opacity-90"
                     >
                       Adicionar ao carrinho
                     </button>
@@ -1027,7 +1027,7 @@ export default function PDVPage() {
                   type="button"
                   onClick={finalizarVenda}
                   disabled={isProcessing || carrinho.length === 0 || shortages.length > 0}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-heading text-base font-bold text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-heading text-base font-bold text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
                 >
                   {isProcessing ? (
                     <>
@@ -1097,7 +1097,7 @@ export default function PDVPage() {
                     ref={confirmBtnRef}
                     type="button"
                     onClick={() => setPrinting(true)}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                   >
                     <Printer className="h-4 w-4" />
                     Imprimir

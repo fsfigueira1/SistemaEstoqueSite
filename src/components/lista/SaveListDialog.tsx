@@ -140,7 +140,7 @@ export default function SaveListDialog({
 
         <DialogFooter>
           {saved ? (
-            <button type="button" onClick={() => onOpenChange(false)} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+            <button type="button" onClick={() => onOpenChange(false)} className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
               Fechar
             </button>
           ) : (
@@ -148,7 +148,7 @@ export default function SaveListDialog({
               type="button"
               onClick={save}
               disabled={saving || !schoolName.trim() || !grade.trim() || !items.length}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Salvar lista

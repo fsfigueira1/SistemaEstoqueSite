@@ -79,7 +79,7 @@ export default function ReplyPanel({
           </p>
           <div className="flex flex-wrap gap-2">
             {onInsert && (
-              <button type="button" onClick={insert} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+              <button type="button" onClick={insert} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
                 <SendHorizonal className="h-4 w-4" /> Colocar no WhatsApp
               </button>
             )}

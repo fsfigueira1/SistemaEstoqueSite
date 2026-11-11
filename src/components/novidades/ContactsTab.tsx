@@ -115,7 +115,7 @@ export default function ContactsTab({ onChanged }: { onChanged?: () => void }) {
           >
             <Users className="h-4 w-4 text-primary" /> Trazer clientes do sistema
           </button>
-          <button type="button" onClick={() => setAdding((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+          <button type="button" onClick={() => setAdding((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
             <Plus className="h-4 w-4" /> Adicionar contato
           </button>
         </div>
@@ -136,7 +136,7 @@ export default function ContactsTab({ onChanged }: { onChanged?: () => void }) {
         >
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nome" className="w-56 rounded-lg border border-border bg-card px-3 py-2 text-sm" />
           <input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="(17) 99999-8888" inputMode="tel" className="w-48 rounded-lg border border-border bg-card px-3 py-2 text-sm" />
-          <button type="submit" disabled={busy || !newPhone.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
+          <button type="submit" disabled={busy || !newPhone.trim()} className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
             Salvar
           </button>
         </form>
