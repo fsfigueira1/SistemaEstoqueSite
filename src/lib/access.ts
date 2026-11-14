@@ -26,6 +26,9 @@ const EMPLOYEE_API: Array<[string, "*" | string[]]> = [
   ["/api/cash-movements", "*"],
   ["/api/cash-registers", ["GET"]],
   ["/api/customers", "*"],
+  // NFC-e: emitir, ver, reimprimir e consultar (cancelar, XML e configuração: só o dono)
+  ["/api/nfce/emitir", ["POST"]],
+  ["/api/nfce/notas", ["GET", "POST"]],
   // comprovante e PDV leem as configurações; gravar só as do atendimento (filtrado na rota)
   ["/api/settings", ["GET", "PUT"]],
   // Atendimento e guias

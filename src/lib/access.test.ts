@@ -15,6 +15,16 @@ describe("quem pode abrir o quê", () => {
     expect(homeFor("EMPLOYEE")).toBe("/pdv")
   })
 
+  it("balcão emite e reimprime NFC-e, mas não mexe na configuração fiscal nem no certificado", () => {
+    expect(canAccess("EMPLOYEE", "/api/nfce/emitir", "POST")).toBe(true)
+    expect(canAccess("EMPLOYEE", "/api/nfce/notas", "GET")).toBe(true)
+    expect(canAccess("EMPLOYEE", "/api/nfce/notas/abc/danfe", "GET")).toBe(true)
+    expect(canAccess("EMPLOYEE", "/api/nfce/notas/abc/consultar", "POST")).toBe(true)
+    // cancelar e baixar XML passam aqui, mas a própria rota exige o dono (requestRole)
+    for (const [p, m] of [["/api/nfce/config", "GET"], ["/api/nfce/config", "PUT"], ["/api/nfce/certificado", "POST"], ["/api/nfce/status", "GET"]] as const)
+      expect(canAccess("EMPLOYEE", p, m)).toBe(false)
+  })
+
   it("balcão não chega no faturamento pela API", () => {
     for (const p of ["/api/dashboard/stats", "/api/dashboard/charts", "/api/reports/daily", "/api/reports/monthly", "/api/backup", "/api/auth/credentials", "/api/restock"])
       expect(canAccess("EMPLOYEE", p)).toBe(false)

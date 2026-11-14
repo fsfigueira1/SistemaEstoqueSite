@@ -41,6 +41,7 @@ interface Product {
   name: string;
   sku: string;
   barcode: string | null;
+  ncm?: string | null;
   categoryId: string;
   supplierId?: string | null;
   category?: { id: string; name: string } | null;
@@ -61,6 +62,7 @@ type FormState = {
   nome: string;
   codigoBarras: string;
   sku: string;
+  ncm: string;
   categoriaId: string;
   fornecedorId: string;
   preco: string;
@@ -74,6 +76,7 @@ const EMPTY_FORM: FormState = {
   nome: '',
   codigoBarras: '',
   sku: '',
+  ncm: '',
   categoriaId: '',
   fornecedorId: '',
   preco: '',
@@ -203,6 +206,7 @@ export default function ProdutosPage() {
       nome: p.name,
       codigoBarras: p.barcode ?? '',
       sku: p.sku,
+      ncm: p.ncm ?? '',
       categoriaId: p.categoryId,
       fornecedorId: p.supplierId ?? '',
       preco: String(toNumber(p.salePrice)),
@@ -240,6 +244,7 @@ export default function ProdutosPage() {
     if (!form.codigoBarras.trim() && !form.sku.trim())
       e.codigoBarras = 'Informe o código de barras (ou um SKU)';
     if (!form.categoriaId) e.categoriaId = 'Selecione uma categoria';
+    if (form.ncm.replace(/\D/g, '') && form.ncm.replace(/\D/g, '').length !== 8) e.ncm = 'NCM tem 8 dígitos';
     if (form.preco === '' || toNumber(form.preco) < 0) e.preco = 'Preço de venda inválido';
     if (toNumber(form.custo) < 0) e.custo = 'Custo não pode ser negativo';
     if (toNumber(form.estoque) < 0) e.estoque = 'Estoque não pode ser negativo';
@@ -257,6 +262,7 @@ export default function ProdutosPage() {
         nome: form.nome.trim(),
         codigoBarras: form.codigoBarras.trim() || null,
         sku: form.sku.trim() || form.codigoBarras.trim(),
+        ncm: form.ncm.replace(/\D/g, ''),
         categoriaId: form.categoriaId,
         fornecedorId: form.fornecedorId || null,
         preco: toNumber(form.preco),
@@ -572,6 +578,17 @@ export default function ProdutosPage() {
                   />
                 </Field>
               </div>
+
+              <Field label="NCM (nota fiscal)" hint="8 dígitos — vazio usa o NCM padrão da configuração fiscal" error={errors.ncm}>
+                <input
+                  value={form.ncm}
+                  onChange={(e) => set('ncm', e.target.value)}
+                  className={inputCls(errors.ncm)}
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="Ex.: 48202000 (caderno)"
+                />
+              </Field>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Categoria" required error={errors.categoriaId}>

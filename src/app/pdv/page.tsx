@@ -16,6 +16,7 @@ import {
   PlusCircle,
 } from 'lucide-react';
 import { ReceiptPrint } from '@/components/pdv/ReceiptPrint';
+import NfcePanel from '@/components/pdv/NfcePanel';
 import Layout from '@/components/Layout';
 import { getSettings, loadSettings, type StoreSettings } from '@/lib/settings';
 import {
@@ -1090,6 +1091,13 @@ export default function PDVPage() {
                   Total: <span className="font-semibold">{formatCurrency(finishedSale.total)}</span>
                   {finishedSale.change > 0 && <> · Troco: {formatCurrency(finishedSale.change)}</>}
                 </p>
+
+                {/* NFC-e só com a venda no servidor (sem internet não há nota) */}
+                {!savedOffline && (
+                  <div className="mt-4">
+                    <NfcePanel saleId={finishedSale.saleId} />
+                  </div>
+                )}
 
                 <p className="mt-4 text-sm font-medium text-foreground">Imprimir comprovante de compra?</p>
                 <div className="mt-3 flex gap-3">

@@ -1,45 +1,11 @@
 'use client';
 
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { getSettings } from '@/lib/settings';
-import type { PayMethod } from '@/lib/payments';
-import { ReceiptPayments } from '@/components/pdv/ReceiptPayments';
+import { receiptHtml, type ReceiptData } from '@/lib/receiptHtml';
+import { printThermal } from '@/lib/printClient';
 
-function formatCurrency(value: unknown): string {
-  const n =
-    typeof value === 'number'
-      ? value
-      : typeof value === 'string'
-        ? parseFloat(value.replace(',', '.')) || 0
-        : value && typeof value === 'object' && 'toNumber' in value
-          ? (value as { toNumber: () => number }).toNumber()
-          : 0;
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
-}
-
-interface ReceiptItem {
-  name: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-}
-
-export interface ReceiptData {
-  saleId: string;
-  date: Date | string;
-  items: ReceiptItem[];
-  subtotal: number;
-  paymentMethod: 'dinheiro' | 'pix' | 'cartao';
-  interest?: number;
-  total: number;
-  installments?: number;
-  installmentValue?: number;
-  received?: number;
-  change?: number;
-  /** Formas de pagamento (pagamento dividido tem mais de uma). */
-  payments?: Array<{ method: PayMethod; amount: number; installments?: number; installmentValue?: number }>;
-}
+export type { ReceiptData } from '@/lib/receiptHtml';
 
 interface ReceiptPrintProps {
   data: ReceiptData;
@@ -50,257 +16,58 @@ interface ReceiptPrintProps {
   autoPrint?: boolean;
 }
 
-type ElectronReceiptAPI = {
-  printReceipt?: (
-    pageSize?: { width: number; height: number },
-  ) => Promise<{ ok?: boolean; reason?: string }>;
-};
-
-// Referência de conversão do CSS: 96px = 1in = 25.4mm, independente do DPI
-// físico da tela — é o que o Chromium usa internamente pra layout.
-const MM_PER_PX = 25.4 / 96;
-
-
 /**
- * Comprovante de compra (NÃO fiscal) formatado para impressora térmica
- * Epson TM-T20X — bobina de 80mm.
- * No app instalado imprime direto na impressora salva (sem diálogo);
- * no navegador cai no window.print() normal.
+ * Comprovante de compra (NÃO fiscal) para a térmica Epson TM-T20X (80 mm).
+ * A página é montada em src/lib/receiptHtml.ts (cupom de 70 mm, @page sem
+ * margem, só preto no branco) e impressa:
+ * - no app instalado: numa janela oculta, direto na impressora salva, com a
+ *   altura medida depois de carregar tudo (electron/thermalPrint.cjs);
+ * - no navegador: por um iframe escondido, com o diálogo de impressão.
  */
-export function ReceiptPrint({
-  data,
-  onPrintComplete,
-  showButton = true,
-  autoPrint = false,
-}: ReceiptPrintProps) {
+export function ReceiptPrint({ data, onPrintComplete, showButton = true, autoPrint = false }: ReceiptPrintProps) {
   const [cfg] = React.useState(() => getSettings());
-  const storeName = cfg.companyName || 'LAÇOLARIA';
-  const storeInfo = cfg.companyTagline;
-  const printingRef = React.useRef(false);
   const autoStarted = React.useRef(false);
-  const receiptRef = React.useRef<HTMLDivElement>(null);
-  // O comprovante é montado direto no <body> (portal), nunca dentro do modal
-  // do PDV/Vendas: dentro do modal o "top: 0" da impressão era relativo ao
-  // modal centralizado, e o papel saía com um bloco em branco no começo e o
-  // fim cortado (a altura da página é medida só pelo comprovante).
-  const [host, setHost] = React.useState<HTMLElement | null>(null);
-  React.useEffect(() => setHost(document.body), []);
-
-  React.useEffect(() => {
-    const after = () => {
-      if (!printingRef.current) return;
-      printingRef.current = false;
-      onPrintComplete?.();
-    };
-    window.addEventListener('afterprint', after);
-    return () => window.removeEventListener('afterprint', after);
-  }, [onPrintComplete]);
+  const busy = React.useRef(false);
 
   const handlePrint = React.useCallback(async () => {
-    printingRef.current = true;
+    if (busy.current) return;
+    busy.current = true;
     try {
-      const api = (typeof window !== 'undefined'
-        ? (window as unknown as { electronAPI?: ElectronReceiptAPI }).electronAPI
-        : undefined);
-      if (api && typeof api.printReceipt === 'function') {
-        // App instalado: impressão silenciosa na impressora configurada.
-        // Manda o tamanho exato da página em microns — sem isso, o Electron
-        // às vezes ignora o @page do CSS e usa o tamanho padrão do driver da
-        // impressora, cortando a lateral (ou sobrando bobina em branco).
-        const widthMm = cfg.receiptWidth === '58mm' ? 58 : 80;
-        const heightPx = receiptRef.current?.getBoundingClientRect().height ?? 0;
-        // +4mm de folga: melhor sobrar um pouco de papel em branco no fim do
-        // que arriscar cortar a última linha por diferença de arredondamento
-        // entre a medição na tela e o motor de impressão.
-        const heightMm = Math.max(40, heightPx * MM_PER_PX + 4);
-        await api.printReceipt({
-          width: Math.round(widthMm * 1000),
-          height: Math.round(heightMm * 1000),
-        });
-      } else {
-        // Navegador: diálogo padrão. window.print() é bloqueante no Chromium.
-        window.print();
-      }
+      const html = receiptHtml(
+        data,
+        {
+          name: cfg.companyName || 'LAÇOLARIA',
+          tagline: cfg.companyTagline,
+          doc: cfg.receiptShowCompany ? cfg.companyDoc : '',
+          address: cfg.receiptShowCompany ? cfg.companyAddress : '',
+          phone: cfg.receiptShowCompany ? cfg.companyPhone : '',
+          footer: cfg.receiptFooter,
+        },
+        cfg.receiptWidth === '58mm' ? '58mm' : '80mm',
+      );
+      await printThermal(html, cfg.receiptWidth === '58mm' ? '58mm' : '80mm');
     } catch {
       // ignora — o finally libera a tela do mesmo jeito
     } finally {
-      // Não depender só do evento 'afterprint' (no Electron às vezes não dispara).
-      printingRef.current = false;
+      busy.current = false;
       onPrintComplete?.();
     }
-  }, [onPrintComplete, cfg.receiptWidth]);
+  }, [data, cfg, onPrintComplete]);
 
   React.useEffect(() => {
-    if (!autoPrint || !host || autoStarted.current) return;
+    if (!autoPrint || autoStarted.current) return;
     autoStarted.current = true;
-    // dois frames para o layout do comprovante ser aplicado antes de imprimir
-    const id = requestAnimationFrame(() => requestAnimationFrame(() => handlePrint()));
-    return () => cancelAnimationFrame(id);
-  }, [autoPrint, host, handlePrint]);
+    void handlePrint();
+  }, [autoPrint, handlePrint]);
 
-  const d = new Date(data.date);
-  const dateStr = d.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  // Fallback pro caminho navegador (window.print()) — no Electron quem manda
-  // é o pageSize em microns calculado no handlePrint acima.
-  const cssPageSize = cfg.receiptWidth === '58mm' ? '58mm' : '80mm';
-
+  if (!showButton) return null;
   return (
-    <div>
-      {/* @page não pode ser condicionado por atributo/classe — precisa saber
-          cfg.receiptWidth em runtime, por isso é injetado aqui e não fica só
-          no globals.css. Tem que bater com o data-w abaixo. */}
-      <style>{`@media print { @page { size: ${cssPageSize} auto; margin: 0; } } `}</style>
-      {host && createPortal(
-      <div id="receipt-print-area" data-w={cfg.receiptWidth}>
-      <div ref={receiptRef} className="receipt">
-        <div className="center bold big">{storeName}</div>
-        {storeInfo && <div className="center small">{storeInfo}</div>}
-        {cfg.receiptShowCompany && cfg.companyDoc && (
-          <div className="center small">{cfg.companyDoc}</div>
-        )}
-        {cfg.receiptShowCompany && cfg.companyAddress && (
-          <div className="center small">{cfg.companyAddress}</div>
-        )}
-        {cfg.receiptShowCompany && cfg.companyPhone && (
-          <div className="center small">Tel: {cfg.companyPhone}</div>
-        )}
-        <div className="sep" />
-        <div className="center bold">COMPROVANTE DE COMPRA</div>
-        <div className="center small">NAO E DOCUMENTO FISCAL</div>
-        <div className="sep" />
-
-        <div className="row small">
-          <span>Venda:</span>
-          <span>{data.saleId}</span>
-        </div>
-        <div className="row small">
-          <span>Data:</span>
-          <span>{dateStr}</span>
-        </div>
-        <div className="sep" />
-
-        {data.items.map((it, i) => (
-          <div key={i} className="item">
-            <div className="item-name">{it.name}</div>
-            <div className="row small">
-              <span>
-                {it.quantity} x {formatCurrency(it.unitPrice)}
-              </span>
-              <span>{formatCurrency(it.total)}</span>
-            </div>
-          </div>
-        ))}
-
-        <div className="sep" />
-        <div className="row">
-          <span>Subtotal</span>
-          <span>{formatCurrency(data.subtotal)}</span>
-        </div>
-        {typeof data.interest === 'number' && data.interest > 0 && (
-          <div className="row small">
-            <span>Juros cartao</span>
-            <span>{formatCurrency(data.interest)}</span>
-          </div>
-        )}
-        <div className="row bold big">
-          <span>TOTAL</span>
-          <span>{formatCurrency(data.total)}</span>
-        </div>
-
-        <div className="sep" />
-        <ReceiptPayments data={data} brl={formatCurrency} />
-
-        <div className="sep" />
-        {cfg.receiptFooter
-          .split('\n')
-          .map((line, i) => (
-            <div key={i} className="center small">
-              {line}
-            </div>
-          ))}
-        <div className="feed" />
-      </div>
-      </div>,
-      host,
-      )}
-
-      {showButton && (
-        <button type="button" onClick={handlePrint} className="no-print receipt-print-btn">
-          Imprimir comprovante
-        </button>
-      )}
-
-      <style jsx global>{`
-        #receipt-print-area .receipt {
-          width: 72mm;
-          margin: 0 auto;
-          padding: 2mm 0;
-          font-family: 'Courier New', Courier, monospace;
-          font-size: 12px;
-          line-height: 1.35;
-          color: #000;
-          background: #fff;
-        }
-        #receipt-print-area .center {
-          text-align: center;
-        }
-        #receipt-print-area .bold {
-          font-weight: bold;
-        }
-        #receipt-print-area .big {
-          font-size: 14px;
-        }
-        #receipt-print-area .small {
-          font-size: 10px;
-        }
-        #receipt-print-area .sep {
-          border-top: 1px dashed #000;
-          margin: 2mm 0;
-        }
-        #receipt-print-area .row {
-          display: flex;
-          justify-content: space-between;
-          gap: 6px;
-          margin: 1px 0;
-        }
-        #receipt-print-area .item {
-          margin-bottom: 2px;
-          page-break-inside: avoid;
-        }
-        #receipt-print-area .item-name {
-          font-weight: bold;
-          word-break: break-word;
-        }
-        #receipt-print-area .feed {
-          height: 8mm;
-        }
-        .receipt-print-btn {
-          margin-top: 12px;
-          width: 100%;
-          padding: 10px 16px;
-          border: none;
-          border-radius: 6px;
-          background: #059669;
-          color: #fff;
-          font-weight: 600;
-          cursor: pointer;
-        }
-        .receipt-print-btn:hover {
-          background: #047857;
-        }
-        @media print {
-          .no-print {
-            display: none !important;
-          }
-        }
-      `}</style>
-    </div>
+    <button
+      type="button"
+      onClick={handlePrint}
+      className="mt-3 w-full rounded-md bg-emerald-600 px-4 py-2.5 font-semibold text-white hover:bg-emerald-700"
+    >
+      Imprimir comprovante
+    </button>
   );
 }
