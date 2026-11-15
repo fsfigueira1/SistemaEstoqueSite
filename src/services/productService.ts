@@ -16,6 +16,9 @@ type ProductCreateInput = {
   minStockLevel?: number
   maxStockLevel?: number
   unit?: string
+  /** NCM e CEST para a NFC-e (só dígitos; null = usar o padrão da configuração fiscal) */
+  ncm?: string | null
+  cest?: string | null
   status?: ProductStatus
   isFeatured?: boolean
 }
@@ -33,6 +36,9 @@ type ProductUpdateInput = {
   minStockLevel?: number
   maxStockLevel?: number
   unit?: string
+  /** NCM e CEST para a NFC-e (só dígitos; null = usar o padrão da configuração fiscal) */
+  ncm?: string | null
+  cest?: string | null
   status?: ProductStatus
   isFeatured?: boolean
 }

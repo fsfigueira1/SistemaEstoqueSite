@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Layout, { PageHeader } from '@/components/Layout';
 import { Loader2, XCircle, Search, Printer, Trash2 } from 'lucide-react';
 import { ReceiptPrint, type ReceiptData } from '@/components/pdv/ReceiptPrint';
+import NfcePanel from '@/components/pdv/NfcePanel';
 import { errorText } from '@/lib/friendlyError';
 
 // método do banco -> forma usada no comprovante
@@ -421,6 +422,8 @@ function SaleDetail({ id, onClose, onChanged }: { id: string; onClose: () => voi
                 ))}
               </div>
             )}
+
+            <NfcePanel saleId={sale.id} saleStatus={sale.status} />
 
             <div className="space-y-2 border-t border-border pt-3">
               <button

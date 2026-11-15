@@ -23,6 +23,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const { autoUpdater } = require("electron-updater");
 const { registerWhatsApp } = require("./whatsapp.cjs");
 const { signToken, newSecret } = require("./authToken.cjs");
+const { printThermalHtml } = require("./thermalPrint.cjs");
 
 app.disableHardwareAcceleration();
 process.env.ELECTRON_RUNNING = "true";
@@ -156,6 +157,10 @@ function getEnvForServer() {
     EMPLOYEE_PASSWORD: cfg.EMPLOYEE_PASSWORD || process.env.EMPLOYEE_PASSWORD || "emp123",
     AUTH_SECRET: authSecret(),
     LACOLARIA_BACKUP_DIR: backupDir(),
+    // NFC-e: certificado A1 fica na pasta de dados do app (só este PC);
+    // os XMLs vão para Documentos, numa pasta por ano/mês.
+    LACOLARIA_FISCAL_DIR: path.join(app.getPath("userData"), "fiscal"),
+    LACOLARIA_FISCAL_XML_DIR: readConfig().FISCAL_XML_DIR || path.join(app.getPath("documents"), "Lacolaria Notas Fiscais"),
   };
 }
 
@@ -788,30 +793,16 @@ ipcMain.handle("set-receipt-printer", (_e, name) => {
   return c.PRINTER_NAME;
 });
 
-// pageSize (opcional): { width, height } em microns, calculado no renderer a
-// partir da largura configurada (58/80mm) e da altura real do comprovante
-// renderizado. Sem isso, o Electron às vezes usa o tamanho de página padrão
-// do driver da impressora em vez do @page do CSS — e o texto sai cortado na
-// lateral (ou sobra papel em branco) quando o driver não bate com a bobina.
-ipcMain.handle("print-receipt", async (_e, pageSize) => {
-  if (!mainWindow) return { ok: false, reason: "sem janela" };
+// Comprovante e DANFE NFC-e: o renderer manda a página pronta (src/lib/thermalPrint.ts)
+// e ela é impressa numa janela oculta, com a altura medida depois de carregar
+// tudo (electron/thermalPrint.cjs). Silencioso só se já escolheram a impressora.
+ipcMain.handle("print-html", async (e, html, opts) => {
+  if (!mainWindow || e.sender !== mainWindow.webContents) return { ok: false, reason: "pedido fora do sistema" };
   const deviceName = readConfig().PRINTER_NAME || "";
-  const printOptions = {
-    // silencioso só se já escolheram a impressora; senão mostra o diálogo
-    silent: Boolean(deviceName),
-    deviceName: deviceName || undefined,
-    margins: { marginType: "none" },
-    printBackground: false,
-  };
-  if (pageSize && Number(pageSize.width) > 0 && Number(pageSize.height) > 0) {
-    printOptions.pageSize = {
-      width: Math.round(Number(pageSize.width)),
-      height: Math.round(Number(pageSize.height)),
-    };
-  }
-  return new Promise((resolve) => {
-    mainWindow.webContents.print(printOptions, (ok, reason) => resolve({ ok, reason }));
-  });
+  const paperMm = opts && opts.width === "58mm" ? 58 : 80;
+  const r = await printThermalHtml(html, { deviceName, paperMm });
+  if (!r.ok) log("[impressão] falhou:", r.reason);
+  return r;
 });
 
 // ---------------- impressão das etiquetas de gôndola ----------------

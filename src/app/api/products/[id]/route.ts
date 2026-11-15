@@ -70,6 +70,9 @@ export async function PUT(
       minStockLevel: data.minStockLevel ?? data.estoqueMinimo,
       maxStockLevel: data.maxStockLevel,
       unit: data.unit,
+      // NFC-e: só dígitos; vazio = sem NCM próprio (usa o padrão da configuração fiscal)
+      ncm: data.ncm === undefined ? undefined : String(data.ncm ?? '').replace(/\D/g, '').slice(0, 8) || null,
+      cest: data.cest === undefined ? undefined : String(data.cest ?? '').replace(/\D/g, '').slice(0, 7) || null,
       description: data.description,
       barcode,
       supplierId,

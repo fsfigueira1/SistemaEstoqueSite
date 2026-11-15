@@ -224,6 +224,10 @@ model Product {
   status             ProductStatus       @default(ACTIVE)
   isFeatured         Boolean             @default(false)
   unit               String              @default("unidade")
+  /// NCM (8 dígitos) para a NFC-e; vazio = usa o NCM padrão da configuração fiscal
+  ncm                String?
+  /// CEST (7 dígitos), só para produtos com substituição tributária
+  cest               String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   priceHistories     PriceHistory[]      @relation("ProductPriceHistory")
@@ -450,6 +454,10 @@ model Settings {
   reportReminderTime           String   @default("18:00")
   /// Fundo de troco padrão (dinheiro que já fica na gaveta ao abrir).
   cashFloatDefault             Float    @default(0)
+  /// NFC-e: dados da empresa, ambiente, série e padrões fiscais (JSON, ver src/lib/nfce/config.ts)
+  nfceConfig                   String   @default("{}")
+  /// NFC-e: CSC (código de segurança do contribuinte). Nunca é devolvido pela API.
+  nfceCsc                      String   @default("")
   updatedAt                    DateTime @updatedAt
 }
 
@@ -713,4 +721,34 @@ model AgentEvent {
   @@index([createdAt])
   @@index([phone])
   @@index([kind, createdAt])
+}
+
+/// NFC-e emitida (ou tentada) para uma venda. O XML autorizado (nfeProc)
+/// fica aqui e também numa pasta por ano/mês no PC que emitiu.
+model NfceEmission {
+  id            String    @id @default(uuid())
+  saleId        String?
+  /// 1 produção, 2 homologação
+  ambiente      Int
+  serie         Int
+  numero        Int
+  chave         String    @unique
+  /// PENDING (sem resposta) | AUTHORIZED | REJECTED | DENIED | CANCELLED
+  status        String    @default("PENDING")
+  cStat         Int?
+  motivo        String    @default("")
+  protocolo     String    @default("")
+  total         Decimal   @default(0)
+  consumidorDoc String    @default("")
+  /// nfeProc (autorizada) ou o XML assinado enviado
+  xml           String    @default("")
+  cancelXml     String    @default("")
+  cancelReason  String    @default("")
+  authorizedAt  DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  @@index([saleId])
+  @@index([ambiente, serie, numero])
+  @@index([createdAt])
 }

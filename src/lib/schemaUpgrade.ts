@@ -9,7 +9,7 @@
 // (IF NOT EXISTS), então rodar em 3 PCs ao mesmo tempo é seguro.
 //
 // Mantenha em sincronia com prisma/migrations/20260924120000_reports_ai/migration.sql
-// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists, 20261021120000_whatsapp_contacts, 20261022120000_novidades_ia, 20261022140000_quote_requests, 20261022160000_copilot_learning, 20261023120000_whatsapp_auto_reply, 20261102120000_whatsapp_agent e 20261103120000_login_users).
+// (e as seguintes, como 20261014120000_product_labels, 20261020120000_school_lists, 20261021120000_whatsapp_contacts, 20261022120000_novidades_ia, 20261022140000_quote_requests, 20261022160000_copilot_learning, 20261023120000_whatsapp_auto_reply, 20261102120000_whatsapp_agent, 20261103120000_login_users e 20261114120000_nfce).
 import { prisma } from "@/lib/prisma"
 
 export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
@@ -283,6 +283,37 @@ export const SCHEMA_UPGRADE_STATEMENTS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS "CirandaPayment_contactKey_createdAt_idx" ON "CirandaPayment"("contactKey", "createdAt")`,
   `CREATE INDEX IF NOT EXISTS "CirandaPayment_createdAt_idx" ON "CirandaPayment"("createdAt")`,
+  // --- NFC-e (20261114120000_nfce) ---
+  `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "ncm" TEXT`,
+  `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "cest" TEXT`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "nfceConfig" TEXT NOT NULL DEFAULT '{}'`,
+  `ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "nfceCsc" TEXT NOT NULL DEFAULT ''`,
+  `CREATE TABLE IF NOT EXISTS "NfceEmission" (
+    "id" TEXT NOT NULL,
+    "saleId" TEXT,
+    "ambiente" INTEGER NOT NULL,
+    "serie" INTEGER NOT NULL,
+    "numero" INTEGER NOT NULL,
+    "chave" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "cStat" INTEGER,
+    "motivo" TEXT NOT NULL DEFAULT '',
+    "protocolo" TEXT NOT NULL DEFAULT '',
+    "total" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "consumidorDoc" TEXT NOT NULL DEFAULT '',
+    "xml" TEXT NOT NULL DEFAULT '',
+    "cancelXml" TEXT NOT NULL DEFAULT '',
+    "cancelReason" TEXT NOT NULL DEFAULT '',
+    "authorizedAt" TIMESTAMP(3),
+    "cancelledAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "NfceEmission_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "NfceEmission_chave_key" ON "NfceEmission"("chave")`,
+  `CREATE INDEX IF NOT EXISTS "NfceEmission_saleId_idx" ON "NfceEmission"("saleId")`,
+  `CREATE INDEX IF NOT EXISTS "NfceEmission_ambiente_serie_numero_idx" ON "NfceEmission"("ambiente", "serie", "numero")`,
+  `CREATE INDEX IF NOT EXISTS "NfceEmission_createdAt_idx" ON "NfceEmission"("createdAt")`,
 ]
 
 let upgrade: Promise<void> | null = null

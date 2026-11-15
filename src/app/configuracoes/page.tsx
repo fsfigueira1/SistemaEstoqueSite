@@ -9,6 +9,7 @@ import ReceiptWidthPreview from '@/components/settings/ReceiptWidthPreview';
 import FeeSettings from '@/components/settings/FeeSettings';
 import BackupSettings from '@/components/settings/BackupSettings';
 import AccessSettings from '@/components/settings/AccessSettings';
+import NfceSettings from '@/components/settings/NfceSettings';
 import { Store, Printer, CheckCircle, CreditCard, BellRing } from 'lucide-react';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type StoreSettings } from '@/lib/settings';
 
@@ -289,6 +290,9 @@ export default function ConfiguracoesPage() {
           )}
           {saveErr && <span className="text-sm text-danger">{saveErr}</span>}
         </div>
+
+        {/* NFC-e: tem o próprio botão de salvar (o CSC e o certificado não vão com o resto) */}
+        <NfceSettings />
 
         {/* login: usuário e senha do dono e do balcão */}
         <AccessSettings />
