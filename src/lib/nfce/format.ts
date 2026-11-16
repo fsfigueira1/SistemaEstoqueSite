@@ -16,10 +16,21 @@ export const cents = (n: number) => Math.round((n + Number.EPSILON) * 100)
  * Texto seguro para o XML (a NFC-e aceita UTF-8, então os acentos ficam):
  * tira caracteres de controle e espaços duplicados e escapa &, <, >, " e '.
  */
+/** Troca de caracteres fora do Latin-1 (o XSD da NF-e só aceita até U+00FF). */
+const LATIN1: Record<string, string> = {
+  "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-", "−": "-",
+  "‘": "'", "’": "'", "‚": "'", "′": "'",
+  "“": '"', "”": '"', "„": '"', "″": '"',
+  "…": "...", "•": "-", "™": "TM", "€": "EUR", " ": " ",
+}
+
 export function xmlText(s: string | undefined | null, max?: number): string {
-  let t = Array.from(String(s ?? ""), (ch) => {
-    const c = ch.charCodeAt(0)
-    return c < 32 || c === 127 ? " " : ch // caracteres de controle viram espaço
+  let t = Array.from(String(s ?? "").normalize("NFC"), (ch) => {
+    const c = ch.codePointAt(0) ?? 32
+    if (c < 32 || c === 127) return " " // caracteres de controle viram espaço
+    if (c <= 0xff) return ch
+    // "–" do nome do produto derrubava a nota inteira (rejeição 225, 16/11/2026)
+    return LATIN1[ch] ?? (ch.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^ -ÿ]/g, "") || " ")
   })
     .join("")
     .replace(/\s+/g, " ")

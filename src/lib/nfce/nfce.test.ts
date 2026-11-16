@@ -7,7 +7,7 @@ import { montarNfceXml, ratear, TEXTO_HOMOLOGACAO } from "@/lib/nfce/xmlBuilder"
 import { grupoInfNFeSupl, montarQrCode } from "@/lib/nfce/qrcode"
 import { lerProtocolo, montarNfeProc, tagTexto } from "@/lib/nfce/sefaz"
 import { montarEventoCancelamento } from "@/lib/nfce/evento"
-import { cnpjValido, cpfValido, dataHoraSefaz } from "@/lib/nfce/format"
+import { cnpjValido, cpfValido, dataHoraSefaz, xmlText } from "@/lib/nfce/format"
 import type { NfceDadosVenda } from "@/lib/nfce/types"
 
 // Certificado de teste gerado na hora (nunca um certificado real).
@@ -72,6 +72,8 @@ describe("chave de acesso", () => {
 
 describe("documentos e datas", () => {
   it("valida CPF e CNPJ", () => {
+    expect(xmlText("Cola Confetti Acrilex 95 g – Tutti-Frutti “Ultra” … ✨")).toBe("Cola Confetti Acrilex 95 g - Tutti-Frutti &quot;Ultra&quot; ...")
+    expect(xmlText("Lápis Ação Çedilha")).toBe("Lápis Ação Çedilha")
     expect(cpfValido("529.982.247-25")).toBe(true)
     expect(cpfValido("111.111.111-11")).toBe(false)
     expect(cnpjValido("11.222.333/0001-81")).toBe(true)
