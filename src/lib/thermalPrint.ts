@@ -2,16 +2,19 @@
 // Usado pelo comprovante de compra e pelo DANFE NFC-e. A página inteira é
 // mandada para o Electron, que imprime numa janela oculta (electron/thermalPrint.cjs).
 //
-// - Bobina de 80 mm, mas a cabeça da TM-T20X só imprime ~72 mm, começando
-//   uns 4 mm para dentro. O cupom fica travado em 70 mm, com 5 mm de recuo
-//   à esquerda (sem o recuo, "TOTAL" saía "TAL").
+// - Bobina de 80 mm, mas a cabeça da TM-T20X só imprime 72 mm, e o driver
+//   já começa a página no início da área imprimível (~4 mm para dentro do
+//   papel). Por isso o recuo é de só 1 mm: com 5 mm + 70 mm o fim da linha
+//   passava dos 72 mm e o "R$ 3,90" saía "R$ 3," (teste na loja, 16/11/2026).
+// - A guilhotina fica uns 10 mm acima da cabeça: o cupom termina com uma
+//   sobra em branco (.fim) para o corte não pegar a última linha.
 // - Só preto puro sobre branco: cinza claro some na impressão térmica.
 
 export type ReceiptWidth = "58mm" | "80mm"
 
 export const THERMAL = {
-  "80mm": { paper: 80, content: 70, left: 5 },
-  "58mm": { paper: 58, content: 48, left: 5 },
+  "80mm": { paper: 80, content: 70, left: 1 },
+  "58mm": { paper: 58, content: 48, left: 1 },
 } as const
 
 export function thermalCss(width: ReceiptWidth = "80mm"): string {
@@ -52,7 +55,7 @@ th { font-weight: bold; }
 .num { text-align: right; white-space: nowrap; }
 .qr { display: block; margin: 1.5mm auto; }
 .qr svg, .qr img { display: block; width: 100%; height: 100%; }
-.fim { height: 6mm; }
+.fim { height: 16mm; }
 `
 }
 

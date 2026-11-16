@@ -48,12 +48,21 @@ export default function NfcePanel({
   saleId,
   saleStatus,
   autoPrint = true,
+  principal = false,
+  onEnabled,
+  onImpresso,
 }: {
   saleId: string;
   /** status da venda (para avisar quando a venda foi estornada e a nota não). */
   saleStatus?: string;
   /** imprime o DANFE sozinho logo que a nota é autorizada */
   autoPrint?: boolean;
+  /** fim da venda no PDV: a nota é a ação principal (foco e botão "Emitir NFC-e e imprimir") */
+  principal?: boolean;
+  /** avisa se a emissão está ligada, para a tela pôr o comprovante não fiscal em segundo plano */
+  onEnabled?: (enabled: boolean) => void;
+  /** nota autorizada e DANFE mandado para a impressora */
+  onImpresso?: () => void;
 }) {
   const me = useMe();
   const [painel, setPainel] = useState<Painel | null>(null);
@@ -65,11 +74,14 @@ export default function NfcePanel({
 
   const carregar = useCallback(async () => {
     try {
-      setPainel(await api<Painel>(`/api/nfce/notas?saleId=${encodeURIComponent(saleId)}`));
+      const p = await api<Painel>(`/api/nfce/notas?saleId=${encodeURIComponent(saleId)}`);
+      setPainel(p);
+      onEnabled?.(p.enabled);
     } catch {
       setPainel(null); // sem acesso / sem internet: não mostra nada
+      onEnabled?.(false);
     }
-  }, [saleId]);
+  }, [saleId, onEnabled]);
 
   useEffect(() => {
     void carregar();
@@ -104,7 +116,10 @@ export default function NfcePanel({
       await carregar();
       if (n.status === 'AUTHORIZED') {
         setMsg({ ok: true, text: `NFC-e nº ${n.numero} autorizada.` });
-        if (autoPrint) await imprimirDanfe(n.id);
+        if (autoPrint) {
+          await imprimirDanfe(n.id);
+          onImpresso?.();
+        }
       } else if (n.status === 'PENDING') {
         setMsg({ ok: false, text: `A SEFAZ não respondeu (${n.motivo || 'sem resposta'}). Clique em "Consultar" daqui a pouco.` });
       } else {
@@ -228,13 +243,14 @@ export default function NfcePanel({
             </p>
           )}
           <div className="flex gap-2">
-            <input value={cpf} onChange={(e) => setCpf(e.target.value)} className={inp} placeholder="CPF/CNPJ na nota (opcional)" inputMode="numeric" />
+            <input value={cpf} onChange={(e) => setCpf(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && busy === '') emitir(); }} className={inp} placeholder="CPF/CNPJ na nota (opcional)" inputMode="numeric" />
             <button
               onClick={emitir}
+              autoFocus={principal}
               disabled={busy !== '' || saleStatus === 'REFUNDED' || saleStatus === 'CANCELLED'}
               className="inline-flex shrink-0 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
             >
-              {busy === 'emitir' && <Loader2 className="h-4 w-4 animate-spin" />} Emitir NFC-e
+              {busy === 'emitir' && <Loader2 className="h-4 w-4 animate-spin" />} {principal && autoPrint ? 'Emitir NFC-e e imprimir' : 'Emitir NFC-e'}
             </button>
           </div>
         </div>

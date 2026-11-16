@@ -165,6 +165,8 @@ export default function PDVPage() {
     change: number;
   }>(null);
   const [printing, setPrinting] = useState(false);
+  // NFC-e ligada: a nota vira a ação principal do fim da venda
+  const [nfceOn, setNfceOn] = useState(false);
 
   const barcodeRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -689,10 +691,14 @@ export default function PDVPage() {
     }
   };
 
+  // com NFC-e ligada, o comprovante não fiscal fica em segundo plano
+  const fiscal = nfceOn && !savedOffline;
+
   const closePostSale = () => {
     setFinishedSale(null);
     setPrinting(false);
     setSavedOffline(false);
+    setNfceOn(false);
     barcodeRef.current?.focus();
   };
 
@@ -1095,20 +1101,31 @@ export default function PDVPage() {
                 {/* NFC-e só com a venda no servidor (sem internet não há nota) */}
                 {!savedOffline && (
                   <div className="mt-4">
-                    <NfcePanel saleId={finishedSale.saleId} />
+                    <NfcePanel
+                      saleId={finishedSale.saleId}
+                      principal
+                      onEnabled={setNfceOn}
+                      onImpresso={() => setTimeout(closePostSale, 1200)}
+                    />
                   </div>
                 )}
 
-                <p className="mt-4 text-sm font-medium text-foreground">Imprimir comprovante de compra?</p>
+                <p className="mt-4 text-sm font-medium text-foreground">
+                  {fiscal ? 'Sem nota fiscal:' : 'Imprimir comprovante de compra?'}
+                </p>
                 <div className="mt-3 flex gap-3">
                   <button
-                    ref={confirmBtnRef}
+                    ref={fiscal ? undefined : confirmBtnRef}
                     type="button"
                     onClick={() => setPrinting(true)}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    className={
+                      fiscal
+                        ? 'flex flex-1 items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 font-medium text-foreground transition-colors hover:bg-muted'
+                        : 'flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90'
+                    }
                   >
                     <Printer className="h-4 w-4" />
-                    Imprimir
+                    {fiscal ? 'Só comprovante (não fiscal)' : 'Imprimir'}
                   </button>
                   <button
                     type="button"
