@@ -5,7 +5,7 @@ import { fetchAllProducts } from '@/lib/fetchAllProducts';
 import { ProductStatus } from '@/generated/prisma/enums';
 import Layout, { PageHeader } from '@/components/Layout';
 import Link from 'next/link';
-import { Plus, Search, Pencil, Trash2, Package, PackagePlus, AlertTriangle, XCircle, Loader2, TrendingUp, FileSpreadsheet, Tag } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, PackagePlus, AlertTriangle, XCircle, Loader2, TrendingUp, FileCode2, FileSpreadsheet, Tag } from 'lucide-react';
 import { StockAdjustModal } from '@/components/stock/StockAdjustModal';
 import { SearchSuggestion } from '@/components/SearchSuggestion';
 import { buildSearchIndex, productSearchFields } from '@/lib/smartSearch';
@@ -325,6 +325,13 @@ export default function ProdutosPage() {
               >
                 <FileSpreadsheet className="h-4 w-4 text-primary" />
                 Importar planilha
+              </Link>
+              <Link
+                href="/produtos/ncm"
+                className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 font-medium text-foreground hover:bg-muted"
+              >
+                <FileCode2 className="h-4 w-4 text-primary" />
+                NCM pelas notas
               </Link>
               <button
                 onClick={openNew}

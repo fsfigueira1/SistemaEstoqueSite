@@ -17,6 +17,7 @@ describe("quem pode abrir o quê", () => {
 
   it("balcão emite e reimprime NFC-e, mas não mexe na configuração fiscal nem no certificado", () => {
     expect(canAccess("EMPLOYEE", "/api/nfce/emitir", "POST")).toBe(true)
+    expect(canAccess("EMPLOYEE", "/api/products/ncm", "POST")).toBe(false) // NCM pelas notas: só o dono
     expect(canAccess("EMPLOYEE", "/api/nfce/notas", "GET")).toBe(true)
     expect(canAccess("EMPLOYEE", "/api/nfce/notas/abc/danfe", "GET")).toBe(true)
     expect(canAccess("EMPLOYEE", "/api/nfce/notas/abc/consultar", "POST")).toBe(true)
