@@ -1,6 +1,8 @@
 // Comunicação com os webservices da NFC-e da SEFAZ-SP (SOAP 1.2 + certificado A1).
 import https from "node:https"
+import tls from "node:tls"
 import { NFE_NS } from "@/lib/nfce/xmlBuilder"
+import { CAS_SEFAZ } from "@/lib/nfce/icpBrasil"
 import type { CertificadoA1 } from "@/lib/nfce/certificate"
 import type { NfceAmbiente } from "@/lib/nfce/types"
 
@@ -46,6 +48,8 @@ export const transporteHttps: Transporte = (url, soapAction, body, cert) =>
         method: "POST",
         key: cert.keyPem,
         cert: cert.certPem,
+        // a SEFAZ-SP usa certificado ICP-Brasil, que não vem na lista padrão do Node
+        ca: [...tls.rootCertificates, ...CAS_SEFAZ],
         timeout: 30_000,
         headers: {
           "Content-Type": `application/soap+xml; charset=utf-8; action="${soapAction}"`,
